@@ -35,6 +35,17 @@ function existsSync(p: string): boolean {
 }
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
+  const cliPath = process.env.PI_CLI_PATH;
+  if (cliPath) {
+    // Embedded host (e.g. the cardo desktop app): run the pi CLI entry under
+    // the current runtime. A `.js` path launches with process.execPath
+    // (Electron becomes node via ELECTRON_RUN_AS_NODE at the spawn site);
+    // anything else (a compiled `pi` binary) is executed directly.
+    if (/\.(c|m)?js$/i.test(cliPath)) {
+      return { command: process.execPath, args: [cliPath, ...args] };
+    }
+    return { command: cliPath, args };
+  }
   const currentScript = process.argv[1];
   const isBunVirtualScript = currentScript?.startsWith('/$bunfs/root/');
   if (currentScript && !isBunVirtualScript && existsSync(currentScript)) {
@@ -90,6 +101,13 @@ export async function runPhase(options: RunPhaseOptions): Promise<PhaseResult> {
   args.push(task);
 
   const invocation = getPiInvocation(args);
+  // When running a `.js` pi entry under an embedded Electron host, the app
+  // binary must be launched in node mode for the child to be a plain node
+  // process. Harmless no-op under node/bun.
+  const env =
+    invocation.command === process.execPath && process.env.PI_CLI_PATH
+      ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+      : process.env;
 
   return new Promise<PhaseResult>((resolve) => {
     let stdout = '';
@@ -100,6 +118,7 @@ export async function runPhase(options: RunPhaseOptions): Promise<PhaseResult> {
       cwd,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env,
     });
 
     const finish = (code: number): void => {
