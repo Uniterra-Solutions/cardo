@@ -9,6 +9,8 @@
   - `pnpm --filter @pi-gui/desktop dev` — run the Electron app in dev (watch mode)
   - `pnpm --filter @pi-gui/desktop typecheck` — type-check the app + vendored driver packages
   - `pnpm --filter @pi-gui/desktop build` — production electron-vite build
+  - `pnpm --filter @pi-gui/desktop test:pbt` — property-based tests for the frontend↔backend contract layer (fast-check + node:test; compiles pure app-store modules via `tsconfig.pbt.json` into `out-pbt/`)
+  - `pnpm --filter @pi-gui/pi-sdk-driver test` — node:test suite for vendored driver pure functions (includes PBT)
 
 # Project Business Goals
 
@@ -44,6 +46,7 @@
 - Run `pnpm run lint` and `pnpm run typecheck` before committing
 - Add tests for new behaviour
 - After changing `packages/jovaltus` or `packages/runtime` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
+- After changing the pi-gui frontend↔backend contract layer (pure app-store modules, vendored driver pure functions, state/persistence/timeline logic), run the PBT suites: `pnpm --filter @pi-gui/desktop test:pbt` and `pnpm --filter @pi-gui/pi-sdk-driver test`. Properties found failing because of a real bug → fix source with a `// Cardo:` marker + deterministic regression test
 
 **Ask first:**
 
