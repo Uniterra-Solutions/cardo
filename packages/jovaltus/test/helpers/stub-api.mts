@@ -61,6 +61,7 @@ export interface ToolCallResult {
 /** Build a valid PipelineState for prompt/dispatch tests. */
 export function makePipelineState(overrides?: Partial<PipelineState>): PipelineState {
   return {
+    id: 'session-1',
     run_dir: '/repo/.plan/20260101/feature',
     tool: 'plan',
     phase: 'prd',
@@ -71,6 +72,9 @@ export function makePipelineState(overrides?: Partial<PipelineState>): PipelineS
     verdict: null,
     updated_at: '2026-01-01T00:00:00.000Z',
     error: null,
+    pid: 1234,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ended_at: null,
     ...overrides,
   };
 }

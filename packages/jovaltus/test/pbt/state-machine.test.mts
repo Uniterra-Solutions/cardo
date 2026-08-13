@@ -1,23 +1,33 @@
 /**
- * Integrated PBT — Jovaltus pipeline state machine (`dist/state.js`).
+ * Integrated PBT — Jovaltus pipeline state machine (`dist/state.js`,
+ * SQLite session store).
  *
  * Business invariants encoded as properties:
  *  1. startPipeline initial state matches the contract: the tool's FIRST
- *     phase per CHAIN, status 'running', loop_iteration 0, verdict null.
+ *     phase per CHAIN, status 'running', loop_iteration 0, verdict null,
+ *     and a unique session id owned by the current process.
  *  2. Domain closure: any sequence of CHAIN-valid setPhase transitions keeps
  *     the pipeline in-domain (phase/status/verdict/loop_iteration), and the
- *     persisted copy on disk equals the in-memory object after every step.
+ *     persisted copy in the SQLite store equals the in-memory object after
+ *     every step.
  *  3. Finish semantics: done/failed are sticky and idempotent; error is set
  *     only on failure; a finished pipeline is locked (setPhase/setVerdict
- *     throw).
+ *     throw); interrupted is a third terminal state (markInterrupted is
+ *     idempotent and finishPipeline is a no-op on it).
  *  4. Verdict flow: 'fix' parking + re-dispatch phases never leave the
  *     domain, never touch loop_iteration (that counter lives at the tool
- *     layer), and roundtrip to disk exactly.
- *  5. Corrupt-state recovery: arbitrary junk or malformed shapes in
- *     jovaltus.json make getPipeline() return null (never throw) and reset
- *     to idle; a new pipeline starts clean afterwards.
- *  6. resetPipeline clears only the pipeline key and preserves the rest of
- *     the state file.
+ *     layer), and roundtrip to the store exactly.
+ *  5. Supersede: starting a new pipeline interrupts any other running
+ *     session — only one active pipeline exists.
+ *  6. Orphan sweep: a running session owned by a dead pid is interrupted on
+ *     the next access (crash/kill recovery).
+ *  7. Corrupt-state recovery: an unreadable SQLite file makes getPipeline()
+ *     return null (never throw) and a new pipeline starts clean afterwards.
+ *  8. History API: listSessions returns every session newest-first;
+ *     getSession finds by id or run_dir; resumeSession re-activates only
+ *     interrupted/failed sessions and throws on missing/running/done.
+ *  9. Legacy migration: a pre-SQLite jovaltus.json pipeline becomes a
+ *     session row (running → interrupted).
  *
  * The agent dir is redirected per test via PI_CODING_AGENT_DIR (pi's
  * getAgentDir() honours it), so the real ~/.pi/agent is never touched.
@@ -25,13 +35,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fc from 'fast-check';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import {
   finishPipeline,
   getPipeline,
+  getSession,
+  listSessions,
+  markInterrupted,
   PHASES,
-  resetPipeline,
+  resumeSession,
   setPhase,
   setVerdict,
   startPipeline,
@@ -40,11 +54,22 @@ import {
 import { CHAIN, waitingPhase } from '../../dist/chain.js';
 import { makeTmpDir, setAgentDir } from '../helpers/stub-api.mts';
 
-const STATE_FILE = 'jovaltus.json';
+const DB_FILE = 'jovaltus.sqlite';
 const TOOLS = ['plan', 'execute', 'simplify', 'review'] as const;
 
+/** Empty the sessions table without unlinking the file (the module keeps an
+ *  open connection to it, so deleting the file would orphan that handle). */
 function freshAgent(agentDir: string): void {
-  rmSync(path.join(agentDir, STATE_FILE), { force: true });
+  try {
+    const d = new DatabaseSync(path.join(agentDir, DB_FILE));
+    try {
+      d.exec('DELETE FROM sessions');
+    } finally {
+      d.close();
+    }
+  } catch {
+    // No DB yet — nothing to clear.
+  }
 }
 
 /** First phase of a tool's CHAIN — the phase startPipeline must begin at. */
@@ -56,7 +81,7 @@ function firstPhaseOf(tool: string): string {
   return first;
 }
 
-/** Read-back equality through the JSON persistence boundary. */
+/** Read-back equality through the SQLite persistence boundary. */
 function normalize(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value)) as unknown;
 }
@@ -88,7 +113,10 @@ test('startPipeline: initial state matches the contract for every tool', async (
           assert.equal(p.run_dir, runDir);
           assert.equal(p.user_requirements, req);
           assert.equal(p.plan_path, planPath);
+          assert.ok(p.id.length > 0, 'session has an id');
+          assert.equal(p.pid, process.pid, 'owned by the current process');
           assert.ok(!Number.isNaN(Date.parse(p.updated_at)), 'updated_at is an ISO timestamp');
+          assert.equal(p.ended_at, null, 'active sessions have no ended_at');
           const disk = getPipeline();
           assert.ok(disk !== null, 'pipeline is persisted');
           assert.deepEqual(normalize(disk), normalize(p));
@@ -122,7 +150,7 @@ test('domain closure: CHAIN-following transitions keep state in-domain and persi
           assert.equal(p.verdict, null);
           assert.equal(p.loop_iteration, 0);
           assert.equal(p.error, null);
-          // The disk copy is identical to the in-memory object.
+          // The store copy is identical to the in-memory object.
           const disk = getPipeline();
           assert.ok(disk !== null);
           assert.deepEqual(normalize(disk), normalize(p));
@@ -149,6 +177,7 @@ test('finishPipeline: sticky, idempotent, error-on-failure-only, terminal lock',
           finishPipeline(p, ok, errorText);
           assert.equal(p.status, ok ? 'done' : 'failed');
           assert.equal(p.error, ok ? null : errorText);
+          assert.ok(p.ended_at !== null, 'finished sessions record ended_at');
           const disk = getPipeline();
           assert.ok(disk !== null);
           assert.deepEqual(normalize(disk), normalize(p));
@@ -207,14 +236,171 @@ test('verdict flow: fix parking + re-dispatch stays in-domain and roundtrips; lo
   }
 });
 
-test('corrupt state: arbitrary junk never throws and yields idle', async () => {
+test('supersede: starting a new pipeline interrupts the previous running session', async () => {
   const agentDir = makeTmpDir();
   try {
     setAgentDir(agentDir);
-    await fc.assert(
-      fc.property(fc.string({ maxLength: 200 }), (junk) => {
-        freshAgent(agentDir);
-        writeFileSync(path.join(agentDir, STATE_FILE), junk, 'utf8');
+    const first = startPipeline('review', '/repo/.plan/20260101/a', 'req', null);
+    setVerdict(first, 'fix');
+    setPhase(first, 'review_waiting'); // parked, still running
+    const second = startPipeline('plan', '/repo/.plan/20260101/b', 'req2', null);
+    assert.equal(second.status, 'running');
+    // The superseded session is interrupted on disk (the in-memory object
+    // of the old run is stale by design — only the store is authoritative).
+    const oldRun = getSession(first.id);
+    assert.ok(oldRun !== null);
+    assert.equal(oldRun.status, 'interrupted', 'the old run is superseded');
+    assert.ok(oldRun.ended_at !== null);
+    const disk = getPipeline();
+    assert.ok(disk !== null);
+    assert.equal(disk.id, second.id, 'the newest running session is active');
+    assert.equal(disk.phase, 'prd');
+    const sessions = listSessions();
+    assert.equal(sessions.length, 2);
+    assert.equal(sessions[0]?.id, second.id);
+    assert.equal(sessions[1]?.id, first.id);
+    assert.equal(sessions[1]?.status, 'interrupted');
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('markInterrupted: running → interrupted with ended_at; terminal and idempotent', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+    const p = startPipeline('plan', '/run', 'req', null);
+    markInterrupted(p);
+    assert.equal(p.status, 'interrupted');
+    assert.equal(p.error, null, 'an interruption is not an error');
+    assert.ok(p.ended_at !== null);
+    // Idempotent; a finished pipeline cannot be interrupted.
+    const before = normalize(p);
+    markInterrupted(p);
+    assert.deepEqual(normalize(p), before);
+    // Interrupted is terminal: finishPipeline is a no-op, mutations throw.
+    finishPipeline(p, true, 'late success');
+    assert.equal(p.status, 'interrupted');
+    assert.throws(() => setPhase(p, 'tasks'));
+    // The store agrees.
+    const disk = getPipeline();
+    assert.ok(disk !== null);
+    assert.deepEqual(normalize(disk), normalize(p));
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('orphan sweep: a running session owned by a dead pid is interrupted on next access', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+    const p = startPipeline('execute', '/run', 'req', null);
+    assert.equal(getPipeline()?.id, p.id, 'active before the owner dies');
+    // Simulate a crash/restart: the owning process dies and a NEW process
+    // (different pid) opens the store. Rewrite the row's pid to a dead one.
+    const d = new DatabaseSync(path.join(agentDir, DB_FILE));
+    try {
+      d.prepare('UPDATE sessions SET pid = ? WHERE id = ?').run(process.pid + 999999, p.id);
+    } finally {
+      d.close();
+    }
+    // The next access sweeps the orphan: it can never masquerade as active.
+    const swept = getPipeline();
+    assert.ok(swept !== null);
+    assert.equal(swept.status, 'interrupted');
+    assert.equal(swept.id, p.id);
+    const orphan = getSession(p.id);
+    assert.ok(orphan !== null);
+    assert.equal(orphan.status, 'interrupted');
+    assert.ok(orphan.ended_at !== null);
+    assert.equal(orphan.error, null);
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('history API: listSessions newest-first, getSession by id or run_dir', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+    assert.deepEqual(listSessions(), [], 'empty store lists nothing');
+    const plan = startPipeline('plan', '/repo/.plan/20260101/a', 'first', null);
+    finishPipeline(plan, true);
+    const review = startPipeline('review', '/repo/.plan/20260101/b', '', null);
+    setVerdict(review, 'fix');
+    setPhase(review, 'review_waiting');
+    const shared = startPipeline('review', '/repo/.plan/20260101/shared', '', null);
+    finishPipeline(shared, true);
+
+    const sessions = listSessions();
+    assert.equal(sessions.length, 3);
+    assert.equal(sessions[0]?.id, shared.id, 'newest first');
+    assert.equal(sessions[1]?.id, review.id);
+    assert.equal(sessions[2]?.id, plan.id);
+
+    assert.equal(getSession(plan.id)?.run_dir, '/repo/.plan/20260101/a', 'lookup by id');
+    assert.equal(getSession('/repo/.plan/20260101/b')?.id, review.id, 'lookup by run_dir');
+    assert.equal(
+      getSession('/repo/.plan/20260101/shared')?.id,
+      shared.id,
+      'run_dir lookup returns the newest match',
+    );
+    assert.equal(getSession('no-such-session'), null);
+    assert.equal(getSession(''), null);
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('resumeSession: re-activates interrupted/failed, throws on running/done/missing', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+
+    // Interrupted → running again, owned by this process, error cleared.
+    const interrupted = startPipeline('plan', '/run/1', 'req', null);
+    markInterrupted(interrupted);
+    const resumed1 = resumeSession(interrupted.id);
+    assert.equal(resumed1.status, 'running');
+    assert.equal(resumed1.error, null);
+    assert.equal(resumed1.ended_at, null);
+    assert.equal(resumed1.pid, process.pid);
+    assert.equal(resumed1.id, interrupted.id, 'resume keeps the session identity');
+    assert.deepEqual(normalize(getPipeline()), normalize(resumed1), 'resume persists');
+
+    // Failed → running again.
+    const failed = startPipeline('execute', '/run/2', '', null);
+    finishPipeline(failed, false, 'boom');
+    const resumed2 = resumeSession(failed.id);
+    assert.equal(resumed2.status, 'running');
+    assert.equal(resumed2.error, null);
+
+    // Running → throws.
+    const running = startPipeline('review', '/run/3', '', null);
+    assert.throws(() => resumeSession(running.id), /already running/);
+
+    // Done → throws.
+    const done = startPipeline('simplify', '/run/4', '', null);
+    finishPipeline(done, true);
+    assert.throws(() => resumeSession(done.id), /already completed/);
+
+    // Missing → throws.
+    assert.throws(() => resumeSession('ghost'), /no Jovaltus session/);
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('corrupt store: an unreadable SQLite file never throws and yields idle', async () => {
+  await fc.assert(
+    fc.property(fc.string({ maxLength: 200 }), (junk) => {
+      // A FRESH agent dir per iteration: the module caches its connection by
+      // path, and a corrupted file must be recovered from a cold open.
+      const agentDir = makeTmpDir('jovaltus-corrupt-');
+      try {
+        setAgentDir(agentDir);
+        writeFileSync(path.join(agentDir, DB_FILE), junk, 'utf8');
         const p = getPipeline();
         assert.equal(p, null);
         // A fresh pipeline starts cleanly afterwards (the corrupt file is
@@ -224,44 +410,63 @@ test('corrupt state: arbitrary junk never throws and yields idle', async () => {
         const disk = getPipeline();
         assert.ok(disk !== null);
         assert.equal(disk.tool, 'plan');
-      }),
-    );
-    // Malformed shapes (object roots with bad fields) also yield idle.
-    const shapes: unknown[] = [
-      { pipeline: [] },
-      { pipeline: 'nope' },
-      { pipeline: { tool: 'plan' } },
-      { pipeline: { run_dir: 5, tool: 'plan' } },
-      { pipeline: { run_dir: '/r', tool: 'plan', phase: 'banana', status: 'running' } },
-      { pipeline: { run_dir: '/r', tool: 'mystery', phase: 'prd', status: 'running' } },
-    ];
-    for (const shape of shapes) {
-      freshAgent(agentDir);
-      writeFileSync(path.join(agentDir, STATE_FILE), JSON.stringify(shape), 'utf8');
-      assert.equal(getPipeline(), null, `shape yields idle: ${JSON.stringify(shape)}`);
-    }
-  } finally {
-    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
-  }
+      } finally {
+        rmSync(agentDir, { recursive: true, force: true });
+      }
+    }),
+  );
 });
 
-test('resetPipeline: clears only the pipeline key, preserves other state keys', async () => {
-  const agentDir = makeTmpDir();
+test('migration: a legacy jovaltus.json pipeline becomes a session row', () => {
+  const legacyPipeline = {
+    run_dir: '/repo/.plan/20260101/old',
+    tool: 'plan',
+    phase: 'research',
+    user_requirements: 'Old run',
+    plan_path: null,
+    loop_iteration: 0,
+    verdict: null,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    error: null,
+  };
+
+  // A legacy "running" pipeline: its owner is gone — recorded interrupted.
+  const runningDir = makeTmpDir('jovaltus-migrate-running-');
   try {
-    setAgentDir(agentDir);
-    // Seed an unrelated key alongside a pipeline, then reset.
-    writeFileSync(path.join(agentDir, STATE_FILE), JSON.stringify({ other: { kept: 1 } }), 'utf8');
-    const q = startPipeline('review', '/run2', '', null);
-    void q;
-    assert.ok(getPipeline() !== null);
-    resetPipeline();
-    assert.equal(getPipeline(), null, 'pipeline is gone after reset');
-    const raw = JSON.parse(readFileSync(path.join(agentDir, STATE_FILE), 'utf8')) as Record<
-      string,
-      unknown
-    >;
-    assert.deepEqual(raw, { other: { kept: 1 } }, 'unrelated keys survive reset');
+    setAgentDir(runningDir);
+    writeFileSync(
+      path.join(runningDir, 'jovaltus.json'),
+      JSON.stringify({ pipeline: { ...legacyPipeline, status: 'running' }, other: { kept: 1 } }),
+      'utf8',
+    );
+    const p = getPipeline();
+    assert.ok(p !== null);
+    assert.equal(p.status, 'interrupted', 'a running legacy pipeline migrates as interrupted');
+    assert.equal(p.phase, 'research');
+    assert.equal(p.run_dir, '/repo/.plan/20260101/old');
+    assert.equal(p.tool, 'plan');
+    assert.ok(p.ended_at !== null);
+    assert.equal(listSessions().length, 1, 'migration runs only once');
   } finally {
-    delete process.env.PI_CODING_AGENT_DIR;
+    rmSync(runningDir, { recursive: true, force: true });
+  }
+
+  // A legacy "done" pipeline: status preserved, ended_at back-filled.
+  const doneDir = makeTmpDir('jovaltus-migrate-done-');
+  try {
+    setAgentDir(doneDir);
+    writeFileSync(
+      path.join(doneDir, 'jovaltus.json'),
+      JSON.stringify({
+        pipeline: { ...legacyPipeline, status: 'done', phase: 'done' },
+      }),
+      'utf8',
+    );
+    const p = getPipeline();
+    assert.ok(p !== null);
+    assert.equal(p.status, 'done');
+    assert.equal(p.phase, 'done');
+  } finally {
+    rmSync(doneDir, { recursive: true, force: true });
   }
 });

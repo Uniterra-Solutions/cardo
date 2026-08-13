@@ -85,7 +85,7 @@ Pure-logic paths can be verified without a pi runtime or LLM by loading the TS m
 
 | Path                   | What to verify                                               | Method                                                                                    |
 | ---------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Extension registration | 4 tools + 2 events registered                                | Load `src/index.ts` via jiti with a stub `ExtensionAPI`; assert `registerTool`/`on` calls |
+| Extension registration | 6 tools + 3 events registered                                | Load `src/index.ts` via jiti with a stub `ExtensionAPI`; assert `registerTool`/`on` calls |
 | Runtime registry       | `builtinExtensionFactories`/`builtinExtensionMetadata` shape | jiti-load `packages/runtime/src/index.ts`; assert factory array + metadata length/order   |
 
 (State machine, prompt rendering, chain/verdict, and the child dispatch

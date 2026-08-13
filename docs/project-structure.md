@@ -12,13 +12,13 @@
 
 ## Module map (`packages/jovaltus/src/`)
 
-| Module        | LOC | Public API                                                                                                                                       |
-| ------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `index.ts`    | 439 | `default` factory (entry) — registers 4 tools + 2 events                                                                                         |
-| `state.ts`    | 255 | `PipelineState`, `PHASES`, `STATUSES`, `getPipeline`, `startPipeline`, `setPhase`, `setVerdict`, `finishPipeline`, `statusText`, `resetPipeline` |
-| `dispatch.ts` | 211 | `PhaseResult`, `runPhase`                                                                                                                        |
-| `chain.ts`    | 85  | `CHAIN`, `WAITING_PHASES`, `waitingPhase`, `readVerdict`, `readFindings`                                                                         |
-| `prompts.ts`  | 104 | `PROMPT_NAMES`, `loadPrompt`, `renderPrompt`, `buildContext`                                                                                     |
+| Module        | LOC | Public API                                                                                                                                                                                        |
+| ------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`    | 662 | `default` factory (entry) — registers 6 tools + 3 events                                                                                                                                          |
+| `state.ts`    | 566 | `PipelineState`, `PHASES`, `STATUSES`, `getPipeline`, `startPipeline`, `setPhase`, `setVerdict`, `finishPipeline`, `markInterrupted`, `listSessions`, `getSession`, `resumeSession`, `statusText` |
+| `dispatch.ts` | 211 | `PhaseResult`, `runPhase`                                                                                                                                                                         |
+| `chain.ts`    | 85  | `CHAIN`, `WAITING_PHASES`, `waitingPhase`, `readVerdict`, `readFindings`                                                                                                                          |
+| `prompts.ts`  | 104 | `PROMPT_NAMES`, `loadPrompt`, `renderPrompt`, `buildContext`                                                                                                                                      |
 
 ## Module map (`packages/runtime/src/`)
 

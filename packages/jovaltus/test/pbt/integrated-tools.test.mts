@@ -3,10 +3,12 @@
  * backend (`dist/index.js` factory + tool handlers + event hooks).
  *
  * These are the end-to-end business invariants: the extension factory
- * registers exactly the four pipeline tools; every tool handler drives real
+ * registers exactly the six pipeline tools; every tool handler drives real
  * child dispatches through the backend and advances the persisted pipeline
  * state exactly as the business rules say; the `agent_settled` hook closes
- * the verdict-driven review loop.
+ * the verdict-driven review loop; `list_sessions` reports the persisted
+ * history; `resume_session` re-activates interrupted/failed sessions; an
+ * aborted or ended run is recorded as `interrupted`, never `failed`.
  *
  * Invariants locked here:
  *  1. plan: dispatches exactly CHAIN['plan']'s phases in order (the
@@ -416,4 +418,210 @@ test('model-based: random verdict plans reach done with exactly the fix loop sem
     }),
     { numRuns: 10 },
   );
+});
+
+// ---- list_sessions / resume_session / interruption ------------------------
+
+test('factory registers the six pipeline tools', (t) => {
+  const { stub } = setupRun(t);
+  for (const name of ['plan', 'execute', 'simplify', 'review', 'list_sessions', 'resume_session']) {
+    assert.ok(stub.tools.has(name), `registers ${name}`);
+  }
+});
+
+test('list_sessions: reports every past session with its status, filterable', async (t) => {
+  const { tmp, cwd, stub } = setupRun(t);
+  // A done plan.
+  await callTool(stub, 'plan', { user_requirements: 'Feature one' }, cwd);
+  // A parked (running) review.
+  useVerdictPlan(tmp, ['fix']);
+  await callTool(stub, 'review', {}, cwd);
+
+  const result = await callTool(stub, 'list_sessions', {}, cwd);
+  assert.ok(!result.details['isError']);
+  const sessions = result.details['sessions'] as Array<Record<string, unknown>>;
+  assert.equal(sessions.length, 2, 'both sessions are listed');
+  assert.equal(sessions[0]?.tool, 'review');
+  assert.equal(sessions[0]?.status, 'running');
+  assert.equal(sessions[1]?.tool, 'plan');
+  assert.equal(sessions[1]?.status, 'done');
+
+  const text = result.content[0]?.text ?? '';
+  assert.ok(text.includes('| review | running |'), 'text shows the running review');
+  assert.ok(text.includes('| plan | done |'), 'text shows the done plan');
+
+  // Status filter narrows the list.
+  const filtered = await callTool(stub, 'list_sessions', { status: 'done' }, cwd);
+  assert.ok(!filtered.details['isError']);
+  const filteredSessions = filtered.details['sessions'] as Array<Record<string, unknown>>;
+  assert.equal(filteredSessions.length, 1);
+  assert.equal(filteredSessions[0]?.tool, 'plan');
+
+  // An unknown status filter reports an error.
+  const none = await callTool(stub, 'list_sessions', { status: 'interrupted' }, cwd);
+  assert.equal(none.details['isError'], true);
+});
+
+test('session_shutdown: a parked running pipeline becomes interrupted, not failed', async (t) => {
+  const { tmp, cwd, stub } = setupRun(t);
+  useVerdictPlan(tmp, ['fix']);
+  const round1 = await callTool(stub, 'review', {}, cwd);
+  assert.equal(round1.details['verdict'], 'fix');
+  const parked = currentPipeline();
+  assert.equal(parked.status, 'running');
+
+  const shutdown = stub.handlers.get('session_shutdown');
+  assert.ok(shutdown !== undefined, 'factory registered session_shutdown');
+  const { ctx } = makeCtx(cwd);
+  await shutdown({}, ctx);
+
+  const p = currentPipeline();
+  assert.equal(p.status, 'interrupted');
+  assert.equal(p.error, null, 'interruption is not an error');
+  assert.equal(p.phase, 'review_waiting', 'the parking phase is preserved for resume');
+  assert.ok(p.ended_at !== null);
+});
+
+test('resume_session: an interrupted review_waiting session falls back to the reviewer until pass', async (t) => {
+  const { tmp, cwd, stub, logFile } = setupRun(t);
+  useVerdictPlan(tmp, ['fix', 'pass']);
+  const round1 = await callTool(stub, 'review', {}, cwd);
+  assert.equal(round1.details['verdict'], 'fix');
+  const parked = currentPipeline();
+  assert.equal(parked.phase, 'review_waiting');
+
+  // The session ends (e.g. app close) while parked → interrupted.
+  const shutdown = stub.handlers.get('session_shutdown');
+  assert.ok(shutdown !== undefined);
+  const { ctx } = makeCtx(cwd);
+  await shutdown({}, ctx);
+  assert.equal(currentPipeline().status, 'interrupted');
+
+  // Resume: the reviewer re-runs against the current diff; the next verdict
+  // (pass) finishes the loop with the loop counter preserved.
+  const result = await callTool(stub, 'resume_session', { session_id: parked.id }, cwd);
+  assert.ok(!result.details['isError'], `resume succeeds: ${result.content[0]?.text}`);
+  assert.ok((result.content[0]?.text ?? '').includes('resumed session'), 'reports the resume');
+  const p = currentPipeline();
+  assert.equal(p.status, 'done');
+  assert.equal(p.phase, 'done');
+  assert.equal(p.verdict, 'pass');
+  assert.equal(p.loop_iteration, 1, 'loop counter survives the interrupt');
+
+  // The resumed reviewer ran once (fix round 1 + resumed pass round).
+  const dispatched = readFakeLog(logFile).map((e) => e.phase);
+  assert.deepEqual(dispatched, ['review', 'review']);
+});
+
+test('resume_session: a failed plan session resumes from the interrupted phase with a resume note', async (t) => {
+  const { cwd, stub, logFile } = setupRun(t);
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'research';
+  const failed = await callTool(stub, 'plan', { user_requirements: 'Build resume' }, cwd);
+  assert.equal(failed.details['isError'], true);
+  const p = currentPipeline();
+  assert.equal(p.status, 'failed');
+  assert.equal(p.phase, 'research');
+
+  // Resume dispatches only the remaining plan phases — not prd again — and
+  // the resumed phase carries the resume note (artifact-aware continuation).
+  delete process.env.JOVALTUS_FAKE_FAIL_ON;
+  const result = await callTool(stub, 'resume_session', { session_id: p.id }, cwd);
+  assert.ok(!result.details['isError'], `resume succeeds: ${result.content[0]?.text}`);
+  const dispatched = readFakeLog(logFile).map((e) => e.phase);
+  assert.deepEqual(dispatched, ['prd', 'research', 'research', 'acceptance', 'tasks']);
+  const resumedResearch = readFakeLog(logFile).find(
+    (e) => e.phase === 'research' && e.prompt.includes('Resumed run'),
+  );
+  assert.ok(resumedResearch !== undefined, 'the resumed phase prompt carries the resume note');
+
+  const done = currentPipeline();
+  assert.equal(done.status, 'done');
+  assert.equal(done.phase, 'done');
+});
+
+test('resume_session: a failed execute session resumes and finishes', async (t) => {
+  const { tmp, cwd, stub } = setupRun(t);
+  const planPath = path.join(tmp, 'plans', 'tasks.md');
+  mkdirSync(path.dirname(planPath), { recursive: true });
+  writeFileSync(planPath, '# Tasks\n', 'utf8');
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'execute';
+  const failed = await callTool(stub, 'execute', { plan: planPath }, cwd);
+  assert.equal(failed.details['isError'], true);
+  const p = currentPipeline();
+  assert.equal(p.status, 'failed');
+
+  delete process.env.JOVALTUS_FAKE_FAIL_ON;
+  const result = await callTool(stub, 'resume_session', { session_id: p.id }, cwd);
+  assert.ok(!result.details['isError'], `resume succeeds: ${result.content[0]?.text}`);
+  const done = currentPipeline();
+  assert.equal(done.status, 'done');
+  assert.equal(done.phase, 'done');
+});
+
+test('resume_session: accepts a run directory and errors on missing/running/done', async (t) => {
+  const { tmp, cwd, stub } = setupRun(t);
+  // Missing.
+  const missing = await callTool(stub, 'resume_session', { session_id: 'ghost' }, cwd);
+  assert.equal(missing.details['isError'], true);
+  assert.ok((missing.content[0]?.text ?? '').includes('no Jovaltus session'));
+
+  // Running: a parked review cannot be resumed while active.
+  useVerdictPlan(tmp, ['fix', 'pass']);
+  const round1 = await callTool(stub, 'review', {}, cwd);
+  assert.equal(round1.details['verdict'], 'fix');
+  const parked = currentPipeline();
+  assert.equal(parked.status, 'running');
+  const running = await callTool(stub, 'resume_session', { session_id: parked.id }, cwd);
+  assert.equal(running.details['isError'], true);
+  assert.ok((running.content[0]?.text ?? '').includes('already running'));
+
+  // Done: finish the loop, then resume errors.
+  const settled = stub.handlers.get('agent_settled');
+  assert.ok(settled !== undefined);
+  const { ctx } = makeCtx(cwd);
+  await settled({}, ctx);
+  assert.equal(currentPipeline().status, 'done');
+  const doneResume = await callTool(stub, 'resume_session', { session_id: parked.id }, cwd);
+  assert.equal(doneResume.details['isError'], true);
+  assert.ok((doneResume.content[0]?.text ?? '').includes('already completed'));
+
+  // A run directory works as the session handle too.
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'acceptance';
+  const failed = await callTool(stub, 'plan', { user_requirements: 'Dir handle' }, cwd);
+  assert.equal(failed.details['isError'], true);
+  const failedSession = currentPipeline();
+  assert.equal(failedSession.status, 'failed');
+  delete process.env.JOVALTUS_FAKE_FAIL_ON;
+  const byDir = await callTool(
+    stub,
+    'resume_session',
+    { session_id: String(failedSession.run_dir) },
+    cwd,
+  );
+  assert.ok(!byDir.details['isError'], 'resume by run_dir succeeds');
+});
+
+test('abort: an aborted phase dispatch interrupts the pipeline instead of failing it', async (t) => {
+  const { cwd, stub } = setupRun(t);
+  process.env.JOVALTUS_FAKE_SLOW_MS = '500';
+  const tool = requireTool(stub, 'plan');
+  const controller = new AbortController();
+  const { ctx } = makeCtx(cwd, { signal: controller.signal });
+  const promise = tool.execute(
+    'call-1',
+    { user_requirements: 'Abort me' },
+    undefined,
+    undefined,
+    ctx,
+  );
+  const abortTimer = setTimeout(() => controller.abort(), 100);
+  const result = (await promise) as ToolCallResult;
+  clearTimeout(abortTimer);
+
+  assert.equal(result.details['isError'], true);
+  assert.ok((result.content[0]?.text ?? '').includes('interrupted'), 'reports interruption');
+  const p = currentPipeline();
+  assert.equal(p.status, 'interrupted');
+  assert.equal(p.error, null, 'an abort is not an error');
+  assert.ok(p.ended_at !== null);
 });

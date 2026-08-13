@@ -38,7 +38,7 @@ Enforced by tooling (`eslint`, `prettier`, `tsc`); documented here because they 
 
 - No test framework installed (see `testing.md`).
 - Any manual verification scripts must be hermetic: no real pi runtime, no LLM, no network.
-- State-machine logic must be testable with an in-memory or temp-dir agent path; never write to the real `~/.pi/agent/jovaltus.json` in tests.
+- State-machine logic must be testable with an in-memory or temp-dir agent path; never write to the real `~/.pi/agent/jovaltus.sqlite` in tests.
 
 ## Commit Conventions
 
@@ -51,7 +51,7 @@ Enforced by tooling (`eslint`, `prettier`, `tsc`); documented here because they 
 
 - Never commit `.env` files or secrets (`.gitignore`).
 - Extensions run with full system permissions — only install trusted sources (pi docs warning).
-- State file `~/.pi/agent/jovaltus.json` may contain repo paths — do not commit or print.
+- State store `~/.pi/agent/jovaltus.sqlite` may contain repo paths — do not commit or print.
 - `vendor/pi-gui` is MIT third-party code — keep the license attribution; review upstream changes on subtree pulls.
 
 ## How to Update

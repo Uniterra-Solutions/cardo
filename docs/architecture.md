@@ -11,7 +11,7 @@ graph TD
   App -->|"in-process SDK<br/>createAgentSessionRuntime"| PiCore["pi-coding-agent core"]
   Jov -->|"spawns phase subagents<br/>pi --mode json -p --no-session --no-extensions"| Child["Child pi processes"]
   Child -->|"LLM calls"| Provider["Model providers<br/>(anthropic / openai / custom)"]
-  Jov -->|"persists state"| StateFile["~/.pi/agent/jovaltus.json"]
+  Jov -->|"persists sessions<br/>(SQLite)"| StateFile["~/.pi/agent/jovaltus.sqlite"]
   Jov -->|"writes artifacts"| PlanDir["<cwd>/.plan/<date>/<name>/"]
 ```
 
@@ -52,7 +52,7 @@ graph TD
 ## Data Flow — one tool invocation
 
 1. User calls a tool (`plan` / `execute` / `simplify` / `review`) in the pi session (CLI) or via the desktop app's agent.
-2. `index.ts` handler validates args, computes the run directory (`<cwd>/.plan/<date>/<slug>/`), and calls `startPipeline` (`state.ts`) — persisted to `~/.pi/agent/jovaltus.json`.
+2. `index.ts` handler validates args, computes the run directory (`<cwd>/.plan/<date>/<slug>/`), and calls `startPipeline` (`state.ts`) — persisted as a session row in `~/.pi/agent/jovaltus.sqlite`.
 3. For each phase in the chain (`chain.ts` CHAIN table), `dispatchPhase` renders the phase prompt (`prompts.ts` → `prompts/<phase>.md` with `[[token]]` substitution) and spawns an isolated child `pi --mode json -p --no-session --no-extensions` process (`dispatch.ts`).
 4. In the desktop app the child is launched through `PI_CLI_PATH` (resolved to the bundled `pi-coding-agent/dist/cli.js`) under `ELECTRON_RUN_AS_NODE`; in the CLI it uses the running pi binary.
 5. The child runs with coding built-ins only (`read,bash,edit,write,grep,find,ls`), inheriting the parent's model/thinking level; its stdout JSONL is parsed for the final assistant text.
@@ -74,7 +74,7 @@ graph TD
 | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | Child pi process per phase (not in-process SDK session)                                    | Official subagent example pattern; isolates context windows; `--no-extensions` prevents recursive extension load                                                                        | Active |
 | Default-exported entry factory                                                             | pi loader contract: `jiti.import(path, { default: true })` then `typeof factory === "function"` — the single exception to the repo's named-exports rule                                 | Active |
-| State persisted to `~/.pi/agent/jovaltus.json`                                             | Cross-session resume; same location pattern as Hermes plugin's state file                                                                                                               | Active |
+| Sessions persisted to `~/.pi/agent/jovaltus.sqlite` (one row per run)                      | Cross-session resume; every run is listed (`list_sessions`) and resumable (`resume_session`); crashes sweep to `interrupted` (pid ownership)                                            | Active |
 | No delegation tool in children                                                             | pi children have no `delegate_task`; execute phase completes the DAG itself instead of dispatching workers `[INFERRED — ported behavior, see packages/jovaltus/src/prompts/execute.md]` | Active |
 | `agent_settled` + `pi.sendUserMessage()` replace Hermes `post_llm_call` + completion queue | pi's event model: settled fires after the agent's run ends; sendUserMessage wakes a new turn                                                                                            | Active |
 | Vendor pi-gui via git subtree, not copy/fork                                               | Code lives in-repo while `git subtree pull` keeps upstream merges semi-automated; MIT with attribution                                                                                  | Active |

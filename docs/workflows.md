@@ -31,7 +31,7 @@ Task recipes for agents working in this repo.
 
 ## Debug a Failed Phase
 
-1. Check `~/.pi/agent/jovaltus.json` → pipeline `status`/`error`.
+1. Check `list_sessions` (or `~/.pi/agent/jovaltus.sqlite`) for the run's `status`/`error`. An `interrupted` run (abort/session-end/crash) can be continued with `resume_session`; a `failed` run records the error.
 2. Run the child invocation manually with the same flags (see `docs/modules/dispatch.md`) to see the raw error.
 3. Verify pi auth: `pi --list-models` must not print "No models available".
 4. Confirm the run dir exists and `verdict.json` (review phases) was written.
