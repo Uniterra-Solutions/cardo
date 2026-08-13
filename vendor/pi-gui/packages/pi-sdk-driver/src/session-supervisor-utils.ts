@@ -199,6 +199,12 @@ export function toSessionErrorInfo(error: unknown, code: string): SessionErrorIn
 
 export function truncate(value: string, limit = 140): string {
   const normalized = value.replace(/\s+/g, " ").trim();
+  if (limit <= 0) {
+    // Cardo: a non-positive limit must yield a result of length <= limit;
+    // slice(0, limit - 1) underflows to "drop the last char" when limit === 0,
+    // producing a string longer than the limit (e.g. truncate("ab", 0) === "a…").
+    return "";
+  }
   if (normalized.length <= limit) {
     return normalized;
   }
@@ -275,7 +281,13 @@ function messageCreatedAt(message: Record<string, unknown>, fallback: string): s
     return message.createdAt;
   }
   if (typeof message.timestamp === "number" && Number.isFinite(message.timestamp)) {
-    return new Date(message.timestamp).toISOString();
+    const date = new Date(message.timestamp);
+    if (!Number.isNaN(date.getTime())) {
+      // Cardo: out-of-range timestamps (corrupt/foreign JSONL, e.g. 1e21) used to
+      // throw RangeError from toISOString(); fall back to the caller-provided
+      // timestamp instead so transcript building never crashes on bad data.
+      return date.toISOString();
+    }
   }
   return fallback;
 }
@@ -346,7 +358,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function messageText(message: Record<string, unknown>): string {
+export function messageText(message: unknown): string {
+  if (!isRecord(message)) {
+    // Cardo: tolerate non-record entries (null / undefined / primitives) from
+    // untyped JSONL data instead of throwing on `message.role`.
+    return "";
+  }
   if (message.role === "branchSummary" || message.role === "compactionSummary") {
     return typeof message.summary === "string" ? message.summary.trim() : "";
   }

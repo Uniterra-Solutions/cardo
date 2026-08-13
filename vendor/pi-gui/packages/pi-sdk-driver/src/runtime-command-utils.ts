@@ -1,5 +1,8 @@
 export function normalizeRuntimeCommandName(value: string): string {
-  return value.trim().replace(/^\/+/, "");
+  // Cardo: re-trim after stripping leading slashes so the function is
+  // idempotent — previously "/ x" normalized to " x", which normalized again
+  // to "x", breaking the normalize-twice == normalize-once contract.
+  return value.trim().replace(/^\/+/, "").trim();
 }
 
 export function skillCommandName(name: string): string {
