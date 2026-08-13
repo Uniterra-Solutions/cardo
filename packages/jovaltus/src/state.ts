@@ -154,6 +154,14 @@ export function getPipeline(): PipelineState | null {
     resetPipeline();
     return null;
   }
+  // The tool field is written only by startPipeline; an unknown tool means
+  // the state file was corrupted or hand-edited. Like an unknown phase, it
+  // is auto-cleared so agent_settled can never silently "complete" a
+  // pipeline whose chain does not exist.
+  if (!Object.keys(FIRST_PHASE).includes(p.tool)) {
+    resetPipeline();
+    return null;
+  }
   return p;
 }
 

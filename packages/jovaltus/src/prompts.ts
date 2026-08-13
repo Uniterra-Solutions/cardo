@@ -81,15 +81,19 @@ export function renderPrompt(p: PipelineState, phase: string, cwd: string): stri
     throw new Error(`no prompt for phase ${phase}`);
   }
   let text = loadPrompt(promptName);
-  text = text.replaceAll('[[run_dir]]', p.run_dir);
-  text = text.replaceAll('[[repo_root]]', repoRoot(cwd));
-  text = text.replaceAll('[[user_requirements]]', p.user_requirements);
+  // Function replacements: string replacement values would interpret `$&`,
+  // $`, $', $n patterns from user-controlled fields (run_dir,
+  // user_requirements) and re-inject the token text into the rendered
+  // prompt — the child would see an unsubstituted [[token]].
+  text = text.replaceAll('[[run_dir]]', () => p.run_dir);
+  text = text.replaceAll('[[repo_root]]', () => repoRoot(cwd));
+  text = text.replaceAll('[[user_requirements]]', () => p.user_requirements);
   // Plan-less simplify/review runs: replace the plan-reading step with a
   // standalone-review instruction. Done BEFORE [[plan_path]] substitution so
   // the step's own plan reference (which embeds [[plan_path]]) resolves too.
-  text = text.replaceAll('[[plan_step]]', planStepText(p, phase));
-  text = text.replaceAll('[[plan_path]]', p.plan_path ?? '');
-  text = text.replaceAll(MARKER_PLACEHOLDER, `[jovaltus-pipeline:${p.tool}:${phase}]`);
+  text = text.replaceAll('[[plan_step]]', () => planStepText(p, phase));
+  text = text.replaceAll('[[plan_path]]', () => p.plan_path ?? '');
+  text = text.replaceAll(MARKER_PLACEHOLDER, () => `[jovaltus-pipeline:${p.tool}:${phase}]`);
   return text;
 }
 
