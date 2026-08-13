@@ -2,6 +2,8 @@
 
 統一桌面工作台 —— 整合 Uniterra 的 Hermes 插件（Jovaltus、Caelterra、Tabularius、Fabricium）於單一 surface，作為全公司 agent 運作的標準基準點。Built on the pi-agent core; plugins live as separate workspace packages.
 
+**文檔：[Documentation](docs/README.md)**（架構圖、模組深潛、設定、測試、工作流）
+
 ## Packages
 
 | Package             | 說明                                                                                                                                                                               |
