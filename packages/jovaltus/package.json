@@ -16,7 +16,7 @@
     ]
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/copy-prompts.mjs",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint src",
     "format": "prettier --write src"
