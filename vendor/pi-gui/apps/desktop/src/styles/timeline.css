@@ -850,6 +850,64 @@
   text-decoration: underline;
 }
 
+/* ---- Markdown tables (GFM via remark-gfm) ------------------------------ */
+/* Visible hairlines in both themes; sharp corners per the 03b system. The
+   wrapper scrolls horizontally instead of squeezing columns into mid-word
+   breaks (`.message__content` sets overflow-wrap: anywhere globally). */
+
+.message__content .message__table-wrap {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.message__content .message__table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.message__content .message__table-wrap th,
+.message__content .message__table-wrap td {
+  border: 1px solid var(--line);
+  padding: 7px 12px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+  white-space: normal;
+  word-break: normal;
+}
+
+.message__content .message__table-wrap th {
+  background: var(--surface-muted);
+  color: var(--text-strong);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+
+.message__content .message__table-wrap tbody tr:first-child th,
+.message__content .message__table-wrap tbody tr:first-child td {
+  border-top: 0;
+}
+
+.message__content .message__table-wrap tr:last-child th,
+.message__content .message__table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+
+.message__content .message__table-wrap th:first-child,
+.message__content .message__table-wrap td:first-child {
+  border-left: 0;
+}
+
+.message__content .message__table-wrap th:last-child,
+.message__content .message__table-wrap td:last-child {
+  border-right: 0;
+}
+
 /* ---- Reduced motion ----------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
