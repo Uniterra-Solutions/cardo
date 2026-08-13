@@ -84,7 +84,7 @@ export function ArrowUpIcon() {
 export function PiLogoMark() {
   return (
     <svg aria-hidden="true" viewBox="0 0 64 64" fill="none">
-      <rect width="64" height="64" rx="18" fill="#1f2638" />
+      <rect width="64" height="64" rx="6" fill="#b4552d" />
       <text
         x="50%"
         y="54%"

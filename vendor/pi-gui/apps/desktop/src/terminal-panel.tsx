@@ -193,10 +193,10 @@ export function TerminalPanel({
       fontSize: 12,
       scrollback: 2_000,
       theme: {
-        background: "#0f1117",
-        foreground: "#d7dae0",
-        cursor: "#f2f4f8",
-        selectionBackground: "#39557a",
+        background: "#221f1a",
+        foreground: "#d7d0c4",
+        cursor: "#f2eee6",
+        selectionBackground: "#b4552d",
       },
     });
     const fitAddon = new FitAddon();

@@ -705,8 +705,8 @@ export const themePresets: readonly ThemePreset[] = [
   {
     id: "default",
     name: "Default",
-    description: "The current pi-gui palette.",
-    swatches: ["#f8f8fb", "#ffffff", "#6a55f2", "#1f2638"],
+    description: "Warm Paper Sharp — the current pi-gui palette.",
+    swatches: ["#f7f4ee", "#fffdf7", "#b4552d", "#26221b"],
     variants: {
       light: { label: "Default light", tokens: {} },
       dark: { label: "Default dark", tokens: {} },
