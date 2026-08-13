@@ -52,15 +52,14 @@ export function createSettingsManagerWithoutNpmPackages(current: SettingsManager
 async function createAgentSessionServicesWithNpmFallback(
   cwd: string,
   agentDir: string,
-  options?: Pick<PiCreateAgentSessionOptions, "authStorage" | "settingsManager" | "modelRegistry" | "resourceLoaderOptions">,
+  options?: Pick<PiCreateAgentSessionOptions, "modelRuntime" | "settingsManager" | "resourceLoaderOptions">,
 ) {
   try {
     return await createAgentSessionServices({
       cwd,
       agentDir,
-      ...(options?.authStorage ? { authStorage: options.authStorage } : {}),
+      ...(options?.modelRuntime ? { modelRuntime: options.modelRuntime } : {}),
       ...(options?.settingsManager ? { settingsManager: options.settingsManager } : {}),
-      ...(options?.modelRegistry ? { modelRegistry: options.modelRegistry } : {}),
       ...(options?.resourceLoaderOptions ? { resourceLoaderOptions: options.resourceLoaderOptions } : {}),
     });
   } catch (error) {
@@ -83,9 +82,8 @@ async function createAgentSessionServicesWithNpmFallback(
     return createAgentSessionServices({
       cwd,
       agentDir,
-      ...(options?.authStorage ? { authStorage: options.authStorage } : {}),
+      ...(options?.modelRuntime ? { modelRuntime: options.modelRuntime } : {}),
       settingsManager: fallbackSettingsManager,
-      ...(options?.modelRegistry ? { modelRegistry: options.modelRegistry } : {}),
       ...(options?.resourceLoaderOptions ? { resourceLoaderOptions: options.resourceLoaderOptions } : {}),
     });
   }

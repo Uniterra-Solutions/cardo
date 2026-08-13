@@ -193,7 +193,7 @@ export class DesktopAppStore implements AppStoreInternals {
   private selectionEpoch = 0;
   private refreshStateDepth = 0;
 
-  constructor(options: DesktopAppStoreOptions) {
+  static async create(options: DesktopAppStoreOptions): Promise<DesktopAppStore> {
     const catalogFilePath = join(options.userDataDir, "catalogs.json");
     const driverOptions: PiSdkDriverConfig = {
       catalogFilePath,
@@ -202,9 +202,13 @@ export class DesktopAppStore implements AppStoreInternals {
         ? { generateThreadTitleOverride: options.generateThreadTitleOverride }
         : {}),
     };
+    const driver = await PiSdkDriver.create(driverOptions);
+    return new DesktopAppStore(options, driver);
+  }
 
-    this.driver = new PiSdkDriver(driverOptions);
-    this.catalogStore = new JsonCatalogStore({ catalogFilePath });
+  private constructor(options: DesktopAppStoreOptions, driver: PiSdkDriver) {
+    this.driver = driver;
+    this.catalogStore = new JsonCatalogStore({ catalogFilePath: join(options.userDataDir, "catalogs.json") });
     this.worktreeManager = new GitWorktreeManager({ catalogStorage: this.catalogStore });
     this.uiStateFilePath = join(options.userDataDir, "ui-state.json");
     this.attachmentStore = new JsonFileStore<ComposerAttachment[]>(options.userDataDir, "attachments");

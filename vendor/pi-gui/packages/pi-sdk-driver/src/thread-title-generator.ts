@@ -6,7 +6,7 @@ import {
   type CreateAgentSessionOptions,
   type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
-import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { SessionModelSelection, WorkspaceRef } from "@pi-gui/session-driver";
 import { messageText as sessionMessageText } from "./session-supervisor-utils.js";
 
@@ -19,8 +19,7 @@ export interface GenerateThreadTitleOptions {
 
 interface ThreadTitleGeneratorDeps {
   readonly agentDir: string;
-  readonly authStorage: AuthStorage;
-  readonly modelRegistry: ModelRegistry;
+  readonly modelRuntime: ModelRuntime;
 }
 
 const MAX_THREAD_TITLE_LENGTH = 36;
@@ -52,15 +51,14 @@ export async function generateThreadTitle(
   const createOptions: CreateAgentSessionOptions = {
     cwd: workspace.path,
     agentDir: deps.agentDir,
-    authStorage: deps.authStorage,
-    modelRegistry: deps.modelRegistry,
+    modelRuntime: deps.modelRuntime,
     resourceLoader,
     settingsManager,
     sessionManager: SessionManager.inMemory(),
     tools: [],
   };
   if (options.model) {
-    const selectedModel = deps.modelRegistry.find(options.model.provider, options.model.modelId);
+    const selectedModel = deps.modelRuntime.getModel(options.model.provider, options.model.modelId);
     if (!selectedModel) {
       return null;
     }
@@ -82,8 +80,8 @@ export async function generateThreadTitle(
     if (!session.model) {
       return null;
     }
-    const auth = await session.modelRegistry.getApiKeyAndHeaders(session.model);
-    if (!auth.ok || !auth.apiKey) {
+    const auth = await deps.modelRuntime.getAuth(session.model);
+    if (!auth) {
       return null;
     }
 
@@ -103,7 +101,9 @@ function createThreadTitleResourceLoader(): ResourceLoader {
     getThemes: () => ({ themes: [], diagnostics: [] }),
     getAgentsFiles: () => ({ agentsFiles: [] }),
     getSystemPrompt: () => THREAD_TITLE_SYSTEM_PROMPT,
+    getSystemPromptSource: () => undefined,
     getAppendSystemPrompt: () => [],
+    getAppendSystemPromptSources: () => [],
     extendResources: () => {},
     reload: async () => {},
   };

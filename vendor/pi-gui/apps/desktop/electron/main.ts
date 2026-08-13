@@ -13,11 +13,29 @@ import {
   type MessageBoxOptions,
 } from "electron";
 import { isValidHttpBaseUrl } from "@pi-gui/pi-sdk-driver";
+import { builtinExtensionFactories, builtinExtensionMetadata } from "@cardo/runtime";
 import { randomUUID } from "node:crypto";
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+// Cardo: point jovaltus phase dispatch at the bundled pi CLI entry. Inside
+// the Electron main process `process.execPath` is the app binary, not a node
+// runtime, so `getPiInvocation` needs an explicit entry; ELECTRON_RUN_AS_NODE
+// is applied by the dispatcher when it spawns a `.js` pi path. The relative
+// layout (out/main -> ../../node_modules) holds both in dev and inside
+// app.asar when packaged.
+if (!process.env.PI_CLI_PATH) {
+  const cliPath = path.join(
+    __dirname,
+    "../../node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+  );
+  if (existsSync(cliPath)) {
+    process.env.PI_CLI_PATH = cliPath;
+  }
+}
 import { DesktopAppStore, type DesktopAppViewState } from "./app-store";
 import {
   createOrchestrationRuntimeExtension,
@@ -188,6 +206,7 @@ function createTestExtensionContext(sessionRef: SessionRef): ExtensionContext {
     getContextUsage: () => undefined,
     compact: () => undefined,
     getSystemPrompt: () => "",
+    scopedModels: [],
   };
 }
 const OPEN_FOLDER_MENU_ITEM_ID = "file.open-folder";
@@ -1033,15 +1052,19 @@ app.whenReady().then(async () => {
     | undefined;
   const orchestrationRuntimeBridge = createStoreBackedOrchestrationRuntimeBridge();
   const driverOptions = {
-    extensionFactories: [createOrchestrationRuntimeExtension(orchestrationRuntimeBridge)],
+    extensionFactories: [
+      createOrchestrationRuntimeExtension(orchestrationRuntimeBridge),
+      ...builtinExtensionFactories,
+    ],
     inlineExtensionMetadata: [
       {
         displayName: "Thread orchestration",
         description: "Start child pi-gui threads from transcript tool calls",
       },
+      ...builtinExtensionMetadata,
     ],
   };
-  store = new DesktopAppStore({
+  store = await DesktopAppStore.create({
     userDataDir: configuredUserDataDir,
     initialWorkspacePaths: resolveInitialWorkspacePaths(),
     getWindow: () => mainWindow,

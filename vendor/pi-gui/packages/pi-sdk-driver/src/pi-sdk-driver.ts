@@ -1,4 +1,4 @@
-import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { SessionCatalogSnapshot, WorkspaceCatalogSnapshot, WorkspaceId } from "@pi-gui/catalogs";
 import type {
   NavigateSessionTreeOptions,
@@ -26,7 +26,7 @@ import {
   type SyncWorkspaceResult,
 } from "./session-supervisor.js";
 import { RuntimeSupervisor, type RuntimeSupervisorOptions } from "./runtime-supervisor.js";
-import { createRuntimeDependencies } from "./runtime-deps.js";
+import { createRuntimeDependencies, type RuntimeDependencies } from "./runtime-deps.js";
 import { generateThreadTitle, type GenerateThreadTitleOptions } from "./thread-title-generator.js";
 
 export interface PiSdkDriverConfig extends PiSdkDriverOptions, RuntimeSupervisorOptions {}
@@ -34,22 +34,25 @@ export interface PiSdkDriverConfig extends PiSdkDriverOptions, RuntimeSupervisor
 export class PiSdkDriver implements SessionDriver {
   private readonly supervisor: SessionSupervisor;
   private readonly agentDir: string;
-  private readonly authStorage: AuthStorage;
-  private readonly modelRegistry: ModelRegistry;
+  private readonly modelRuntime: ModelRuntime;
   private readonly generateThreadTitleOverride:
     | ((workspace: WorkspaceRef, options: GenerateThreadTitleOptions) => Promise<string | null | undefined>)
     | undefined;
   readonly runtimeSupervisor: RuntimeSupervisor;
 
-  constructor(options: PiSdkDriverConfig = {}) {
-    const deps = createRuntimeDependencies(options);
+  static async create(options: PiSdkDriverConfig = {}): Promise<PiSdkDriver> {
+    const deps = await createRuntimeDependencies(options);
+    const runtimeSupervisor = await RuntimeSupervisor.create({ ...options, ...deps });
+    return new PiSdkDriver(options, deps, runtimeSupervisor);
+  }
+
+  private constructor(options: PiSdkDriverConfig, deps: RuntimeDependencies, runtimeSupervisor: RuntimeSupervisor) {
     this.agentDir = deps.agentDir;
-    this.authStorage = deps.authStorage;
-    this.modelRegistry = deps.modelRegistry;
+    this.modelRuntime = deps.modelRuntime;
     this.generateThreadTitleOverride = options.generateThreadTitleOverride;
 
-    this.supervisor = new SessionSupervisor({ ...options, modelRegistry: deps.modelRegistry });
-    this.runtimeSupervisor = new RuntimeSupervisor({ ...options, ...deps });
+    this.supervisor = new SessionSupervisor({ ...options, modelRuntime: deps.modelRuntime });
+    this.runtimeSupervisor = runtimeSupervisor;
   }
 
   createSession(workspace: WorkspaceRef, options?: CreateSessionOptions): Promise<SessionSnapshot> {
@@ -179,19 +182,17 @@ export class PiSdkDriver implements SessionDriver {
           ? override
           : generateThreadTitle(workspace, options, {
               agentDir: this.agentDir,
-              authStorage: this.authStorage,
-              modelRegistry: this.modelRegistry,
+              modelRuntime: this.modelRuntime,
             }),
       );
     }
     return generateThreadTitle(workspace, options, {
       agentDir: this.agentDir,
-      authStorage: this.authStorage,
-      modelRegistry: this.modelRegistry,
+      modelRuntime: this.modelRuntime,
     });
   }
 }
 
-export function createPiSdkDriver(options?: PiSdkDriverConfig): PiSdkDriver {
-  return new PiSdkDriver(options);
+export async function createPiSdkDriver(options?: PiSdkDriverConfig): Promise<PiSdkDriver> {
+  return PiSdkDriver.create(options);
 }

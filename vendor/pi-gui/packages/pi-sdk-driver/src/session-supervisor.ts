@@ -1,7 +1,7 @@
 import { access, realpath, stat, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
-  ModelRegistry,
+  type ModelRuntime,
   SessionManager,
   type AgentSessionRuntime,
   type AgentSession,
@@ -102,7 +102,7 @@ import {
 export interface PiSdkDriverOptions {
   readonly catalogFilePath?: string;
   readonly createAgentSessionRuntimeImpl?: (options?: CreateAgentSessionOptions) => Promise<AgentSessionRuntime>;
-  readonly modelRegistry?: ModelRegistry;
+  readonly modelRuntime?: ModelRuntime;
   readonly extensionFactories?: readonly ExtensionFactory[];
   readonly generateThreadTitleOverride?: (
     workspace: WorkspaceRef,
@@ -177,7 +177,7 @@ interface SkillAdapter {
 export class SessionSupervisor {
   private readonly catalogs: SessionFileCatalogStorage;
   private readonly createAgentSessionRuntimeImpl: (options?: CreateAgentSessionOptions) => Promise<AgentSessionRuntime>;
-  private readonly modelRegistry: ModelRegistry | undefined;
+  private readonly modelRuntime: ModelRuntime | undefined;
   private readonly records = new Map<string, ManagedSessionRecord>();
   private readonly ensureRecordInFlight = new Map<string, Promise<ManagedSessionRecord>>();
   private readonly leaseIdentity: LeaseIdentity = currentLeaseIdentity();
@@ -198,7 +198,7 @@ export class SessionSupervisor {
             ...(options.extensionFactories ? { extensionFactories: [...options.extensionFactories] } : {}),
           },
         }));
-    this.modelRegistry = options.modelRegistry;
+    this.modelRuntime = options.modelRuntime;
   }
 
   listWorkspaces(): Promise<WorkspaceCatalogSnapshot> {
@@ -454,7 +454,7 @@ export class SessionSupervisor {
     const createOptions: CreateAgentSessionOptions = {
       cwd: workspace.path,
       sessionManager: SessionManager.create(workspace.path),
-      ...(this.modelRegistry ? { modelRegistry: this.modelRegistry } : {}),
+      ...(this.modelRuntime ? { modelRuntime: this.modelRuntime } : {}),
     };
     if (initialModel) {
       createOptions.model = initialModel;
@@ -568,7 +568,7 @@ export class SessionSupervisor {
     const createOptions: CreateAgentSessionOptions = {
       cwd: targetWorkspace.path,
       sessionManager: branchedManager,
-      ...(this.modelRegistry ? { modelRegistry: this.modelRegistry } : {}),
+      ...(this.modelRuntime ? { modelRuntime: this.modelRuntime } : {}),
     };
     const forkConfig = deriveSessionConfig(branchedManager);
     if (forkConfig?.provider && forkConfig?.modelId) {
@@ -802,9 +802,13 @@ export class SessionSupervisor {
     }
 
     const model = this.resolveModel(selection.provider, selection.modelId);
-    const auth = await session.modelRegistry.getApiKeyAndHeaders(model);
-    if (!auth.ok) {
-      throw new Error(auth.error);
+    const runtime = this.modelRuntime;
+    if (!runtime) {
+      throw new Error("Model runtime is not configured.");
+    }
+    const auth = await runtime.getAuth(model);
+    if (!auth) {
+      throw new Error(`Model ${selection.provider}/${selection.modelId} is not available (missing auth).`);
     }
 
     const previousModel = session.model;
@@ -1000,7 +1004,7 @@ export class SessionSupervisor {
     const runtime = await this.createAgentSessionRuntimeImpl({
       cwd: workspace.path,
       sessionManager: SessionManager.open(sessionFile),
-      ...(this.modelRegistry ? { modelRegistry: this.modelRegistry } : {}),
+      ...(this.modelRuntime ? { modelRuntime: this.modelRuntime } : {}),
     });
     const session = runtime.session;
 
@@ -1506,7 +1510,7 @@ export class SessionSupervisor {
   }
 
   private resolveModel(provider: string, modelId: string) {
-    const model = this.modelRegistry?.find(provider, modelId);
+    const model = this.modelRuntime?.getModel(provider, modelId);
     if (!model) {
       throw new Error(`Unknown model ${provider}:${modelId}`);
     }
