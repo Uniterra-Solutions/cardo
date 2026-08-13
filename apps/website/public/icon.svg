@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>pi-gui</title>
+  <rect width="64" height="64" rx="18" fill="#1f2638"/>
+  <text
+    x="50%"
+    y="54%"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="SF Pro Display, SF Pro Text, ui-sans-serif, system-ui, sans-serif"
+    font-size="34"
+    font-style="italic"
+    font-weight="700"
+    fill="#ffffff"
+  >
+    &#960;
+  </text>
+</svg>

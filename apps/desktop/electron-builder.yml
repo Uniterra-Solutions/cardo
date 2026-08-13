@@ -1,0 +1,79 @@
+appId: com.pi-gui.desktop
+productName: pi-gui
+copyright: Copyright 2026 Matthew Lam
+electronVersion: 37.10.3
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - out/**/*
+  - package.json
+
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/*.wasm"
+  - "**/node_modules/node-pty/**/*"
+  - "**/node_modules/.pnpm/node-pty*/node_modules/node-pty/**/*"
+
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+mac:
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  notarize: true
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  darkModeSupport: true
+  extraFiles:
+    - from: build/native/pi-gui-notification-status-helper
+      to: MacOS/pi-gui-notification-status-helper
+
+linux:
+  category: Development
+  executableName: pi-gui
+  target:
+    - target: AppImage
+
+win:
+  executableName: pi-gui
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+toolsets:
+  appimage: "1.0.2"
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+
+publish:
+  provider: github
+  owner: minghinmatthewlam
+  repo: pi-gui
