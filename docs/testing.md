@@ -6,11 +6,11 @@ Automated test suites exist as **property-based tests (PBT)** in two lanes,
 plus static gates at the repo root. No vitest/jest is used; PBT runs on
 fast-check ^4.9 + node:test, driving compiled output:
 
-| Lane                               | Command                                    | Covers                                                                                                                                                                    |
-| ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@cardo/jovaltus`                  | `pnpm --filter @cardo/jovaltus test:pbt`   | Extension ↔ pi-backend interaction: state machine, phase chains, prompt rendering, JSONL protocol, full tool surface vs a fake `pi` backend (`test/fixtures/fake-pi.mjs`) |
-| `@pi-gui/desktop` (vendored)       | `pnpm --filter @pi-gui/desktop test:pbt`   | Desktop frontend↔backend contract layer (app-store transitions, persistence, timeline)                                                                                    |
-| `@pi-gui/pi-sdk-driver` (vendored) | `pnpm --filter @pi-gui/pi-sdk-driver test` | Vendored driver pure functions (incl. PBT)                                                                                                                                |
+| Lane                               | Command                                    | Covers                                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@cardo/jovaltus`                  | `pnpm --filter @cardo/jovaltus test:pbt`   | Extension ↔ pi-backend interaction: state machine, phase chains, prompt rendering, JSONL protocol, full tool surface vs a fake `pi` backend (`test/fixtures/fake-pi.mjs`)            |
+| `@pi-gui/desktop` (vendored)       | `pnpm --filter @pi-gui/desktop test:pbt`   | Desktop frontend↔backend contract layer (app-store transitions, persistence, timeline) **+ renderer markdown regression** (`test/pbt/markdown-table.test.mts`, fast SSR, no browser) |
+| `@pi-gui/pi-sdk-driver` (vendored) | `pnpm --filter @pi-gui/pi-sdk-driver test` | Vendored driver pure functions (incl. PBT)                                                                                                                                           |
 
 All suites are hermetic: no pi runtime, no LLM, no network, no real
 agent-dir writes (the jovaltus suite redirects the agent dir per test via
@@ -59,17 +59,20 @@ pnpm --filter @pi-gui/pi-sdk-driver test  # vendored driver pure functions (incl
 #### Visual verification (design system)
 
 Restyles land in token files (`styles/tokens.css`, `styles/base.css`) plus
-per-surface CSS. After a restyle, verify the rendered app against the token
-contract with a hermetic Electron launch:
+per-surface CSS. Regression coverage is layered, fastest first:
 
-1. Launch via `electron.launch()` (plain `playwright`, no `@playwright/test`)
-   with a temp `PI_APP_USER_DATA_DIR` + seeded agent dir and
-   `PI_APP_TEST_MODE=background`.
-2. Wait for the `piApp` bridge, then assert computed styles against the
-   contract: palette tokens (`--main`, `--accent`, …), radii ≤4px on
-   chrome/surfaces, serif on page titles, accent left-border on active rows.
-3. Optionally screenshot each page (threads / new-thread / settings /
-   skills / extensions) for eyeball comparison.
+1. **Fast SSR regression (default)** — `test/pbt/markdown-table.test.mts`
+   renders `MessageMarkdown` with `react-dom/server` `renderToString` (no
+   browser, no Electron; seconds) and asserts the GFM table wrapper +
+   CSS contract (hairline border, sharp radius, `overflow-wrap: normal` on
+   cells, header tint). This catches renderer/CSS regressions deterministically
+   as part of `pnpm --filter @pi-gui/desktop test:pbt`.
+2. **Hermetic Electron screenshot (opt-in, slow)** — for eyeball comparison
+   only, when a restyle changes more than tokens can express. Launch via
+   `electron.launch()` (plain `playwright`) with a temp `PI_APP_USER_DATA_DIR`
+   - seeded agent dir and `PI_APP_TEST_MODE=background`, screenshot each page
+     (threads / new-thread / settings / skills / extensions), and compare
+     against the mockup.
 
 Pitfalls: the app uses `requestSingleInstanceLock()` — kill leftover pi
 Electron processes before each launch, or the new instance quits immediately

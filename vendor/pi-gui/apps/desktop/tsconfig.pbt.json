@@ -4,6 +4,7 @@
     "outDir": "out-pbt",
     "rootDir": "..",
     "baseUrl": ".",
+    "jsx": "react-jsx",
     "composite": false,
     "declaration": true,
     "declarationMap": false,
@@ -35,6 +36,7 @@
     "electron/json-file-store.ts",
     "electron/workspace-paths.ts",
     "src/desktop-state.ts",
-    "src/ipc.ts"
+    "src/ipc.ts",
+    "src/message-markdown.tsx"
   ]
 }
