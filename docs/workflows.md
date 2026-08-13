@@ -8,10 +8,11 @@ Task recipes for agents working in this repo.
 2. Register with `pi.registerTool({ name, label, description, promptGuidelines, parameters: Type.Object(...), execute })`.
 3. If the tool has phases: add chain edges to `src/chain.ts` `CHAIN` + `docs/modules/chain.md`.
 4. If it uses a phase prompt: add `src/prompts/<name>.md` + `PROMPT_NAMES` + `docs/modules/prompts.md`.
-5. If it needs state fields: extend `PipelineState` + `fromDict` + `docs/modules/state.md`.
-6. Run `pnpm run typecheck && pnpm run lint && pnpm run format:check`.
-7. Run the jovaltus PBT suite (`pnpm --filter @cardo/jovaltus test:pbt`) — it encodes invariants over the state machine / chains / prompts / dispatch and fails on drift (e.g. a tool whose first phase no longer matches `CHAIN`, or a prompt with an unsubstituted token). A failing property on a real bug → fix source + add a deterministic regression test.
-8. Verify registration via the jiti stub (see `docs/testing.md`).
+5. If it needs state fields: extend `PipelineState` + `SessionRow` + `rowToPipeline` + `insertRow`/`persistLive` + `docs/modules/state.md`.
+6. If it changes session lifecycle semantics (supersede / interrupt / resume): update the model-based property in `test/pbt/state-machine.test.mts` and add a deterministic regression for the new edge.
+7. Run `pnpm run typecheck && pnpm run lint && pnpm run format:check`.
+8. Run the jovaltus PBT suite (`pnpm --filter @cardo/jovaltus test:pbt`) — it encodes invariants over the state machine / chains / prompts / dispatch and fails on drift (e.g. a tool whose first phase no longer matches `CHAIN`, or a prompt with an unsubstituted token). A failing property on a real bug → fix source + add a deterministic regression test.
+9. Verify registration via the jiti stub (see `docs/testing.md`).
 
 ## Add a New Phase to an Existing Chain
 
@@ -35,6 +36,21 @@ Task recipes for agents working in this repo.
 2. Run the child invocation manually with the same flags (see `docs/modules/dispatch.md`) to see the raw error.
 3. Verify pi auth: `pi --list-models` must not print "No models available".
 4. Confirm the run dir exists and `verdict.json` (review phases) was written.
+
+## Resume an Interrupted Pipeline
+
+1. `list_sessions(status="interrupted")` (or filter `failed`) to find the
+   session — note its `id` or `run_dir`.
+2. `resume_session(session_id="<id>")` — accepts the id or the run
+   directory. A session parked in a fix round (`review_waiting` /
+   `simplify_waiting`) falls back to the reviewer phase and re-checks the
+   current diff; any other session re-runs its interrupted phase with a
+   resume note (reuse artifacts, continue the working tree).
+3. A `failed` session is resumable too (it re-attempts from its phase); a
+   `running` or `done` session is refused — finish or list first.
+4. Interrupted sessions are also auto-recovered: a `running` row left by a
+   crashed process is swept to `interrupted` on the next store access, so a
+   direct resume after a crash works without any manual cleanup.
 
 ## Port a Change from the Hermes Plugin
 

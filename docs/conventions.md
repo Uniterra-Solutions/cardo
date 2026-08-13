@@ -39,6 +39,7 @@ Enforced by tooling (`eslint`, `prettier`, `tsc`); documented here because they 
 - No test framework installed (see `testing.md`).
 - Any manual verification scripts must be hermetic: no real pi runtime, no LLM, no network.
 - State-machine logic must be testable with an in-memory or temp-dir agent path; never write to the real `~/.pi/agent/jovaltus.sqlite` in tests.
+- Session-store business logic (lifecycle, supersede, interrupt, resume) must be covered by the model-based invariants in `test/pbt/state-machine.test.mts`; new lifecycle semantics get a deterministic regression test too.
 
 ## Commit Conventions
 

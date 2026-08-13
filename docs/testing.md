@@ -6,11 +6,11 @@ Automated test suites exist as **property-based tests (PBT)** in two lanes,
 plus static gates at the repo root. No vitest/jest is used; PBT runs on
 fast-check ^4.9 + node:test, driving compiled output:
 
-| Lane                               | Command                                    | Covers                                                                                                                                                                               |
-| ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@cardo/jovaltus`                  | `pnpm --filter @cardo/jovaltus test:pbt`   | Extension ↔ pi-backend interaction: state machine, phase chains, prompt rendering, JSONL protocol, full tool surface vs a fake `pi` backend (`test/fixtures/fake-pi.mjs`)            |
-| `@pi-gui/desktop` (vendored)       | `pnpm --filter @pi-gui/desktop test:pbt`   | Desktop frontend↔backend contract layer (app-store transitions, persistence, timeline) **+ renderer markdown regression** (`test/pbt/markdown-table.test.mts`, fast SSR, no browser) |
-| `@pi-gui/pi-sdk-driver` (vendored) | `pnpm --filter @pi-gui/pi-sdk-driver test` | Vendored driver pure functions (incl. PBT)                                                                                                                                           |
+| Lane                               | Command                                    | Covers                                                                                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cardo/jovaltus`                  | `pnpm --filter @cardo/jovaltus test:pbt`   | Extension ↔ pi-backend interaction: SQLite session store (model-based invariants), phase chains, prompt rendering, JSONL protocol, full tool surface vs a fake `pi` backend (`test/fixtures/fake-pi.mjs`) |
+| `@pi-gui/desktop` (vendored)       | `pnpm --filter @pi-gui/desktop test:pbt`   | Desktop frontend↔backend contract layer (app-store transitions, persistence, timeline) **+ renderer markdown regression** (`test/pbt/markdown-table.test.mts`, fast SSR, no browser)                      |
+| `@pi-gui/pi-sdk-driver` (vendored) | `pnpm --filter @pi-gui/pi-sdk-driver test` | Vendored driver pure functions (incl. PBT)                                                                                                                                                                |
 
 All suites are hermetic: no pi runtime, no LLM, no network, no real
 agent-dir writes (the jovaltus suite redirects the agent dir per test via
@@ -40,6 +40,13 @@ pnpm --filter @cardo/jovaltus test:pbt
 - Fixture backend: `test/fixtures/fake-pi.mjs` emulates `pi --mode json`
   (real child process; verdict-plan file drives deterministic fix loops).
   Stub `ExtensionAPI`/`ExtensionContext`: `test/helpers/stub-api.mts`.
+- **Session-store invariants:** `state-machine.test.mts` runs a model-based
+  property over arbitrary operation sequences (start / advance / verdict /
+  finish / interrupt / resume / orphan-crash) — after every step the store
+  must agree with a lock-step reference model and keep the global
+  invariants (at most one running session owned by the current pid,
+  ended_at iff not running, interrupted never records an error,
+  newest-first listing, getPipeline == newest row).
 - **Bug rule:** a property failing on a real source bug → fix source + add a
   deterministic regression test with the minimal counterexample. A failing
   property on a wrong test/generator → fix the test, never bend the source
