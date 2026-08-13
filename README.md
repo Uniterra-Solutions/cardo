@@ -1,6 +1,12 @@
 # Cardo
 
-統一桌面工作台 —— 整合 Uniterra 的 Hermes 插件（Jovaltus、Caelterra、Tabularius、Fabricium）於單一 surface，作為全公司 agent 運作的標準基準點。
+統一桌面工作台 —— 整合 Uniterra 的 Hermes 插件（Jovaltus、Caelterra、Tabularius、Fabricium）於單一 surface，作為全公司 agent 運作的標準基準點。Built on the pi-agent core; plugins live as separate workspace packages.
+
+## Packages
+
+| Package             | 說明                                                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/jovaltus` | Jovaltus pipeline（plan/execute/simplify/review）作為 pi-agent extension 的移植。安裝：`pi install ./packages/jovaltus` 或 `pi -e packages/jovaltus/src/index.ts`（詳見其 README） |
 
 ## 開發
 
