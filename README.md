@@ -6,9 +6,11 @@
 
 ## Packages
 
-| Package             | 說明                                                                                                                                                                               |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/jovaltus` | Jovaltus pipeline（plan/execute/simplify/review）作為 pi-agent extension 的移植。安裝：`pi install ./packages/jovaltus` 或 `pi -e packages/jovaltus/src/index.ts`（詳見其 README） |
+| Package             | 說明                                                                                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/jovaltus` | Jovaltus pipeline（plan/execute/simplify/review）作為 pi-agent extension。CLI 安裝：`pi install ./packages/jovaltus` 或 `pi -e packages/jovaltus/src/index.ts`；桌面 app 以內建 extension 載入（經 `packages/runtime`） |
+| `packages/runtime`  | 桌面 runtime：內建 extension registry（`builtinExtensionFactories` + `builtinExtensionMetadata`），被 vendored desktop app 消費                                                                                         |
+| `vendor/pi-gui`     | git-subtree 管理的桌面 app（MIT，pi-gui v0.1.0-beta.33）：Electron shell + `@pi-gui/*` driver 套件；pi-coding-agent 對齊 0.84.1                                                                                         |
 
 ## 開發
 
@@ -17,7 +19,11 @@ pnpm install        # 安裝依賴（自動啟用 husky pre-commit hooks）
 pnpm lint           # ESLint（strictTypeChecked + 額外 strict 規則）
 pnpm typecheck      # tsc -b --noEmit
 pnpm format         # Prettier 格式化
-pnpm build          # tsc -b
+pnpm build          # tsc -b（jovaltus + runtime → dist）
+
+# 桌面 app（vendored pi-gui）
+pnpm --filter @pi-gui/desktop dev       # 開發模式（Electron + watch）
+pnpm --filter @pi-gui/desktop build     # production electron-vite build
 ```
 
 ## Pre-commit Hooks
@@ -33,6 +39,8 @@ pnpm build          # tsc -b
 
 - Node ≥ 22（`.nvmrc` / `engines` 鎖定）
 - NodeNext ESM：內部 import 必須帶 `.js` 後綴
-- 只准 named exports，禁止 default exports
+- 只准 named exports，禁止 default exports（單一例外：`packages/jovaltus/src/index.ts` 的 pi loader factory）
 - 禁止 `any`（`no-explicit-any: error`）
+- `vendor/` 由 git subtree 管理——cardo 側只做最小、帶 `// Cardo:` 註解的修改；更新走 `git subtree pull`
+- 桌面 app 消費的 `@cardo/*` 套件 exports 指向 built `dist`（Node 不能直接載 TS source）
 - 詳細見 `AGENTS.md`
