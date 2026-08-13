@@ -16,14 +16,14 @@
 
 ## Verified imports
 
-- `@earendil-works/pi-coding-agent` — `packages/jovaltus/src/index.ts:21` (`ExtensionAPI`, `ExtensionContext`), `src/state.ts:21` (`getAgentDir`); `packages/runtime/src/index.ts` (`ExtensionFactory` type)
+- `@earendil-works/pi-coding-agent` — `packages/jovaltus/src/index.ts:29` (`ExtensionAPI`, `ExtensionContext`), `src/state.ts:30` (`getAgentDir`); `packages/runtime/src/index.ts` (`ExtensionFactory` type)
 - `@earendil-works/pi-ai` — `vendor/pi-gui/packages/pi-sdk-driver/src/runtime-supervisor.ts` (`AuthEvent`, `AuthInteraction`, `AuthPrompt`)
-- `typebox` — `packages/jovaltus/src/index.ts:24` (`Type`)
-- Node built-ins only elsewhere: `node:fs`, `node:path`, `node:child_process`, `node:os`, `node:url`, `node:module`
+- `typebox` — `packages/jovaltus/src/index.ts:32` (`Type`)
+- Node built-ins only elsewhere: `node:fs`, `node:path`, `node:child_process`, `node:os`, `node:url`, `node:module`, `node:sqlite`, `node:crypto`
 
 ## Not present
 
-- No web framework, no database, no test framework (see `testing.md`), no CI config yet, no Docker.
+- No web framework, no external database driver, no test framework (see `testing.md`), no CI config yet, no Docker. The jovaltus session store uses Node's built-in `node:sqlite` (`DatabaseSync`), so no database dependency is added.
 - The vendored app brings its own toolchain (electron-vite, playwright, electron-builder) inside `vendor/pi-gui` — not cardo root deps.
 
 ## Version alignment

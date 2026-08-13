@@ -2,7 +2,7 @@
 
 **Purpose:** Deterministic pipeline state machine with a SQLite session store at `~/.pi/agent/jovaltus.sqlite`.
 
-Source: `packages/jovaltus/src/state.ts` (566 LOC). Ported from the Hermes plugin's `src/jovaltus/state.py`; persistence moved from a single JSON key (fabricium) to a SQLite session table in pi's `getAgentDir()`.
+Source: `packages/jovaltus/src/state.ts` (582 LOC). Ported from the Hermes plugin's `src/jovaltus/state.py`; persistence moved from a single JSON key (fabricium) to a SQLite session table in pi's `getAgentDir()`.
 
 ## Public API
 
@@ -60,12 +60,21 @@ SQLite table `sessions` in `<agentDir>/jovaltus.sqlite` (WAL mode). Every run is
 
 - **Best-effort persistence:** DB failures never crash the pipeline — mutations degrade to in-memory-only; reads degrade to `null`/`[]` (`persistLive`, `state.ts`).
 - **Corrupt-store self-healing:** an unreadable `.sqlite` file is deleted and recreated on next open; `getPipeline()` returns `null` and a fresh pipeline starts cleanly.
-- **Orphan sweep:** `sweepOrphans` marks `running` rows from a dead pid as `interrupted` before every read/write, so a crashed pipeline can never masquerade as active.
+- **Orphan sweep:** `sweepOrphans` marks `running` rows from a dead pid as `interrupted` before every read/write — a crashed pipeline can never masquerade as active. `resumeSession` sweeps first, so a crash's leftover `running` row is directly resumable (not "already running").
 - **Legacy migration:** on first open of an empty store, a pre-SQLite `jovaltus.json` `pipeline` key becomes a session row — `running` migrates as `interrupted` (its owner is gone).
 - **Ordering:** reads order by SQLite `rowid DESC` (insertion order), not `created_at` — timestamps can tie within a millisecond.
 - **In-memory staleness:** after a session is superseded/resumed, only the store is authoritative; callers must re-read via `getPipeline`/`getSession`.
+- **Invalid-row invisibility:** a row whose phase/tool is out-of-domain is dropped by `getPipeline` and invisible to `getSession`/`listSessions`/`resumeSession` (corrupt rows never block the chain).
+
+## Property-based coverage
+
+The store's business logic is locked as invariants in `test/pbt/state-machine.test.mts`:
+
+- **Model-based property:** arbitrary operation sequences (start / advance / verdict / finish / interrupt / resume / orphan-crash) must, after every step, agree with a lock-step reference model and preserve the global invariants: at most one `running` session owned by the current pid, `ended_at` iff not running, `interrupted` never records an error, newest-first listing, `getPipeline` == newest row.
+- **Deterministic regressions:** an orphaned `running` row is directly resumable (the resume path sweeps before lookup); corrupted rows are invisible to list/get/resume.
+- Bug rule: a property failing on a real bug → fix source + add a deterministic regression test with the minimal counterexample.
 
 ## How to Update
 
 - New phase/status → update `PHASES`/`STATUSES` + the chain tables in `chain.ts`.
-- New field → add to interface + `SessionRow` + `rowToPipeline` + `insertRow`/`persistLive` + this table.
+- New field → add to interface + `SessionRow` + `rowToPipeline` + `insertRow`/`persistLive` + this table + the model-based property in `state-machine.test.mts`.
