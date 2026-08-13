@@ -28,6 +28,15 @@
  *     interrupted/failed sessions and throws on missing/running/done.
  *  9. Legacy migration: a pre-SQLite jovaltus.json pipeline becomes a
  *     session row (running → interrupted).
+ * 10. MODEL-BASED property: arbitrary sequences of store operations
+ *     (start/advance/verdict/finish/interrupt/resume/orphan-crash) preserve
+ *     the global invariants — at most one running session owned by the
+ *     current pid, ended_at iff not running, interrupted never records an
+ *     error, newest-first listing, getPipeline == newest row — and agree
+ *     with a lock-step reference model after every step.
+ * 11. Regression: an orphaned "running" row is directly resumable (the
+ *     resume path sweeps orphans before the lookup); corrupted rows are
+ *     invisible to list/get/resume.
  *
  * The agent dir is redirected per test via PI_CODING_AGENT_DIR (pi's
  * getAgentDir() honours it), so the real ~/.pi/agent is never touched.
@@ -468,5 +477,345 @@ test('migration: a legacy jovaltus.json pipeline becomes a session row', () => {
     assert.equal(p.phase, 'done');
   } finally {
     rmSync(doneDir, { recursive: true, force: true });
+  }
+});
+
+// ---- model-based: session-store invariants under arbitrary sequences -------
+
+/**
+ * A compact reference model of the session store: one entry per session with
+ * the fields the store guarantees. The model is advanced in lock-step with
+ * the real store; after every operation both must agree, and a set of global
+ * invariants must hold no matter how the operations interleave.
+ */
+interface ModelSession {
+  id: string;
+  tool: string;
+  phase: string;
+  status: string;
+  error: string | null;
+  endedAt: boolean;
+  pidIsCurrent: boolean;
+  order: number;
+}
+
+interface ModelState {
+  model: Map<string, ModelSession>;
+  nextOrder: number;
+}
+
+type Operation =
+  | { kind: 'start'; tool: string }
+  | { kind: 'advance' }
+  | { kind: 'verdict'; value: 'pass' | 'fix' }
+  | { kind: 'finish'; ok: boolean }
+  | { kind: 'interrupt' }
+  | { kind: 'resume'; which: 'newest' | 'oldest' }
+  | { kind: 'orphan' };
+
+function latestRunningId(model: Map<string, ModelSession>): string | null {
+  let best: ModelSession | null = null;
+  for (const s of model.values()) {
+    if (s.status === 'running' && (best === null || s.order > best.order)) {
+      best = s;
+    }
+  }
+  return best === null ? null : best.id;
+}
+
+/** Mutate the real store + reference model for one operation. */
+function applyOperation(op: Operation, state: ModelState, agentDir: string): void {
+  switch (op.kind) {
+    case 'start': {
+      const runDir = `/repo/.plan/20260101/run-${String(state.nextOrder)}`;
+      const p = startPipeline(op.tool, runDir, 'req', null);
+      // A new run supersedes any other running session.
+      for (const s of state.model.values()) {
+        if (s.status === 'running') {
+          s.status = 'interrupted';
+          s.endedAt = true;
+        }
+      }
+      const order = state.nextOrder;
+      state.nextOrder += 1;
+      state.model.set(p.id, {
+        id: p.id,
+        tool: op.tool,
+        phase: firstPhaseOf(op.tool),
+        status: 'running',
+        error: null,
+        endedAt: false,
+        pidIsCurrent: true,
+        order,
+      });
+      break;
+    }
+    case 'advance': {
+      const id = latestRunningId(state.model);
+      if (id === null) {
+        break;
+      }
+      const m = state.model.get(id);
+      if (m === undefined) {
+        break;
+      }
+      const next = CHAIN[m.tool]?.[m.phase];
+      if (next === undefined) {
+        break; // no chain edge (terminal phase) — nothing to advance to
+      }
+      const p = getSession(id);
+      assert.ok(p !== null, 'running session is retrievable');
+      setPhase(p, next);
+      m.phase = next;
+      break;
+    }
+    case 'verdict': {
+      const id = latestRunningId(state.model);
+      if (id === null) {
+        break;
+      }
+      const p = getSession(id);
+      assert.ok(p !== null, 'running session is retrievable');
+      setVerdict(p, op.value);
+      break;
+    }
+    case 'finish': {
+      const id = latestRunningId(state.model);
+      if (id === null) {
+        // No running session: finishing the newest terminal session is a
+        // no-op (idempotency lives in the store too).
+        const rows = listSessions();
+        if (rows.length === 0) {
+          break;
+        }
+        const newest = rows[0];
+        assert.ok(newest !== undefined);
+        const before = normalize(newest);
+        finishPipeline(newest, op.ok, op.ok ? null : 'boom');
+        const after = listSessions()[0];
+        assert.ok(after !== undefined);
+        assert.deepEqual(
+          normalize(after),
+          normalize(before),
+          'finishPipeline is a no-op on a finished session',
+        );
+        break;
+      }
+      const p = getSession(id);
+      assert.ok(p !== null, 'running session is retrievable');
+      finishPipeline(p, op.ok, op.ok ? null : 'boom');
+      const m = state.model.get(id);
+      assert.ok(m !== undefined, 'model entry exists');
+      m.status = op.ok ? 'done' : 'failed';
+      m.error = op.ok ? null : 'boom';
+      m.endedAt = true;
+      break;
+    }
+    case 'interrupt': {
+      const id = latestRunningId(state.model);
+      if (id === null) {
+        break;
+      }
+      const m = state.model.get(id);
+      if (m === undefined) {
+        break;
+      }
+      const p = getSession(id);
+      assert.ok(p !== null, 'running session is retrievable');
+      markInterrupted(p);
+      m.status = 'interrupted';
+      m.endedAt = true;
+      break;
+    }
+    case 'resume': {
+      const entries = [...state.model.values()].sort((a, b) => a.order - b.order);
+      const target = op.which === 'newest' ? entries[entries.length - 1] : entries[0];
+      if (target === undefined) {
+        break;
+      }
+      const m = state.model.get(target.id);
+      assert.ok(m !== undefined);
+      if (m.status === 'running') {
+        assert.throws(
+          () => resumeSession(m.id),
+          /already running/,
+          `resuming a running session throws (${m.id})`,
+        );
+      } else if (m.status === 'done') {
+        assert.throws(
+          () => resumeSession(m.id),
+          /already completed/,
+          `resuming a done session throws (${m.id})`,
+        );
+      } else {
+        const p = resumeSession(m.id);
+        assert.equal(p.status, 'running');
+        assert.equal(p.error, null, 'resume clears the failure message');
+        assert.equal(p.ended_at, null);
+        assert.equal(p.pid, process.pid);
+        // The resumed session becomes the only running one.
+        for (const s of state.model.values()) {
+          if (s.id !== m.id && s.status === 'running') {
+            s.status = 'interrupted';
+            s.endedAt = true;
+          }
+        }
+        m.status = 'running';
+        m.error = null;
+        m.endedAt = false;
+        m.pidIsCurrent = true;
+      }
+      break;
+    }
+    case 'orphan': {
+      const id = latestRunningId(state.model);
+      if (id === null) {
+        break;
+      }
+      const m = state.model.get(id);
+      if (m === undefined) {
+        break;
+      }
+      // Simulate a crash: the owning process dies mid-run.
+      const d = new DatabaseSync(path.join(agentDir, DB_FILE));
+      try {
+        d.prepare('UPDATE sessions SET pid = ? WHERE id = ?').run(process.pid + 1000000, m.id);
+      } finally {
+        d.close();
+      }
+      m.pidIsCurrent = false;
+      // The next store access sweeps the orphan (any hook would).
+      getPipeline();
+      m.status = 'interrupted';
+      m.endedAt = true;
+      break;
+    }
+  }
+}
+
+/** Global invariants + reference-model agreement after every operation. */
+function checkStoreInvariants(model: Map<string, ModelSession>): void {
+  const rows = listSessions();
+
+  // The store shows exactly the modeled sessions, newest first.
+  const expectedIds = [...model.values()].sort((a, b) => b.order - a.order).map((s) => s.id);
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    expectedIds,
+    'listSessions is newest-first',
+  );
+
+  const running = rows.filter((r) => r.status === 'running');
+  assert.ok(running.length <= 1, 'at most one running session');
+
+  for (const r of rows) {
+    const m = model.get(r.id);
+    assert.ok(m !== undefined, 'every row has a model entry');
+    assert.equal(r.status, m.status, `status matches for ${r.id}`);
+    assert.equal(r.phase, m.phase, `phase matches for ${r.id}`);
+    assert.equal(r.error, m.error, `error matches for ${r.id}`);
+    assert.equal(r.ended_at === null, !m.endedAt, `ended_at iff ended for ${r.id}`);
+    assert.equal(r.pid === process.pid, m.pidIsCurrent, `pid ownership for ${r.id}`);
+    assert.ok([...PHASES, 'done'].includes(r.phase), `phase in-domain (${r.id})`);
+    assert.ok(STATUSES.includes(r.status), `status in-domain (${r.id})`);
+    assert.ok((TOOLS as readonly string[]).includes(r.tool), `tool in-domain (${r.id})`);
+    assert.ok(!Number.isNaN(Date.parse(r.created_at)), 'created_at is an ISO timestamp');
+    assert.ok(!Number.isNaN(Date.parse(r.updated_at)), 'updated_at is an ISO timestamp');
+    if (r.status === 'running') {
+      assert.equal(r.pid, process.pid, 'a running session is owned by this process');
+    }
+    if (r.status === 'interrupted') {
+      assert.equal(r.error, null, 'an interrupted session records no error');
+    }
+  }
+
+  // getPipeline always yields the newest session (or null when empty).
+  const gp = getPipeline();
+  if (rows.length === 0) {
+    assert.equal(gp, null, 'empty store: no pipeline');
+  } else {
+    assert.ok(gp !== null);
+    assert.equal(gp.id, rows[0]?.id, 'getPipeline returns the newest session');
+  }
+}
+
+test('model-based: arbitrary operation sequences preserve the session-store invariants', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+    const arbOperation: fc.Arbitrary<Operation> = fc.oneof(
+      fc.record({ kind: fc.constant('start'), tool: fc.constantFrom(...TOOLS) }),
+      fc.constant({ kind: 'advance' }),
+      fc.record({ kind: fc.constant('verdict'), value: fc.constantFrom('pass', 'fix') }),
+      fc.record({ kind: fc.constant('finish'), ok: fc.boolean() }),
+      fc.constant({ kind: 'interrupt' }),
+      fc.record({ kind: fc.constant('resume'), which: fc.constantFrom('newest', 'oldest') }),
+      fc.constant({ kind: 'orphan' }),
+    );
+    await fc.assert(
+      fc.property(fc.array(arbOperation, { maxLength: 40 }), (ops) => {
+        freshAgent(agentDir);
+        const state: ModelState = { model: new Map<string, ModelSession>(), nextOrder: 0 };
+        for (const op of ops) {
+          applyOperation(op, state, agentDir);
+          checkStoreInvariants(state.model);
+        }
+      }),
+    );
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('resumeSession: an orphaned running session (crash) is directly resumable', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+    const p = startPipeline('review', '/run', 'req', null);
+    setVerdict(p, 'fix');
+    setPhase(p, 'review_waiting');
+    // The owner crashes mid-run (pid rewritten to a dead process) and NO
+    // hook touches the store before the user resumes it directly.
+    const d = new DatabaseSync(path.join(agentDir, DB_FILE));
+    try {
+      d.prepare('UPDATE sessions SET pid = ? WHERE id = ?').run(process.pid + 999999, p.id);
+    } finally {
+      d.close();
+    }
+    const resumed = resumeSession(p.id); // must not throw "already running"
+    assert.equal(resumed.status, 'running');
+    assert.equal(resumed.phase, 'review_waiting', 'parking phase preserved for resume');
+    assert.equal(resumed.error, null);
+    assert.equal(getSession(p.id)?.status, 'running');
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
+  }
+});
+
+test('invalid rows: corrupted sessions are invisible to list/get/resume', async () => {
+  const agentDir = makeTmpDir();
+  try {
+    setAgentDir(agentDir);
+    const good = startPipeline('plan', '/run/good', 'req', null);
+    finishPipeline(good, true);
+    // Hand-insert a corrupt row (unknown phase) directly into the store.
+    const corruptId = 'corrupt-row';
+    const d = new DatabaseSync(path.join(agentDir, DB_FILE));
+    try {
+      d.prepare(
+        `INSERT INTO sessions (
+           id, run_dir, tool, phase, status, user_requirements, plan_path,
+           loop_iteration, verdict, error, pid, created_at, updated_at, ended_at
+         ) VALUES (?, '/run/corrupt', 'plan', 'banana', 'running', '', NULL, 0, NULL, NULL, ?, ?, ?, NULL)`,
+      ).run(corruptId, process.pid, new Date().toISOString(), new Date().toISOString());
+    } finally {
+      d.close();
+    }
+    assert.equal(listSessions().length, 1, 'the corrupt row is not listed');
+    assert.equal(getSession(corruptId), null, 'the corrupt row is not found by id');
+    assert.equal(getSession('/run/corrupt'), null, 'the corrupt run_dir is not found');
+    assert.throws(() => resumeSession(corruptId), /no Jovaltus session/);
+  } finally {
+    setAgentDir(makeTmpDir('jovaltus-cleanup-'));
   }
 });

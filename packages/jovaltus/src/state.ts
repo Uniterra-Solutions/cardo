@@ -341,6 +341,11 @@ function persistLive(p: PipelineState): void {
   }
 }
 
+/** A pipeline row is usable only when its phase and tool are in-domain. */
+function isValidPipeline(p: PipelineState): boolean {
+  return VALID_PHASES.includes(p.phase) && Object.keys(FIRST_PHASE).includes(p.tool);
+}
+
 // Public API ----------------------------------------------------------------
 
 /**
@@ -361,7 +366,7 @@ export function getPipeline(): PipelineState | null {
       return null;
     }
     const p = rowToPipeline(row);
-    if (!VALID_PHASES.includes(p.phase) || !Object.keys(FIRST_PHASE).includes(p.tool)) {
+    if (!isValidPipeline(p)) {
       d.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
       return null;
     }
@@ -486,7 +491,7 @@ export function listSessions(): PipelineState[] {
     const rows = d
       .prepare('SELECT * FROM sessions ORDER BY rowid DESC')
       .all() as unknown as SessionRow[];
-    return rows.map(rowToPipeline);
+    return rows.map(rowToPipeline).filter(isValidPipeline);
   } catch {
     return [];
   }
@@ -503,12 +508,17 @@ export function getSession(idOrRunDir: string): PipelineState | null {
     const byId = d.prepare('SELECT * FROM sessions WHERE id = ?').get(key) as
       SessionRow | undefined;
     if (byId !== undefined) {
-      return rowToPipeline(byId);
+      const p = rowToPipeline(byId);
+      return isValidPipeline(p) ? p : null;
     }
     const byRunDir = d
       .prepare('SELECT * FROM sessions WHERE run_dir = ? ORDER BY rowid DESC LIMIT 1')
       .get(key) as SessionRow | undefined;
-    return byRunDir === undefined ? null : rowToPipeline(byRunDir);
+    if (byRunDir === undefined) {
+      return null;
+    }
+    const p = rowToPipeline(byRunDir);
+    return isValidPipeline(p) ? p : null;
   } catch {
     return null;
   }
@@ -520,6 +530,14 @@ export function getSession(idOrRunDir: string): PipelineState | null {
  * running, or already completed successfully.
  */
 export function resumeSession(idOrRunDir: string): PipelineState {
+  // An orphaned "running" row (the owning process crashed) is resumable, not
+  // "already running" — sweep before the lookup so a direct resume works even
+  // when no hook touched the store since the crash.
+  try {
+    sweepOrphans(getDb());
+  } catch {
+    // best-effort, same as the other store accessors
+  }
   const existing = getSession(idOrRunDir);
   if (existing === null) {
     throw new Error(`no Jovaltus session found: ${idOrRunDir}`);
