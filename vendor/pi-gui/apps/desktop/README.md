@@ -67,6 +67,14 @@ Use the smallest lane that matches the changed surface.
   pnpm --filter @pi-gui/desktop run test:e2e:core
   ```
 
+- `pbt`
+  Property-based tests (fast-check + node:test) for the frontend↔backend contract layer — the pure state-transformation and persistence logic in `electron/app-store-*.ts` and the vendored driver packages. Use this when a change touches session state transitions, timeline rendering logic, workspace/session records, or persistence roundtrips; it is the fastest signal that business-logic invariants still hold without launching Electron.
+
+  ```bash
+  pnpm --filter @pi-gui/desktop run test:pbt
+  pnpm --filter @pi-gui/pi-sdk-driver test
+  ```
+
 - `live`
   Real runtime/provider coverage. Use this when the change depends on an actual run, transcript item, tool call, or background notification.
 
@@ -142,6 +150,23 @@ Use manual Computer Use smoke only as a complement, not a replacement.
 - The reason to use Computer Use is product confidence, not determinism. It is useful when you want to see the real installed app behave correctly while minimizing disruption to the laptop.
 - Keep Playwright as the primary regression signal. Computer Use should not replace lane coverage for `core`, `live`, `native`, or `production`, and it should not become a hidden repo dependency.
 - Treat real open-folder and native file-picker checks in Computer Use as best-effort smoke coverage unless the workflow is explicitly being validated there.
+
+## Property-Based Tests (PBT)
+
+The desktop app uses `fast-check` + `node:test` to lock down business-logic invariants across the pi-gui ↔ pi-agent contract layer without launching Electron. The pattern: define the behavior of a pure transformation as properties (revision increments, field-merge precedence, roundtrip equality, never-throws), then let fast-check generate thousands of arbitrary inputs and shrink any counterexample.
+
+- Test files live in `apps/desktop/test/pbt/` (`*.test.mts`, run directly by Node 22) and `packages/pi-sdk-driver/test/`.
+- `tsconfig.pbt.json` compiles the pure `electron/app-store-*.ts` modules + `src/desktop-state.ts` into `out-pbt/` (gitignored); tests import the compiled output, never the source.
+- Shared generators (`fc.arbitrary` factories) live in `test/pbt/arbitraries.mts`.
+- When a property fails because of a real bug, fix the source with a `// Cardo:` marker and add a deterministic regression test with the minimal counterexample alongside the PBT. If the failure is a wrong test, fix the test.
+- Known intentional limits: `sessionKey`'s `:`-delimited format means key collision is possible across refs whose ids contain `:`; the PBT pins injectivity over the in-domain alphabet instead of changing the persisted format.
+
+```bash
+# desktop contract layer (app-store state/persistence/timeline)
+pnpm --filter @pi-gui/desktop run test:pbt
+# vendored driver pure functions (session-supervisor-utils, schema, lease)
+pnpm --filter @pi-gui/pi-sdk-driver test
+```
 
 ## Targeted Commands
 
