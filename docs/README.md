@@ -13,6 +13,7 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 | Know what technologies we use            | [tech-stack.md](tech-stack.md)               |
 | Find where code lives                    | [project-structure.md](project-structure.md) |
 | Know the code conventions                | [conventions.md](conventions.md)             |
+| Style / theme the desktop app            | [design-system.md](design-system.md)         |
 | Understand the extension entry / 4 tools | [modules/extension.md](modules/extension.md) |
 | Understand the pipeline state machine    | [modules/state.md](modules/state.md)         |
 | Understand phase chains + verdicts       | [modules/chain.md](modules/chain.md)         |
@@ -27,6 +28,7 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 - [project-structure.md](project-structure.md) — directory map + module map
 - [architecture.md](architecture.md) — C4 diagrams, data flow, decisions
 - [conventions.md](conventions.md) — code style, testing, commit, security rules
+- [design-system.md](design-system.md) — 03b Warm Paper Sharp tokens, palette, radii, theming
 - [modules/extension.md](modules/extension.md) — entry factory, 4 tools, 2 events
 - [modules/state.md](modules/state.md) — PipelineState + JSON persistence
 - [modules/chain.md](modules/chain.md) — CHAIN tables, verdict readers

@@ -56,6 +56,26 @@ pnpm --filter @pi-gui/desktop test:pbt    # app-store contract PBT (compiles pur
 pnpm --filter @pi-gui/pi-sdk-driver test  # vendored driver pure functions (incl. PBT)
 ```
 
+#### Visual verification (design system)
+
+Restyles land in token files (`styles/tokens.css`, `styles/base.css`) plus
+per-surface CSS. After a restyle, verify the rendered app against the token
+contract with a hermetic Electron launch:
+
+1. Launch via `electron.launch()` (plain `playwright`, no `@playwright/test`)
+   with a temp `PI_APP_USER_DATA_DIR` + seeded agent dir and
+   `PI_APP_TEST_MODE=background`.
+2. Wait for the `piApp` bridge, then assert computed styles against the
+   contract: palette tokens (`--main`, `--accent`, …), radii ≤4px on
+   chrome/surfaces, serif on page titles, accent left-border on active rows.
+3. Optionally screenshot each page (threads / new-thread / settings /
+   skills / extensions) for eyeball comparison.
+
+Pitfalls: the app uses `requestSingleInstanceLock()` — kill leftover pi
+Electron processes before each launch, or the new instance quits immediately
+(`persistence flush timed out during quit` in stderr). See `docs/design-system.md`
+for the token contract.
+
 ### Manual / ad-hoc verification (documented, hermetic)
 
 Pure-logic paths can be verified without a pi runtime or LLM by loading the TS modules through pi's jiti and asserting behavior:
