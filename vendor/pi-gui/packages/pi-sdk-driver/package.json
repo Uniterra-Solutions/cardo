@@ -28,5 +28,8 @@
     "@earendil-works/pi-coding-agent": "^0.84.1",
     "@pi-gui/catalogs": "workspace:*",
     "@pi-gui/session-driver": "workspace:*"
+  },
+  "devDependencies": {
+    "fast-check": "^4.9.0"
   }
 }

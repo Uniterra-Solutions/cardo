@@ -5,5 +5,6 @@ dist-electron
 *.log
 .tmp-userdata-debug
 test-results
+out-pbt
 tmp-chat-selftest.mjs
 tmp-parallel-selftest.mjs

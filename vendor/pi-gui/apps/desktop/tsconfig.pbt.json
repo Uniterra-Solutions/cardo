@@ -1,0 +1,40 @@
+{
+  "extends": ["./tsconfig.electron.json"],
+  "compilerOptions": {
+    "outDir": "out-pbt",
+    "rootDir": "..",
+    "baseUrl": ".",
+    "composite": false,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": false,
+    "types": ["node", "electron"],
+    "paths": {
+      "@pi-gui/pi-sdk-driver": ["../../packages/pi-sdk-driver/dist/index.d.ts"],
+      "@pi-gui/pi-sdk-driver/custom-provider-types": [
+        "../../packages/pi-sdk-driver/dist/custom-provider-types.d.ts"
+      ],
+      "@pi-gui/pi-sdk-driver/dev-reload-probe": ["../../packages/pi-sdk-driver/dist/dev-reload-probe.d.ts"],
+      "@pi-gui/catalogs": ["../../packages/catalogs/dist/index.d.ts"],
+      "@pi-gui/catalogs/dev-reload-probe": ["../../packages/catalogs/dist/dev-reload-probe.d.ts"],
+      "@pi-gui/session-driver": ["../../packages/session-driver/dist/index.d.ts"],
+      "@pi-gui/session-driver/runtime-types": ["../../packages/session-driver/dist/runtime-types.d.ts"],
+      "@pi-gui/session-driver/dev-reload-probe": ["../../packages/session-driver/dist/dev-reload-probe.d.ts"]
+    }
+  },
+  "include": [
+    "electron/app-store-utils.ts",
+    "electron/app-store-timeline.ts",
+    "electron/app-store-session-state.ts",
+    "electron/app-store-persistence.ts",
+    "electron/app-store-diff.ts",
+    "electron/app-store-files.ts",
+    "electron/orchestration-runtime.ts",
+    "electron/atomic-file-write.ts",
+    "electron/json-file-store.ts",
+    "electron/workspace-paths.ts",
+    "src/desktop-state.ts",
+    "src/ipc.ts"
+  ]
+}
