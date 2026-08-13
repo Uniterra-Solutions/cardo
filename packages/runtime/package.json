@@ -1,0 +1,26 @@
+{
+  "name": "@cardo/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cardo desktop runtime: built-in extension registry for the pi-gui shell.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src",
+    "format": "prettier --write src"
+  },
+  "dependencies": {
+    "@cardo/jovaltus": "workspace:*",
+    "@earendil-works/pi-coding-agent": "^0.84.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}
