@@ -1,0 +1,31 @@
+node_modules/
+.turbo/
+plans/
+dist/
+build/
+out/
+release/
+release-*/
+.cache/
+playwright-report/
+test-results/
+.claude/worktrees/
+.codex/worktrees/
+.DS_Store
+tmp-chat-parity.png
+tmp-latest-design.png
+tmp-sample-design.png
+
+# Vite dev build artifacts
+*.js
+*.css
+!/apps/**/*.js
+!/apps/**/*.css
+!/packages/**/*.js
+!/packages/**/*.css
+index.html
+!apps/**/index.html
+
+# Vite hashed build output (anywhere)
+*-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9].js
+*-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9].css

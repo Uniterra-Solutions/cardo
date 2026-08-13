@@ -1,0 +1,29 @@
+{
+  "name": "@pi-gui/session-driver",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Durable session driver contract for pi-gui.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./runtime-types": {
+      "types": "./dist/runtime-types.d.ts",
+      "default": "./dist/runtime-types.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

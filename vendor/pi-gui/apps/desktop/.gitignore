@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-electron
+.vite
+*.log
+.tmp-userdata-debug
+test-results
+tmp-chat-selftest.mjs
+tmp-parallel-selftest.mjs
