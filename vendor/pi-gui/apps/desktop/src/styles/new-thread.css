@@ -41,10 +41,12 @@
 
 .new-thread__hero h1 {
   margin: 0;
+  font-family: var(--font-serif);
   color: var(--text-strong);
   font-size: 30px;
   font-weight: 640;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
 }
 
 .new-thread__title {
@@ -58,7 +60,7 @@
 
 .new-thread__workspace {
   padding: 8px 12px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text-strong);
@@ -86,7 +88,7 @@
 
 .new-thread__environment {
   padding: 7px 11px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--surface-muted);
   color: var(--muted-strong);

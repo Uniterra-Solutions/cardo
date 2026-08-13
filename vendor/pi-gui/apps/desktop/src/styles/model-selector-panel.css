@@ -1,7 +1,7 @@
 /* =============================================================================
  * Model selector — composer-footer trigger + dropdown.
  * Extracted from main.css. The trigger is promoted from bare gray text to a
- * discrete pill control so the active model/thinking level reads as a real
+ * discrete control so the active model/thinking level reads as a real
  * affordance (Codex parity).
  * ========================================================================== */
 
@@ -25,7 +25,7 @@
   min-height: 24px;
   padding: 2px 9px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   background: var(--surface-muted);
   color: var(--muted-strong);
   font-size: 12px;
