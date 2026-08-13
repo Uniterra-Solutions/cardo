@@ -64,7 +64,7 @@ cp -r packages/jovaltus ~/.pi/agent/extensions/jovaltus
 ```
 
 After install, `/reload` (or restart pi). The startup header lists the
-loaded extension; the four tools appear in the tool list.
+loaded extension; the six tools appear in the tool list.
 
 > **Security:** extensions run with full system permissions. Only install
 > from sources you trust.
@@ -73,7 +73,7 @@ loaded extension; the four tools appear in the tool list.
 
 | Hermes plugin concept                    | pi-agent equivalent                                                                    |
 | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `ctx.register_tool` × 4                  | `pi.registerTool()` × 4 (typebox schema)                                               |
+| `ctx.register_tool` × 4                  | `pi.registerTool()` × 6 (plan/execute/simplify/review/list_sessions/resume_session)    |
 | `subagent_lifecycle.launch()`            | child `pi --mode json -p --no-session --no-extensions` process (see `src/dispatch.ts`) |
 | `state.py` PipelineState + JSON          | `src/state.ts` — SQLite session store at `<agentDir>/jovaltus.sqlite`                  |
 | `CHAIN` table                            | `src/chain.ts`                                                                         |
@@ -124,10 +124,14 @@ backend interaction end-to-end:
 
 - **Pure logic layers** — `state.ts` (domain closure of CHAIN-valid phase
   transitions, terminal lock, persistence roundtrip, corrupt-state
-  recovery), `chain.ts` (edge validity, verdict-reader totality/roundtrip),
-  `prompts.ts` (no leftover tokens, exact marker, `$`-pattern regression),
-  `dispatch.ts` JSONL decoding (last assistant message_end wins, total over
-  arbitrary output).
+  recovery, and a **model-based property over arbitrary session-store
+  operations** — start/supersede/finish/interrupt/resume/orphan-crash must
+  preserve the invariants: at most one running session owned by the current
+  pid, ended_at iff not running, interrupted never records an error,
+  newest-first listing), `chain.ts` (edge validity, verdict-reader
+  totality/roundtrip), `prompts.ts` (no leftover tokens, exact marker,
+  `$`-pattern regression), `dispatch.ts` JSONL decoding (last assistant
+  message_end wins, total over arbitrary output).
 - **The real spawn path** — `runPhase` runs against
   `test/fixtures/fake-pi.mjs`, a `pi --mode json` backend stub: child args
   (`--no-extensions` recursion prevention, model/thinking forwarding,
