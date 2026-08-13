@@ -34,7 +34,8 @@ function existsSync(p: string): boolean {
   }
 }
 
-function getPiInvocation(args: string[]): { command: string; args: string[] } {
+/** Resolve the child pi invocation (embedded host vs plain `pi` binary). */
+export function getPiInvocation(args: string[]): { command: string; args: string[] } {
   const cliPath = process.env.PI_CLI_PATH;
   if (cliPath) {
     // Embedded host (e.g. the cardo desktop app): run the pi CLI entry under
@@ -180,7 +181,7 @@ interface JsonlEvent {
 }
 
 /** Parse the tail of a JSONL stdout buffer into events (bounded cost). */
-function parseJsonlTail(stdout: string): JsonlEvent[] {
+export function parseJsonlTail(stdout: string): JsonlEvent[] {
   const lines = stdout.split('\n');
   const events: JsonlEvent[] = [];
   for (const line of lines.slice(-200)) {
@@ -207,7 +208,7 @@ function isTextContent(p: JsonlContent): p is { type: 'text'; text: string } {
 }
 
 /** The last assistant text message from a `pi --mode json` stdout buffer. */
-function extractAssistantTextDelta(stdout: string): string {
+export function extractAssistantTextDelta(stdout: string): string {
   const events = parseJsonlTail(stdout);
   for (let i = events.length - 1; i >= 0; i--) {
     const evt = events[i];
@@ -225,6 +226,6 @@ function extractAssistantTextDelta(stdout: string): string {
 }
 
 /** The final assistant output: last assistant message's text in the stream. */
-function extractFinalOutput(stdout: string): string {
+export function extractFinalOutput(stdout: string): string {
   return extractAssistantTextDelta(stdout);
 }
