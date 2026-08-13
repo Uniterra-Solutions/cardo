@@ -11,6 +11,8 @@
   - `pnpm --filter @pi-gui/desktop build` — production electron-vite build
   - `pnpm --filter @pi-gui/desktop test:pbt` — property-based tests for the frontend↔backend contract layer (fast-check + node:test; compiles pure app-store modules via `tsconfig.pbt.json` into `out-pbt/`)
   - `pnpm --filter @pi-gui/pi-sdk-driver test` — node:test suite for vendored driver pure functions (includes PBT)
+- `packages/jovaltus`:
+  - `pnpm --filter @cardo/jovaltus test:pbt` — integrated PBT for the extension ↔ pi-backend interaction (state machine, phase chains, prompt rendering, JSONL protocol, and the full tool surface against a fake `pi` backend in `test/fixtures/fake-pi.mjs`). Tests import the compiled `dist/` output; the build copies `src/prompts/*.md` → `dist/prompts/` (dist consumers must be able to load phase prompts)
 
 # Project Business Goals
 
@@ -47,6 +49,7 @@
 - Add tests for new behaviour
 - After changing `packages/jovaltus` or `packages/runtime` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
 - After changing the pi-gui frontend↔backend contract layer (pure app-store modules, vendored driver pure functions, state/persistence/timeline logic), run the PBT suites: `pnpm --filter @pi-gui/desktop test:pbt` and `pnpm --filter @pi-gui/pi-sdk-driver test`. Properties found failing because of a real bug → fix source with a `// Cardo:` marker + deterministic regression test
+- After changing `packages/jovaltus` business logic (state machine, chains, prompts, dispatch), run `pnpm --filter @cardo/jovaltus test:pbt`. Properties found failing because of a real bug → fix source + add a deterministic regression test with the minimal counterexample
 
 **Ask first:**
 

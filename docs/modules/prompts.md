@@ -36,7 +36,7 @@ Source: `packages/jovaltus/src/prompts.ts` (104 LOC) + `packages/jovaltus/src/pr
 | `[[plan_step]]`                  | "read the plan" vs "review uncommitted changes standalone" (plan-less runs)                   |
 | `[jovaltus-pipeline:TOOL:PHASE]` | literal marker with the actual tool/phase (retained for provenance; no functional role in pi) |
 
-Substitution uses `String.replaceAll` — never template literals, because prompt bodies contain mermaid `{}` braces.
+Substitution uses `String.replaceAll` with **function replacements** — never template literals (prompt bodies contain mermaid `{}` braces) and never string replacement values (they would interpret `$&`/`` $` ``/`$'`/`$n` from user-controlled fields and re-inject token text into the rendered prompt).
 
 ## Dependencies
 
@@ -46,7 +46,8 @@ Substitution uses `String.replaceAll` — never template literals, because promp
 ## Patterns & Gotchas
 
 - **Port fidelity:** prompts are verbatim from the Hermes plugin except tool-name references and the execute delegation section (pi children have no delegation tool).
-- **Order matters:** `[[plan_step]]` is substituted BEFORE `[[plan_path]]` so the plan-step text's own embedded `[[plan_path]]` resolves too (`prompts.ts:88-94`).
+- **Order matters:** `[[plan_step]]` is substituted BEFORE `[[plan_path]]` so the plan-step text's own embedded `[[plan_path]]` resolves too.
+- **Dist consumers need the prompt files:** `loadPrompt` resolves prompts relative to the compiled module, so `pnpm run build` copies `src/prompts/*.md` → `dist/prompts/` (`scripts/copy-prompts.mjs`). A dist consumer (desktop app via `packages/runtime`) that cannot load a prompt fails on the very first phase dispatch — regression-locked by the PBT suite.
 - **Marker is metadata only:** the `[jovaltus-pipeline:...]` line tells readers which phase produced an artifact; pi's tool handler tracks state itself.
 
 ## How to Update

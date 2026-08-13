@@ -78,3 +78,37 @@ pnpm run format:check
 `pi install ./packages/jovaltus` knows the entry point. pi loads the
 TypeScript source directly via jiti — no build step is required to run the
 extension, but the repo's typecheck/lint/build gates must stay green.
+
+## Testing (integrated property-based tests)
+
+```bash
+pnpm --filter @cardo/jovaltus test:pbt
+```
+
+The PBT suite (`test/pbt/*.test.mts`, fast-check + node:test) defines the
+pipeline's business logic as invariants and exercises the extension ↔ pi
+backend interaction end-to-end:
+
+- **Pure logic layers** — `state.ts` (domain closure of CHAIN-valid phase
+  transitions, terminal lock, persistence roundtrip, corrupt-state
+  recovery), `chain.ts` (edge validity, verdict-reader totality/roundtrip),
+  `prompts.ts` (no leftover tokens, exact marker, `$`-pattern regression),
+  `dispatch.ts` JSONL decoding (last assistant message_end wins, total over
+  arbitrary output).
+- **The real spawn path** — `runPhase` runs against
+  `test/fixtures/fake-pi.mjs`, a `pi --mode json` backend stub: child args
+  (`--no-extensions` recursion prevention, model/thinking forwarding,
+  prompt temp file with 0600 mode, task last), exit codes, aborts, and the
+  output/onText contract.
+- **The full tool surface** — the factory's four tools plus the
+  `before_agent_start` / `agent_settled` hooks are driven through a stub
+  `ExtensionAPI` against the fake backend: plan/execute/review trajectories,
+  the verdict-driven fix loop (park → fix → re-dispatch → pass), and a
+  model-based property over random verdict plans.
+
+Test isolation: the pi agent dir is redirected per test via
+`PI_CODING_AGENT_DIR`, so the real `~/.pi/agent` is never touched. Tests
+import the compiled `dist/` output (the desktop consumption path), which is
+why the build copies `src/prompts/*.md` into `dist/prompts/` — a dist
+consumer that cannot load a prompt fails on the very first phase dispatch
+(regression-locked by `prompts.test.mts`).

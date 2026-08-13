@@ -33,7 +33,7 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 - [modules/dispatch.md](modules/dispatch.md) — child pi process runner
 - [modules/prompts.md](modules/prompts.md) — prompt files, token substitution
 - [setup.md](setup.md) — prerequisites, install, run, verify
-- [testing.md](testing.md) — static gates + hermetic verification
+- [testing.md](testing.md) — PBT lanes (jovaltus / desktop / driver) + static gates + hermetic verification
 - [workflows.md](workflows.md) — task recipes
 
 Not present (do not apply): `api-reference.md` (no HTTP routes), `data-models.md` (no database — `PipelineState` is documented in [modules/state.md](modules/state.md)).

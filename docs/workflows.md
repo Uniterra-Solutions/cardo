@@ -10,7 +10,8 @@ Task recipes for agents working in this repo.
 4. If it uses a phase prompt: add `src/prompts/<name>.md` + `PROMPT_NAMES` + `docs/modules/prompts.md`.
 5. If it needs state fields: extend `PipelineState` + `fromDict` + `docs/modules/state.md`.
 6. Run `pnpm run typecheck && pnpm run lint && pnpm run format:check`.
-7. Verify registration via the jiti stub (see `docs/testing.md`).
+7. Run the jovaltus PBT suite (`pnpm --filter @cardo/jovaltus test:pbt`) — it encodes invariants over the state machine / chains / prompts / dispatch and fails on drift (e.g. a tool whose first phase no longer matches `CHAIN`, or a prompt with an unsubstituted token). A failing property on a real bug → fix source + add a deterministic regression test.
+8. Verify registration via the jiti stub (see `docs/testing.md`).
 
 ## Add a New Phase to an Existing Chain
 
@@ -18,6 +19,7 @@ Task recipes for agents working in this repo.
 2. Add to `PROMPT_NAMES` + `PHASE_PROMPTS` in `src/prompts.ts`.
 3. Wire the edge in `src/chain.ts` `CHAIN` (and the waiting/re-dispatch loop if it is a reviewer phase).
 4. Update `docs/modules/chain.md` + `docs/modules/prompts.md` tables.
+5. Run `pnpm --filter @cardo/jovaltus test:pbt` — the prompt/marker/chain invariants lock the new phase; waiting phases must NOT get a prompt file (they are never dispatched).
 
 ## Run a Plan Pipeline End-to-End
 

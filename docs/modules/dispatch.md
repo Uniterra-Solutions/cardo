@@ -6,10 +6,18 @@ Source: `packages/jovaltus/src/dispatch.ts` (211 LOC). Modeled on pi's official 
 
 ## Public API
 
-| Export        | Signature                                            | Description                                     |
-| ------------- | ---------------------------------------------------- | ----------------------------------------------- |
-| `PhaseResult` | `interface`                                          | `{ exitCode, output, error }`                   |
-| `runPhase`    | `(options: RunPhaseOptions) => Promise<PhaseResult>` | Spawn child, wait for completion, return output |
+| Export                      | Signature                                            | Description                                                           |
+| --------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| `PhaseResult`               | `interface`                                          | `{ exitCode, output, error }`                                         |
+| `runPhase`                  | `(options: RunPhaseOptions) => Promise<PhaseResult>` | Spawn child, wait for completion, return output                       |
+| `parseJsonlTail`            | `(stdout: string) => JsonlEvent[]`                   | Parse last ≤200 JSONL lines (bounded cost); malformed lines → `{}`    |
+| `extractAssistantTextDelta` | `(stdout: string) => string`                         | Last assistant `message_end` text (backwards scan)                    |
+| `extractFinalOutput`        | `(stdout: string) => string`                         | Alias of `extractAssistantTextDelta` (final output)                   |
+| `getPiInvocation`           | `(args: string[]) => { command, args }`              | Resolve child command: embedded host (`PI_CLI_PATH`) vs `pi` fallback |
+
+The pure helpers are exported for the PBT suite (JSONL protocol invariants,
+`getPiInvocation` branch contract); the extension itself only uses
+`runPhase`.
 
 `RunPhaseOptions`: `{ cwd, prompt, task, model: string | null, thinkingLevel: string | null, signal?: AbortSignal, onText?: (text: string) => void }`
 
@@ -50,4 +58,4 @@ pi --mode json -p --no-session --no-extensions --tools read,bash,edit,write,grep
 ## How to Update
 
 - New child flag → add to invocation + the flag table.
-- Output parsing changed → update Output Extraction + `extractAssistantTextDelta` (`dispatch.ts:185-204`).
+- Output parsing changed → update Output Extraction + `extractAssistantTextDelta`.

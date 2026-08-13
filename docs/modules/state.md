@@ -11,7 +11,7 @@ Source: `packages/jovaltus/src/state.ts` (255 LOC). Ported from the Hermes plugi
 | `PHASES`         | `readonly string[]`                                             | `prd, research, acceptance, tasks, execute, simplify, simplify_waiting, review, review_waiting` |
 | `STATUSES`       | `readonly string[]`                                             | `idle, running, done, failed`                                                                   |
 | `PipelineState`  | `interface`                                                     | See data model below                                                                            |
-| `getPipeline`    | `() => PipelineState \| null`                                   | Read from disk; auto-clears corrupt state; null when idle                                       |
+| `getPipeline`    | `() => PipelineState \| null`                                   | Read from disk; auto-clears corrupt state (unknown phase **or tool**); null when idle           |
 | `startPipeline`  | `(tool, runDir, userRequirements?, planPath?) => PipelineState` | Start (or overwrite) a run in the tool's first phase                                            |
 | `setPhase`       | `(p, phase) => void`                                            | Record a phase transition; rejects finished pipelines                                           |
 | `setVerdict`     | `(p, verdict) => void`                                          | Record `pass`/`fix`; rejects invalid                                                            |
@@ -34,7 +34,7 @@ Source: `packages/jovaltus/src/state.ts` (255 LOC). Ported from the Hermes plugi
 | `updated_at`        | `string`         | ISO timestamp                                 |
 | `error`             | `string \| null` | failure message                               |
 
-Persistence: whole state dict under the `"pipeline"` key of `~/.pi/agent/jovaltus.json`. Unknown/corrupt phase auto-clears (`getPipeline`, `state.ts:143-160`). Terminal states are absorbing: `setPhase`/`setVerdict` raise on `done`/`failed`.
+Persistence: whole state dict under the `"pipeline"` key of `~/.pi/agent/jovaltus.json`. Corrupt state auto-clears (`getPipeline` — unknown phase or unknown tool resets to idle so the chain can never deadlock nor silently auto-complete). Terminal states are absorbing: `setPhase`/`setVerdict` raise on `done`/`failed`.
 
 ## Dependencies
 
