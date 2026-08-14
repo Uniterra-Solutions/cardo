@@ -10,6 +10,7 @@
   - `pnpm --filter @pi-gui/desktop typecheck` — type-check the app + vendored driver packages
   - `pnpm --filter @pi-gui/desktop build` — production electron-vite build
   - `pnpm --filter @pi-gui/desktop test:pbt` — property-based tests for the frontend↔backend contract layer (fast-check + node:test; compiles pure app-store modules via `tsconfig.pbt.json` into `out-pbt/`)
+  - `pnpm --filter @pi-gui/desktop run test:cardo:core:multi-window` / `test:cardo:core:mentions-diff` — Playwright e2e specs runnable from the cardo workspace (`@playwright/test` is a desktop devDep — the vendored root's copy is never installed by the cardo workspace). Requires built `out/` + `dist/`; the launch env forces `PI_OFFLINE=1` because specs seed a fake provider key (pi's model-availability refresh would otherwise hang on real network calls) — real-auth specs opt out
   - `pnpm --filter @pi-gui/pi-sdk-driver test` — node:test suite for vendored driver pure functions (includes PBT)
 - `packages/jovaltus`:
   - `pnpm --filter @cardo/jovaltus test:pbt` — integrated PBT for the extension ↔ pi-backend interaction (SQLite session store incl. model-based invariants, phase chains, prompt rendering, JSONL protocol, and the full tool surface against a fake `pi` backend in `test/fixtures/fake-pi.mjs`). Tests import the compiled `dist/` output; the build copies `src/prompts/*.md` → `dist/prompts/` (dist consumers must be able to load phase prompts)

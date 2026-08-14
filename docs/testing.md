@@ -2,19 +2,25 @@
 
 ## Current State
 
-Automated test suites exist as **property-based tests (PBT)** in two lanes,
-plus static gates at the repo root. No vitest/jest is used; PBT runs on
-fast-check ^4.9 + node:test, driving compiled output:
+Automated test suites exist as **property-based tests (PBT)** in two lanes plus a
+Playwright e2e lane against the Electron app, and static gates at the repo root.
+No vitest/jest is used; PBT runs on fast-check ^4.9 + node:test, driving
+compiled output:
 
-| Lane                               | Command                                    | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@cardo/jovaltus`                  | `pnpm --filter @cardo/jovaltus test:pbt`   | Extension ↔ pi-backend interaction: SQLite session store (model-based invariants), phase chains, prompt rendering, JSONL protocol, full tool surface vs a fake `pi` backend (`test/fixtures/fake-pi.mjs`)                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `@pi-gui/desktop` (vendored)       | `pnpm --filter @pi-gui/desktop test:pbt`   | Desktop frontend↔backend contract layer (app-store transitions, persistence, timeline) **+ renderer markdown regression** (`test/pbt/markdown-table.test.mts`, fast SSR, no browser). Timeline PBT covers reasoning streaming/collapse (`assistantThinkingDelta` → thinking item, finalize), tool-batch grouping (`timeline-turns.test.mts` — one request = one collapsible group, lone calls stay plain rows), and `pruneExpandState` invariants (value = current ∩ available; unchanged results return the identical `Set` reference so React bails out instead of re-rendering per streamed character) |
-| `@pi-gui/pi-sdk-driver` (vendored) | `pnpm --filter @pi-gui/pi-sdk-driver test` | Vendored driver pure functions (incl. PBT)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Lane                               | Command                                                                                            | Covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cardo/jovaltus`                  | `pnpm --filter @cardo/jovaltus test:pbt`                                                           | Extension ↔ pi-backend interaction: SQLite session store (model-based invariants), phase chains, prompt rendering, JSONL protocol, full tool surface vs a fake `pi` backend (`test/fixtures/fake-pi.mjs`)                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `@pi-gui/desktop` (vendored)       | `pnpm --filter @pi-gui/desktop test:pbt`                                                           | Desktop frontend↔backend contract layer (app-store transitions, persistence, timeline) **+ renderer markdown regression** (`test/pbt/markdown-table.test.mts`, fast SSR, no browser). Timeline PBT covers reasoning streaming/collapse (`assistantThinkingDelta` → thinking item, finalize), tool-batch grouping (`timeline-turns.test.mts` — one request = one collapsible group, lone calls stay plain rows), and `pruneExpandState` invariants (value = current ∩ available; unchanged results return the identical `Set` reference so React bails out instead of re-rendering per streamed character) |
+| `@pi-gui/pi-sdk-driver` (vendored) | `pnpm --filter @pi-gui/pi-sdk-driver test`                                                         | Vendored driver pure functions (incl. PBT)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@pi-gui/desktop` e2e (cardo)      | `pnpm --filter @pi-gui/desktop run test:cardo:core:multi-window` / `test:cardo:core:mentions-diff` | Playwright e2e against the real Electron app (cardo-runnable since `@playwright/test` is a desktop devDep; the vendored root's copy is never installed by the cardo workspace). Covers shortcut remapping (Cmd+N → new thread under the selected workspace, Cmd+Shift+N → new window, Cmd+Alt+J → files panel), File menu accelerators, mention menu, and the diff/files panels                                                                                                                                                                                                                           |
 
-All suites are hermetic: no pi runtime, no LLM, no network, no real
+All PBT suites are hermetic: no pi runtime, no LLM, no network, no real
 agent-dir writes (the jovaltus suite redirects the agent dir per test via
-`PI_CODING_AGENT_DIR`).
+`PI_CODING_AGENT_DIR`). The desktop e2e lane is the exception: it launches
+the real Electron app with a fake provider key and `PI_OFFLINE=1` (forced in
+`buildDesktopLaunchEnv` unless `realAuthSourceDir` opts out — pi's
+model-availability refresh otherwise waits on real network calls that hang in
+restricted environments and never contribute real auth anyway).
 
 ## Available Verification
 
@@ -60,8 +66,16 @@ pnpm --filter @pi-gui/desktop typecheck   # app + vendored driver packages (need
 pnpm --filter @pi-gui/desktop build       # electron-vite production build (bundles main/preload/renderer)
 pnpm --filter @pi-gui/desktop dev         # dev run — manual smoke
 pnpm --filter @pi-gui/desktop test:pbt    # app-store contract PBT (compiles pure modules via tsconfig.pbt.json → out-pbt/)
+pnpm --filter @pi-gui/desktop run test:cardo:core:multi-window   # e2e: multi-window + shortcut remapping
+pnpm --filter @pi-gui/desktop run test:cardo:core:mentions-diff  # e2e: mention menu + diff/files panels (Cmd+D / Cmd+Alt+J)
 pnpm --filter @pi-gui/pi-sdk-driver test  # vendored driver pure functions (incl. PBT)
 ```
+
+#### Desktop e2e notes
+
+- Runs need built `out/` + `dist/` (the scripts run `pnpm build` first; driver `dist/` comes from `pnpm run build` at the repo root or the driver builds).
+- The app uses `requestSingleInstanceLock()` — kill leftover pi Electron processes before each run (see the visual-verification pitfall below).
+- Windows/Linux: Cmd+N / Cmd+Shift+N rely on `before-input-event`; the macOS File menu bindings are asserted platform-gated (`test.skip` inside the test body).
 
 #### Visual verification (design system)
 
@@ -104,7 +118,7 @@ contract are now covered automatically by the jovaltus PBT lane above.)
 
 ## Test Conventions
 
-- Any new automated tests must be hermetic: no pi runtime, no LLM, no network, no real agent-dir writes.
+- Any new automated tests must be hermetic: no pi runtime, no LLM, no network, no real agent-dir writes. **Exception:** the desktop e2e lane (`test:cardo:core:*`) launches the real Electron app offline with a fake provider key.
 - Business logic lives in pure modules (`state.ts`, `chain.ts`, `prompts.ts`, dispatch JSONL helpers) so it can be property-tested against compiled output.
 - Define the business rules as **invariants** (domain closure, persistence roundtrip, terminal locks, protocol contracts) and property-test the full flow with a fake backend, not just isolated helpers.
 - Real bug found by a property → fix source + deterministic regression test pinning the minimal counterexample.
