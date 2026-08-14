@@ -99,6 +99,17 @@ Rules: never give scrollbars a filled track, a pill thumb, or a fixed colour
 outside the `--muted` family (preset-aware). The xterm terminal renders its own
 scrollbar (`.xterm .scrollbar`) and is exempt.
 
+### Reasoning block (timeline)
+
+Streaming reasoning is **not** a surface box — no background, border, or
+shadow. The text sits directly on the timeline in a fixed-height window
+(`height: 120px`, `overflow-y: auto`) so the block never grows with its
+content. Reasoning text is `--font-mono` 11px in `--muted-soft`, lighter and
+smaller than assistant text to keep it visually subordinate. While the model is
+still thinking the window is pinned to the newest content (past text scrolls
+up and out of view); finalized thinking collapses to a "Thought for Ns" row
+that expands on click.
+
 ### Composer (input box)
 
 Chat and new-thread composers share one footer convention — every control sits
