@@ -68,6 +68,12 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
 
+  packages/skills:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+
   vendor/pi-gui/apps/desktop:
     dependencies:
       '@anthropic-ai/sdk':
@@ -118,6 +124,9 @@ importers:
       '@cardo/runtime':
         specifier: workspace:*
         version: link:../../../../packages/runtime
+      '@cardo/skills':
+        specifier: workspace:*
+        version: link:../../../../packages/skills
       '@earendil-works/pi-coding-agent':
         specifier: ^0.84.1
         version: 0.84.1(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)

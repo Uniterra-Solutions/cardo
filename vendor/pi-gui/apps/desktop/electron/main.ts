@@ -14,6 +14,7 @@ import {
 } from "electron";
 import { isValidHttpBaseUrl } from "@pi-gui/pi-sdk-driver";
 import { builtinExtensionFactories, builtinExtensionMetadata } from "@cardo/runtime";
+import { provisionBuiltinSkills, resolveAgentDir } from "@cardo/skills";
 import { randomUUID } from "node:crypto";
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readFile, stat } from "node:fs/promises";
@@ -1032,6 +1033,22 @@ app.on("second-instance", () => {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) {
     return;
+  }
+
+  // Cardo: inject the built-in skill set (Jovaltus pipeline skills + Caelterra
+  // create-skill) into pi's user-level skills directory. Idempotent — skills
+  // already present are left untouched so user edits survive restarts; failure
+  // must never block app startup.
+  try {
+    const provisioned = provisionBuiltinSkills(resolveAgentDir());
+    if (provisioned.installed.length > 0) {
+      console.log(`[cardo] provisioned built-in skills: ${provisioned.installed.join(", ")}`);
+    }
+    if (provisioned.failed.length > 0) {
+      console.warn(`[cardo] failed to provision built-in skills: ${JSON.stringify(provisioned.failed)}`);
+    }
+  } catch (error) {
+    console.warn("[cardo] built-in skill provisioning failed:", error);
   }
 
   // On macOS, packaged builds already render the dock icon from `icon.icns`
