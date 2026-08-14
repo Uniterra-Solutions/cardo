@@ -757,6 +757,13 @@
   gap: 10px;
 }
 
+/* 單排佈局：附件｜輸入｜選擇器｜發送，全部在同一條中心線上 */
+.composer__editor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .composer__slash-intent {
   display: flex;
   align-items: center;
@@ -813,31 +820,16 @@
   color: var(--text-strong);
   line-height: 1.5;
   font-size: 15px;
-  min-height: 24px;
+  /* 單行文字與 36px 高的按鈕共用中心線：
+     textarea 預設 rows=2 → 固有高度兩行、文字頂置，故明確給 height；
+     display:block 消除 inline-block 基線空隙；padding 7/6 讓單行文字垂直置中 */
+  display: block;
+  height: 36px;
+  min-height: 36px;
+  padding: 7px 0 6px;
   max-height: 220px;
-}
-
-.composer__bar {
-  margin-top: 8px;
-  width: 100%;
-}
-
-.composer__footer {
-  display: grid;
-  gap: 10px;
-  width: 100%;
-}
-
-.composer__footer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.composer__hint {
-  color: var(--muted-soft);
-  font-size: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .model-onboarding-notice {
@@ -944,8 +936,6 @@
   height: 32px;
   border-radius: var(--radius-lg);
   color: var(--muted-soft);
-  border: 1px solid var(--line);
-  background: var(--surface-muted);
 }
 
 .composer__attachments {
@@ -2614,7 +2604,6 @@
   }
 
   .topbar,
-  .composer__bar,
   .chat-header__row,
   .view-header,
   .tree-modal__footer {

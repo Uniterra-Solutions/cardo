@@ -56,7 +56,8 @@ interface ComposerSurfaceProps {
   readonly extensionDock?: ExtensionDockModel;
   readonly extensionDockExpanded?: boolean;
   readonly onToggleExtensionDock?: () => void;
-  readonly footer: ReactNode;
+  readonly leadingControls: ReactNode;
+  readonly trailingControls: ReactNode;
 }
 
 export function ComposerSurface({
@@ -100,7 +101,8 @@ export function ComposerSurface({
   extensionDock,
   extensionDockExpanded = false,
   onToggleExtensionDock,
-  footer,
+  leadingControls,
+  trailingControls,
 }: ComposerSurfaceProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const dragDepthRef = useRef(0);
@@ -317,19 +319,22 @@ export function ComposerSurface({
             ) : null}
           </div>
         ) : null}
-        <textarea
-          aria-label={textareaLabel}
-          className={textareaClassName}
-          data-testid={textareaTestId}
-          ref={composerRef}
-          value={composerDraft}
-          onChange={(event) => {
-            setComposerDraft(event.target.value);
-          }}
-          onKeyDown={onComposerKeyDown}
-          placeholder={textareaPlaceholder}
-        />
-        <div className="composer__bar">{footer}</div>
+        <div className="composer__editor-row">
+          {leadingControls}
+          <textarea
+            aria-label={textareaLabel}
+            className={textareaClassName}
+            data-testid={textareaTestId}
+            ref={composerRef}
+            value={composerDraft}
+            onChange={(event) => {
+              setComposerDraft(event.target.value);
+            }}
+            onKeyDown={onComposerKeyDown}
+            placeholder={textareaPlaceholder}
+          />
+          {trailingControls}
+        </div>
       </div>
     </div>
   );

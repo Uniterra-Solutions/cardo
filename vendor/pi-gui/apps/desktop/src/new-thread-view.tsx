@@ -195,10 +195,19 @@ export function NewThreadView({
               onEnableMentionExtension={onEnableMentionExtension}
               textareaLabel="New thread prompt"
               textareaTestId="new-thread-composer"
-              textareaClassName="new-thread__textarea"
-              textareaPlaceholder="Ask pi anything, use / for commands and skills"
-              footer={(
-                <NewThreadComposerFooter
+              textareaPlaceholder="Ask pi anything, or use / for commands"
+              leadingControls={(
+                <button
+                  aria-label="Attach files"
+                  className="icon-button composer__attach"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <PlusIcon />
+                </button>
+              )}
+              trailingControls={(
+                <NewThreadComposerControls
                   runtime={runtime}
                   environment={environment}
                   provider={provider}
@@ -206,23 +215,34 @@ export function NewThreadView({
                   thinkingLevel={thinkingLevel}
                   modelOnboarding={modelOnboarding}
                   hasContent={Boolean(prompt.trim() || attachments.length > 0)}
-                  fileInputRef={fileInputRef}
                   onSelectEnvironment={onSelectEnvironment}
                   onSetModel={onSetModel}
                   onSetThinking={onSetThinking}
-                  onAddAttachments={onAddAttachments}
                   onSubmit={onSubmit}
                 />
               )}
             />
           </div>
         </div>
+        <input
+          ref={fileInputRef}
+          hidden
+          type="file"
+          multiple
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            if (files.length > 0) {
+              onAddAttachments(files);
+            }
+            event.currentTarget.value = "";
+          }}
+        />
       </div>
     </section>
   );
 }
 
-interface NewThreadComposerFooterProps {
+interface NewThreadComposerControlsProps {
   readonly runtime?: RuntimeSnapshot;
   readonly environment: NewThreadEnvironment;
   readonly provider: string | undefined;
@@ -230,15 +250,13 @@ interface NewThreadComposerFooterProps {
   readonly thinkingLevel: string | undefined;
   readonly modelOnboarding: ModelOnboardingState;
   readonly hasContent: boolean;
-  readonly fileInputRef: RefObject<HTMLInputElement | null>;
   readonly onSelectEnvironment: (environment: NewThreadEnvironment) => void;
   readonly onSetModel: (provider: string, modelId: string) => void;
   readonly onSetThinking: (level: string) => void;
-  readonly onAddAttachments: (files: File[]) => void;
   readonly onSubmit: () => void;
 }
 
-function NewThreadComposerFooter({
+function NewThreadComposerControls({
   runtime,
   environment,
   provider,
@@ -246,77 +264,47 @@ function NewThreadComposerFooter({
   thinkingLevel,
   modelOnboarding,
   hasContent,
-  fileInputRef,
   onSelectEnvironment,
   onSetModel,
   onSetThinking,
-  onAddAttachments,
   onSubmit,
-}: NewThreadComposerFooterProps) {
+}: NewThreadComposerControlsProps) {
   return (
     <>
-      <div className="composer__footer">
-        <div className="composer__footer-row">
-          <button
-            aria-label="Attach files"
-            className="icon-button composer__attach"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <PlusIcon />
-          </button>
-          <div className="composer__hint new-thread__hint">
-            <label className="new-thread__environment-picker">
-              <select
-                aria-label="Environment"
-                className="new-thread__environment-select"
-                value={environment}
-                onChange={(event) => onSelectEnvironment(event.target.value as NewThreadEnvironment)}
-              >
-                <option value="local">Local</option>
-                <option value="worktree">Worktree</option>
-              </select>
-              <ChevronDownIcon />
-            </label>
-            <span className="new-thread__hint-separator">·</span>
-            <ModelSelector
-              runtime={runtime}
-              provider={provider}
-              modelId={modelId}
-              thinkingLevel={thinkingLevel}
-              dropdownPlacement="below"
-              showEmptyModelControl
-              unselectedModelLabel={modelOnboarding.unselectedModelLabel}
-              emptyModelLabel={MODEL_OPTIONS_EMPTY_TITLE}
-              emptyModelTitle={modelOnboarding.emptyModelTitle}
-              onSetModel={onSetModel}
-              onSetThinking={onSetThinking}
-            />
-          </div>
-          <button
-            aria-label="Start thread"
-            className="button button--primary button--cta-icon"
-            type="button"
-            disabled={!hasContent || modelOnboarding.requiresModelSelection}
-            onClick={onSubmit}
-          >
-            <ArrowUpIcon />
-          </button>
-        </div>
-      </div>
-      <input
-        ref={fileInputRef}
-        hidden
-        type="file"
-        multiple
-        onChange={(event) => {
-          const files = Array.from(event.target.files ?? []);
-          if (files.length > 0) {
-            onAddAttachments(files);
-          }
-          event.currentTarget.value = "";
-        }}
+      <label className="new-thread__environment-picker">
+        <select
+          aria-label="Environment"
+          className="new-thread__environment-select"
+          value={environment}
+          onChange={(event) => onSelectEnvironment(event.target.value as NewThreadEnvironment)}
+        >
+          <option value="local">Local</option>
+          <option value="worktree">Worktree</option>
+        </select>
+        <ChevronDownIcon />
+      </label>
+      <ModelSelector
+        runtime={runtime}
+        provider={provider}
+        modelId={modelId}
+        thinkingLevel={thinkingLevel}
+        dropdownPlacement="below"
+        showEmptyModelControl
+        unselectedModelLabel={modelOnboarding.unselectedModelLabel}
+        emptyModelLabel={MODEL_OPTIONS_EMPTY_TITLE}
+        emptyModelTitle={modelOnboarding.emptyModelTitle}
+        onSetModel={onSetModel}
+        onSetThinking={onSetThinking}
       />
+      <button
+        aria-label="Start thread"
+        className="button button--primary button--cta-icon"
+        type="button"
+        disabled={!hasContent || modelOnboarding.requiresModelSelection}
+        onClick={onSubmit}
+      >
+        <ArrowUpIcon />
+      </button>
     </>
   );
 }

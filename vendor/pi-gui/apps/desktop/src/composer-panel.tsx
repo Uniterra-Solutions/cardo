@@ -24,7 +24,6 @@ interface ComposerPanelProps {
   readonly composerDraft: string;
   readonly setComposerDraft: Dispatch<SetStateAction<string>>;
   readonly composerRef: RefObject<HTMLTextAreaElement | null>;
-  readonly runningLabel: string;
   readonly attachments: readonly ComposerAttachment[];
   readonly queuedMessages: readonly QueuedComposerMessage[];
   readonly editingQueuedMessageId?: string;
@@ -74,7 +73,6 @@ export function ComposerPanel({
   composerDraft,
   setComposerDraft,
   composerRef,
-  runningLabel,
   attachments,
   queuedMessages,
   editingQueuedMessageId,
@@ -158,53 +156,47 @@ export function ComposerPanel({
           onEnableMentionExtension={onEnableMentionExtension}
           textareaLabel="Composer"
           textareaTestId="composer"
-          textareaPlaceholder="Ask pi to inspect the repo, run a fix, or continue the current thread..."
+          textareaPlaceholder="Ask pi to inspect, run a fix, or continue the thread..."
           extensionDock={extensionDock}
           extensionDockExpanded={extensionDockExpanded}
           onToggleExtensionDock={onToggleExtensionDock}
-          footer={(
-            <div className="composer__footer">
-              <div className="composer__footer-row">
-                <button
-                  aria-label="Attach files"
-                  className="icon-button composer__attach"
-                  type="button"
-                  onClick={onPickAttachments}
-                >
-                  <PlusIcon />
-                </button>
-                <div className="composer__hint">
-                  {selectedSession.status === "running"
-                    ? `${runningLabel} · Enter to queue · Cmd+Enter to steer`
-                    : "Enter to send · Shift+Enter for newline"}
-                  {" · "}
-                  <ModelSelector
-                    runtime={runtime}
-                    provider={provider}
-                    modelId={modelId}
-                    thinkingLevel={thinkingLevel}
-                    disabled={selectedSession.status === "running"}
-                    unselectedModelLabel={modelOnboarding.unselectedModelLabel}
-                    emptyModelTitle={modelOnboarding.emptyModelTitle}
-                    onSetModel={onSetModel}
-                    onSetThinking={onSetThinking}
-                  />
-                </div>
-                <button
-                  aria-label={primaryActionIsStop ? "Stop run" : "Send message"}
-                  className="button button--primary button--cta-icon"
-                  data-testid="send"
-                  type="button"
-                  disabled={
-                    !primaryActionIsStop &&
-                    ((!composerDraft.trim() && attachments.length === 0) || modelOnboarding.requiresModelSelection)
-                  }
-                  onClick={onSubmit}
-                >
-                  {primaryActionIsStop ? <StopSquareIcon /> : <ArrowUpIcon />}
-                </button>
-              </div>
-            </div>
+          leadingControls={(
+            <button
+              aria-label="Attach files"
+              className="icon-button composer__attach"
+              type="button"
+              onClick={onPickAttachments}
+            >
+              <PlusIcon />
+            </button>
+          )}
+          trailingControls={(
+            <>
+              <ModelSelector
+                runtime={runtime}
+                provider={provider}
+                modelId={modelId}
+                thinkingLevel={thinkingLevel}
+                disabled={selectedSession.status === "running"}
+                unselectedModelLabel={modelOnboarding.unselectedModelLabel}
+                emptyModelTitle={modelOnboarding.emptyModelTitle}
+                onSetModel={onSetModel}
+                onSetThinking={onSetThinking}
+              />
+              <button
+                aria-label={primaryActionIsStop ? "Stop run" : "Send message"}
+                className="button button--primary button--cta-icon"
+                data-testid="send"
+                type="button"
+                disabled={
+                  !primaryActionIsStop &&
+                  ((!composerDraft.trim() && attachments.length === 0) || modelOnboarding.requiresModelSelection)
+                }
+                onClick={onSubmit}
+              >
+                {primaryActionIsStop ? <StopSquareIcon /> : <ArrowUpIcon />}
+              </button>
+            </>
           )}
         />
       </div>

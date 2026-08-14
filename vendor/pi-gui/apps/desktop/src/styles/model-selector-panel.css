@@ -23,17 +23,18 @@
   align-items: center;
   gap: 5px;
   min-height: 24px;
-  padding: 2px 9px;
-  border: 1px solid var(--line);
+  padding: 2px 6px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  background: transparent;
   color: var(--muted-strong);
   font-size: 12px;
   font-weight: 560;
   letter-spacing: -0.01em;
+  /* 窄排時文字+chevron 會換行成兩行（button 內部 flex 換行），nowrap 強制單行 */
+  white-space: nowrap;
   transition:
     background var(--motion-base) var(--ease-out),
-    border-color var(--motion-base) var(--ease-out),
     color var(--motion-base) var(--ease-out);
 }
 
@@ -45,7 +46,6 @@
 
 .model-selector__badge:hover:not(:disabled) {
   background: var(--overlay-hover);
-  border-color: var(--border-heavy);
   color: var(--text-strong);
 }
 
