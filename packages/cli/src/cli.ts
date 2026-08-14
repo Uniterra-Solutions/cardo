@@ -7,6 +7,7 @@ import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { stopRunningAppInstances, type ProcessOps } from './stop-app.js';
 
 const REPO = process.env.CARDO_GITHUB_REPO ?? 'Uniterra-Solutions/cardo';
 const PACKAGE_NAME = '@uniterra-solutions/cardo';
@@ -184,6 +185,39 @@ async function installDesktopApp(options: InstallOptions): Promise<void> {
   }
 }
 
+function realProcessOps(): ProcessOps {
+  return {
+    pgrep: async (bundleName: string): Promise<number[]> => {
+      try {
+        // pgrep exits 1 (and prints nothing) when nothing matches.
+        const { stdout } = await run('/usr/bin/pgrep', ['-f', `${bundleName}.app`]);
+        return stdout
+          .split('\n')
+          .filter((line) => line.trim().length > 0)
+          .map((line) => Number(line))
+          .filter((pid) => Number.isInteger(pid) && pid > 0);
+      } catch {
+        return [];
+      }
+    },
+    osascriptQuit: async (bundleName: string): Promise<void> => {
+      await run('/usr/bin/osascript', ['-e', `tell application "${bundleName}" to quit`]);
+    },
+    kill: async (pids: readonly number[], signal: NodeJS.Signals): Promise<void> => {
+      if (pids.length === 0) {
+        return;
+      }
+      await run('/bin/kill', ['-s', signal, ...pids.map((pid) => String(pid))]);
+    },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  };
+}
+
+async function stopRunningApps(): Promise<void> {
+  process.stdout.write('Stopping running Cardo app instances...\n');
+  await stopRunningAppInstances(realProcessOps());
+}
+
 async function updateCli(): Promise<void> {
   process.stdout.write(`Updating CLI (${PACKAGE_NAME})...\n`);
   try {
@@ -271,6 +305,9 @@ async function main(): Promise<void> {
       await installDesktopApp({ open: parsed.open, dryRun: parsed.dryRun });
       return;
     case 'update':
+      if (!parsed.dryRun) {
+        await stopRunningApps();
+      }
       await updateCli();
       await installDesktopApp({ open: parsed.open, dryRun: parsed.dryRun });
       return;
