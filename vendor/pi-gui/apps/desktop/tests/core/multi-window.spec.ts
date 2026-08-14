@@ -4,12 +4,15 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   createNamedThread,
   emitTestSessionEvent,
+  expectNewThreadWorkspace,
+  getApplicationMenuItemInfo,
   getDesktopState,
   launchDesktop,
   makeUserDataDir,
   makeWorkspace,
   selectSession,
   streamAssistantDeltas,
+  triggerApplicationMenuItem,
   waitForWorkspaceByPath,
   type DesktopHarness,
   type PiAppWindow,
@@ -77,13 +80,13 @@ async function openWindowViaShortcut(harness: DesktopHarness, source: Page): Pro
     BrowserWindow.getAllWindows()[payload.sourceIndex]?.webContents.sendInputEvent({
       type: "keyDown",
       keyCode: "n",
-      modifiers: [payload.modifier],
+      modifiers: [payload.modifier, "shift"],
     });
   }, { sourceIndex, modifier: platformModifier });
   await waitForWindowCount(harness, existing.size + 1);
   const opened = harness.electronApp.windows().find((candidate) => !existing.has(candidate));
   if (!opened) {
-    throw new Error("Expected Cmd+N to create another Electron window.");
+    throw new Error("Expected Cmd+Shift+N to create another Electron window.");
   }
   await waitForPiApp(opened);
   return opened;
@@ -260,6 +263,81 @@ test("selects an empty workspace from the sidebar row", async () => {
     await harness.close();
   }
 });
+
+const NEW_THREAD_MENU_ITEM_ID = "file.new-thread";
+const NEW_WINDOW_MENU_ITEM_ID = "file.new-window";
+
+test("binds File > New Thread to Cmd+N and File > New Window to Cmd+Shift+N", async () => {
+  test.skip(process.platform !== "darwin", "Application menu shortcuts are macOS-only");
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("shortcut-menu-workspace");
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
+
+    expect(await getApplicationMenuItemInfo(harness, NEW_THREAD_MENU_ITEM_ID)).toEqual({
+      id: NEW_THREAD_MENU_ITEM_ID,
+      label: "New Thread",
+      accelerator: "Command+N",
+      parentLabel: "File",
+    });
+    expect(await getApplicationMenuItemInfo(harness, NEW_WINDOW_MENU_ITEM_ID)).toEqual({
+      id: NEW_WINDOW_MENU_ITEM_ID,
+      label: "New Window",
+      accelerator: "Command+Shift+N",
+      parentLabel: "File",
+    });
+
+    expect(await triggerApplicationMenuItem(harness, NEW_THREAD_MENU_ITEM_ID)).toBe(true);
+    await expectNewThreadWorkspace(window, workspacePath);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("opens the new-thread surface from Cmd+N under the currently selected workspace", async () => {
+  const userDataDir = await makeUserDataDir();
+  const alphaPath = await makeWorkspace("shortcut-new-thread-alpha");
+  const betaPath = await makeWorkspace("shortcut-new-thread-beta");
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [alphaPath, betaPath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, alphaPath);
+    await waitForWorkspaceByPath(window, betaPath);
+
+    await window.locator(".workspace-row__select", { hasText: basename(betaPath) }).click();
+    await expect.poll(() => selectedSummary(window), { timeout: 15_000 }).toEqual({
+      workspacePath: betaPath,
+      sessionTitle: "",
+    });
+
+    await openNewThreadViaShortcut(harness, window);
+    await expectNewThreadWorkspace(window, betaPath);
+  } finally {
+    await harness.close();
+  }
+});
+
+async function openNewThreadViaShortcut(harness: DesktopHarness, source: Page): Promise<void> {
+  const sourceIndex = await browserWindowIndexForPage(harness, source);
+  await harness.electronApp.evaluate(({ BrowserWindow }, payload) => {
+    BrowserWindow.getAllWindows()[payload.sourceIndex]?.webContents.sendInputEvent({
+      type: "keyDown",
+      keyCode: "n",
+      modifiers: [payload.modifier],
+    });
+  }, { sourceIndex, modifier: platformModifier });
+}
 
 test("opens multiple app windows with independent workspace and thread selection", async () => {
   test.setTimeout(120_000);

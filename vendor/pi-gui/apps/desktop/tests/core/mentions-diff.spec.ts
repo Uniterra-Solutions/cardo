@@ -37,7 +37,9 @@ test("shows workspace file mentions from the composer and inserts the selected f
     const mentionMenu = window.getByTestId("mention-menu");
     await expect(mentionMenu).toBeVisible();
     await expect(mentionMenu.locator(".mention-menu__section-title")).toHaveText(["Extensions", "Files"]);
-    await expect(mentionMenu.locator(".mention-menu__item")).toHaveCount(3);
+    // Cardo: cardo registers extra built-in extensions, so the absolute item count
+    // upstream asserted (3) does not hold here. Assert the file entries instead.
+    await expect(mentionMenu.locator(".mention-menu__filename")).toContainText(["README.md", "App.tsx"]);
 
     await composer.pressSequentially("README");
     await expect(mentionMenu.locator(".mention-menu__item")).toHaveCount(1);
@@ -106,6 +108,42 @@ test("toggles the diff panel from the keyboard shortcut and renders changed file
 
     await window.keyboard.press(desktopShortcut("D"));
     await expect(diffPanel).toHaveCount(0);
+  } finally {
+    await harness.close();
+  }
+});
+
+test("toggles the files panel from Cmd+Alt+J and lists workspace files", async () => {
+  test.setTimeout(30_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("files-shortcut-workspace");
+  await initGitRepo(workspacePath);
+  await commitAllInGitRepo(workspacePath, "init");
+  await mkdir(join(workspacePath, "src"), { recursive: true });
+  await writeFile(join(workspacePath, "src", "App.tsx"), "export default App;\n", "utf8");
+  await commitAllInGitRepo(workspacePath, "add src");
+
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await createNamedThread(window, "Files shortcut test");
+
+    const filesPanel = window.locator(".diff-panel");
+    await expect(filesPanel).toHaveCount(0);
+
+    await window.keyboard.press(desktopShortcut("Alt+J"));
+    await expect(filesPanel).toBeVisible();
+    await expect(filesPanel.locator(".diff-panel__title")).toContainText("Files");
+    await expect(
+      filesPanel.locator('.file-workbench__tree-row--file[data-file-path="src/App.tsx"]'),
+    ).toBeVisible();
+
+    await window.keyboard.press(desktopShortcut("Alt+J"));
+    await expect(filesPanel).toHaveCount(0);
   } finally {
     await harness.close();
   }

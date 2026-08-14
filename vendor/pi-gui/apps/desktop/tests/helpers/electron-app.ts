@@ -273,6 +273,11 @@ function buildDesktopLaunchEnv(
     PI_APP_INITIAL_WORKSPACES: (options.initialWorkspaces ?? []).join(delimiter),
     PI_APP_TEST_MODE: options.testMode ?? process.env.PI_APP_TEST_MODE ?? "foreground",
     PI_CODING_AGENT_DIR: agentDir,
+    // Cardo: tests seed a fake provider key, so force pi's model/package refresh
+    // offline — otherwise `modelRuntime.refresh()` waits on real network calls that
+    // can hang in restricted environments and never contribute real auth anyway.
+    // Real-auth specs opt out because they exercise live provider connectivity.
+    ...(options.realAuthSourceDir ? {} : { PI_OFFLINE: "1" }),
     ...(options.notificationLogPath ? { PI_APP_NOTIFICATION_LOG_PATH: options.notificationLogPath } : {}),
     PI_APP_OPEN_DEVTOOLS: "0",
     ...(options.envOverrides ?? {}),
