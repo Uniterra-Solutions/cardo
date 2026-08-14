@@ -1,0 +1,70 @@
+# API Reference
+
+**Base URL:** `{{BASE_URL}}`
+
+**API Version:** {{API_VERSION}}
+
+**Auth:** {{AUTH_DESCRIPTION}}
+
+**Error Format:**
+```json
+{
+  "error": "{{ERROR_TYPE}}",
+  "message": "Human-readable description",
+  "details": {}
+}
+```
+
+---
+
+## Endpoints
+
+### {{RESOURCE_GROUP_1}}
+
+| Method | Path | Auth | Request Body | Response | Description |
+|--------|------|------|-------------|----------|-------------|
+{{RESOURCE_1_ROWS}}
+
+### {{RESOURCE_GROUP_2}}
+
+| Method | Path | Auth | Request Body | Response | Description |
+|--------|------|------|-------------|----------|-------------|
+{{RESOURCE_2_ROWS}}
+
+---
+
+## Authentication
+
+All authenticated endpoints require a `{{AUTH_HEADER}}` header:
+```
+{{AUTH_HEADER}}: {{AUTH_HEADER_FORMAT}}
+```
+
+Token obtained via `{{AUTH_ENDPOINT}}`.
+
+---
+
+## Pagination
+
+{{PAGINATION_DESCRIPTION}}
+
+---
+
+## Rate Limiting
+
+{{RATE_LIMIT_DESCRIPTION}}
+
+---
+
+## How to Update
+- New endpoint added? → Add row to the appropriate resource group table
+- Endpoint changed? → Update the relevant row (Method, Path, Auth, Body, Response, Description)
+- Endpoint removed? → Remove row from the table
+- Auth method changed? → Update Authentication section
+- New resource group? → Add a new table section
+
+## Find It Fast
+```bash
+grep -r "@router\." src/api/           # All route definitions (FastAPI)
+grep -r "app\.\(get\|post\|put\|delete\)" src/  # All routes (Express/Flask)
+```

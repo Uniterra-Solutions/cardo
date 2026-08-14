@@ -1,0 +1,158 @@
+/**
+ * Cardo built-in skill registry — bundles the company-standard skills and
+ * injects them into the desktop app's agent skills directory.
+ *
+ * The desktop app (vendor/pi-gui) calls `provisionBuiltinSkills()` at startup;
+ * the bundled skills are copied into `<agentDir>/skills/` (pi's user-level
+ * skills directory, e.g. `~/.pi/agent/skills/`), where the pi resource loader
+ * and the app's Skills view discover them like any other user skill. Skills
+ * that already exist at the destination are left untouched so user edits are
+ * never clobbered.
+ *
+ * The bundled content lives in `src/skills/*` (vendored from the Jovaltus and
+ * Caelterra Hermes plugins) and is copied to `dist/skills/` by
+ * `scripts/copy-skills.mjs` during the build — consumers must load this
+ * package from its built `dist` output.
+ */
+
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SKILL_NAMES = [
+  'agentic-debugging',
+  'manage-agents-md',
+  'manage-git-repo',
+  'project-documentation',
+  'qa',
+  'create-skill',
+] as const;
+
+export type BuiltinSkillName = (typeof SKILL_NAMES)[number];
+
+/** Names of every skill bundled with this package, in provision order. */
+export const builtinSkillNames: readonly BuiltinSkillName[] = SKILL_NAMES;
+
+export interface BuiltinSkillInfo {
+  readonly name: BuiltinSkillName;
+  readonly description: string;
+  /** Absolute path to the bundled skill directory (`dist/skills/<name>`). */
+  readonly dir: string;
+}
+
+export interface ProvisionFailure {
+  readonly name: BuiltinSkillName;
+  readonly message: string;
+}
+
+export interface ProvisionResult {
+  readonly installed: readonly BuiltinSkillName[];
+  readonly skipped: readonly BuiltinSkillName[];
+  readonly failed: readonly ProvisionFailure[];
+}
+
+/** Absolute path to the bundled skill directories shipped with this package. */
+export function builtinSkillsDir(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), 'skills');
+}
+
+/**
+ * Resolve pi's agent config directory, mirroring pi's own `getAgentDir()`
+ * without importing the ESM-only pi package from the CJS Electron main bundle:
+ * `PI_CODING_AGENT_DIR` (tilde-expanded) or `~/.pi/agent`.
+ */
+export function resolveAgentDir(): string {
+  const envDir = process.env.PI_CODING_AGENT_DIR;
+  if (envDir) {
+    return envDir.startsWith('~') ? path.join(homedir(), envDir.slice(1)) : path.resolve(envDir);
+  }
+  return path.join(homedir(), '.pi', 'agent');
+}
+
+/** List every bundled skill with the description parsed from its SKILL.md frontmatter. */
+export function listBuiltinSkills(): BuiltinSkillInfo[] {
+  const root = builtinSkillsDir();
+  return SKILL_NAMES.map((name) => {
+    const dir = path.join(root, name);
+    return {
+      name,
+      description: readFrontmatterDescription(path.join(dir, 'SKILL.md')),
+      dir,
+    };
+  });
+}
+
+/**
+ * Provision the bundled skills into `<agentDir>/skills/`.
+ *
+ * Idempotent: a skill whose destination directory already exists is skipped
+ * (unless `force` is set) so user edits survive restarts. Returns a report of
+ * what was installed, skipped, and failed — failures never throw.
+ */
+export function provisionBuiltinSkills(
+  agentDir: string,
+  options: { readonly force?: boolean } = {},
+): ProvisionResult {
+  const sourceRoot = builtinSkillsDir();
+  const targetRoot = path.join(agentDir, 'skills');
+  const installed: BuiltinSkillName[] = [];
+  const skipped: BuiltinSkillName[] = [];
+  const failed: ProvisionFailure[] = [];
+
+  for (const name of SKILL_NAMES) {
+    const sourceDir = path.join(sourceRoot, name);
+    if (!existsSync(path.join(sourceDir, 'SKILL.md'))) {
+      failed.push({ name, message: `bundled skill missing: ${sourceDir}` });
+      continue;
+    }
+
+    const targetDir = path.join(targetRoot, name);
+    try {
+      if (!options.force && existsSync(targetDir)) {
+        skipped.push(name);
+        continue;
+      }
+      mkdirSync(targetRoot, { recursive: true });
+      if (existsSync(targetDir)) {
+        rmSync(targetDir, { recursive: true, force: true });
+      }
+      cpSync(sourceDir, targetDir, { recursive: true });
+      installed.push(name);
+    } catch {
+      failed.push({ name, message: `failed to copy ${sourceDir} -> ${targetDir}` });
+    }
+  }
+
+  return { installed, skipped, failed };
+}
+
+/** Parse the folded `description:` frontmatter field of a SKILL.md ("" if absent). */
+function readFrontmatterDescription(filePath: string): string {
+  let content: string;
+  try {
+    content = readFileSync(filePath, 'utf-8');
+  } catch {
+    return '';
+  }
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
+  if (!match || match[1] === undefined) {
+    return '';
+  }
+  const lines = match[1].split(/\r?\n/);
+  const keyIndex = lines.findIndex((line) => line.trim().startsWith('description:'));
+  if (keyIndex === -1) {
+    return '';
+  }
+  const folded: string[] = [];
+  for (const line of lines.slice(keyIndex + 1)) {
+    if (line.trim() === '' && folded.length === 0) {
+      continue;
+    }
+    if (!/^\s/.test(line)) {
+      break;
+    }
+    folded.push(line.trim());
+  }
+  return folded.join(' ');
+}

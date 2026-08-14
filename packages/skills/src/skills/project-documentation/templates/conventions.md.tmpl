@@ -1,0 +1,99 @@
+# Conventions
+
+Code conventions that differ from or extend {{LANGUAGE}} defaults.
+Only rules an agent can't infer from linter config or codebase scanning.
+
+---
+
+## Naming
+
+| Element | Convention | Example |
+|---------|-----------|---------|
+| Files | {{FILE_NAMING}} | `{{FILE_EXAMPLE}}` |
+| Variables | {{VARIABLE_NAMING}} | `{{VARIABLE_EXAMPLE}}` |
+| Functions | {{FUNCTION_NAMING}} | `{{FUNCTION_EXAMPLE}}` |
+| Classes | {{CLASS_NAMING}} | `{{CLASS_EXAMPLE}}` |
+| Database tables | {{TABLE_NAMING}} | `{{TABLE_EXAMPLE}}` |
+| Database columns | {{COLUMN_NAMING}} | `{{COLUMN_EXAMPLE}}` |
+| Environment variables | {{ENV_NAMING}} | `{{ENV_EXAMPLE}}` |
+
+---
+
+## Imports
+
+{{IMPORT_CONVENTIONS}}
+
+---
+
+## Error Handling
+
+- **What gets raised:** {{RAISE_PATTERN}}
+- **What gets returned:** {{RETURN_PATTERN}}
+- **What gets logged:** {{LOG_PATTERN}}
+- **Standard error response shape:** {{ERROR_RESPONSE_SHAPE}}
+
+---
+
+## Logging
+
+| Level | When to Use |
+|-------|-------------|
+| DEBUG | {{DEBUG_USAGE}} |
+| INFO | {{INFO_USAGE}} |
+| WARNING | {{WARNING_USAGE}} |
+| ERROR | {{ERROR_USAGE}} |
+
+{{LOGGING_ADDITIONAL}}
+
+---
+
+## Configuration
+
+- **Secrets:** {{SECRETS_METHOD}} (e.g., environment variables, never committed)
+- **Non-secret config:** {{CONFIG_METHOD}} (e.g., config files, env vars with defaults)
+- **Environment file:** `.env` (copy `.env.example` to `.env`, fill in values)
+- **Never commit:** `.env`, credentials, API keys, private keys
+
+---
+
+## Testing
+
+| Rule | Detail |
+|------|--------|
+| File naming | {{TEST_FILE_NAMING}} |
+| Directory layout | {{TEST_DIR_LAYOUT}} |
+| Fixture location | {{FIXTURE_LOCATION}} |
+| Mock policy | {{MOCK_POLICY}} |
+| Test data | {{TEST_DATA_POLICY}} |
+
+---
+
+## Git / Commits
+
+{{COMMIT_CONVENTIONS}}
+
+---
+
+## Security
+
+- **Never commit `.env`** — it's in `.gitignore`
+- **Secrets via environment variables** — no hardcoded keys
+- **Input validation** — {{INPUT_VALIDATION_RULE}}
+- **Auth tokens** — {{AUTH_TOKEN_RULE}}
+- **Dependencies** — {{DEPENDENCY_SECURITY_RULE}}
+
+---
+
+## How to Update
+- Naming convention changed? → Update the Naming table
+- New error handling pattern? → Add to Error Handling
+- Logging convention changed? → Update Logging table
+- Test convention changed? → Update Testing table
+- New security rule? → Add to Security section
+
+## Find It Fast
+```bash
+grep -r "import " src/ --include="*.py" | head -20   # Check import style
+grep -r "class.*Error" src/                            # All error classes
+grep -r "logger\." src/                                # Logging usage
+```

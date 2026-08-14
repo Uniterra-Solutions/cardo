@@ -1,0 +1,55 @@
+# {{MODULE_NAME}}
+
+**Purpose:** {{ONE_SENTENCE_PURPOSE}}
+
+**Source:** `{{SOURCE_DIR}}/`
+
+---
+
+## Public API
+
+| {{API_ENTITY_TYPE}} | Signature | Description |
+|{{COLUMN_SEPARATOR}}|-----------|-------------|
+{{API_ROWS}}
+
+---
+
+## Dependencies
+
+### Imports (what {{MODULE_NAME}} depends on)
+| Module | Used For |
+|--------|----------|
+{{IMPORT_ROWS}}
+
+### Imported By (what depends on {{MODULE_NAME}})
+| Module | Used For |
+|--------|----------|
+{{IMPORTED_BY_ROWS}}
+
+---
+
+## Data Models
+
+{{DATA_MODELS_SECTION}}
+
+---
+
+## Patterns & Gotchas
+
+- **{{PATTERN_NAME}}:** {{PATTERN_DESCRIPTION}}
+- **{{GOTCHA_NAME}}:** {{GOTCHA_DESCRIPTION}}
+
+---
+
+## How to Update
+- New public function/class added? → Add row to Public API table
+- New dependency added? → Add row to Imports table
+- Other module now imports this one? → Add row to Imported By table
+- Data model changed? → Update Data Models section
+- New pattern or gotcha discovered? → Add to Patterns & Gotchas
+
+## Find It Fast
+```bash
+grep -r "def {{MODULE_NAME}}" src/     # Entry points
+grep -r "class.*:" {{SOURCE_DIR}}/    # All classes in this module
+```

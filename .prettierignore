@@ -4,3 +4,5 @@ dist/
 .tsbuildinfo
 pnpm-lock.yaml
 vendor/
+# Vendored skill content from the Hermes plugins — keep byte-identical for clean re-syncs
+packages/skills/src/skills/

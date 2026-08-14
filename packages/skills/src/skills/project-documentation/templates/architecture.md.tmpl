@@ -1,0 +1,115 @@
+# Architecture — {{PROJECT_NAME}}
+
+> Reference example: this template models the **Jovaltus v1.0.0 Hermes
+> plugin** — a subagent-driven development framework. When documenting
+> another project, keep the section structure and replace the content with
+> that project's actual architecture.
+
+## System Context (C4 Level 1)
+
+```mermaid
+graph TD
+    User[User] -->|tool call| Tools[Jovaltus Tools]
+    Tools -->|dispatch| Subagent[Subagent Process]
+    Subagent -->|writes| RunDir[.plan/&lt;date&gt;/&lt;slug&gt;/]
+    Hooks[Hooks] -->|advance| State[State Machine]
+    State -->|persist| StateFile[(~/.hermes/jovaltus_state.json)]
+```
+
+**Users:** {{USER_TYPES}} — a human + main agent that calls tools and reads hook-injected status.
+
+**External services:**
+| Service | Purpose | Protocol |
+|---------|---------|----------|
+| Hermes Agent Runtime | Host process; calls `register(ctx)` at startup | Python in-process |
+| LLM Provider | Powers main agent + subagent reasoning | HTTP API |
+| Git Repository | Working tree where subagents implement | git CLI |
+
+---
+
+## Container View (C4 Level 2)
+
+```mermaid
+graph TD
+    Main[Main Agent] -->|plan / execute / simplify / review| Tools[Tools Layer: tools.py]
+    Tools -->|ctx.dispatch_tool delegate_task| Sub[Subagent Process]
+    Sub -->|subagent_stop hook| Hooks[Hooks Layer: hooks.py]
+    Hooks -->|advance| State[State Machine: state.py]
+    State -->|load_state / save_state| SF[(jovaltus_state.json)]
+    Prompts[Prompts: prompts/*.md] -->|goal text| Sub
+    Skills[Bundled Skills x5] -->|guide| Main
+```
+
+| Container | Technology | Purpose |
+|-----------|-----------|---------|
+| Tools Layer | `tools.py` | 4 tool handlers: `plan`, `execute`, `simplify`, `review` — each dispatches subagents via `ctx.dispatch_tool("delegate_task", ...)` |
+| Hooks Layer | `hooks.py` | `subagent_start` / `subagent_stop` / `pre_llm_call` — associate children with the pipeline and advance the state machine |
+| State Machine | `state.py` | Deterministic phase transitions (`prd → research → acceptance → tasks` for plan; simplify/review verdict loops); JSON persistence for cross-session resume |
+| Prompts | `prompts/*.md` | Subagent goal prompts: `prd`, `research`, `acceptance`, `tasks`, `execute`, `simplify-review`, `simplify-fix`, `review`, `review-fix` |
+| Bundled Skills | Markdown (SKILL.md) | 5 utility skills: `manage-git-repo`, `manage-agents-md`, `project-documentation`, `agentic-debugging`, `qa` |
+
+---
+
+## Data Flow
+
+### Tool Dispatch
+
+1. Main agent calls a tool (`plan` | `execute` | `simplify` | `review`) with its arguments
+2. Handler validates input, computes the run dir, loads the phase prompt, substitutes `[[tokens]]`
+3. Handler dispatches **one** subagent via `ctx.dispatch_tool("delegate_task", ...)` (fire-and-forget; `role="orchestrator"` only for `execute`)
+4. Handler returns `{"status": "started", "tool": ..., "phase": ..., "run_dir": ...}`
+5. The subagent writes its artifact (e.g. `prd.md`, `tasks.md`, `verdict.json`) into the run dir
+
+### State Machine Flow
+
+1. `subagent_start` matches the child goal marker `[jovaltus-pipeline:<tool>:<phase>]` → `register_child`
+2. `subagent_stop` completes the child → phase advances per the chain table:
+   - `plan`: prd → research → acceptance → tasks → done
+   - `simplify` / `review`: verdict `pass` → done; verdict `fix` → fixer dispatched, then reviewer re-dispatched (no loop cap)
+3. `pre_llm_call` injects a one-line pipeline status into the main agent's user message each turn
+4. Non-success child status → `finish_pipeline(ok=False, error=...)`
+
+---
+
+## Key Architectural Decisions
+
+| Decision | Rationale | Status | Date |
+|----------|-----------|--------|------|
+| Subagent-driven, not skill-driven | Deterministic flow owned by the state machine; main agent only calls tools and reads status | Active | {{DATE}} |
+| 4 tools: plan / execute / simplify / review | Handlers dispatch subagents; no pipeline logic in the main agent | Active | {{DATE}} |
+| JSON state persistence | Cross-session resume via fabricium `load_state` / `save_state` | Active | {{DATE}} |
+| Hooks wire lifecycle | `subagent_stop` advances the chain; `pre_llm_call` surfaces status | Active | {{DATE}} |
+| No simplify/review loop cap | Review-fix loops run until the reviewer passes | Active | {{DATE}} |
+| Fabricium as sole dependency | `git_utils`, CLI registration, skill bundling | Active | {{DATE}} |
+
+---
+
+## Deployment
+
+{{DEPLOYMENT_DESCRIPTION}}
+
+```mermaid
+graph LR
+    CI[CI/CD] -->|Build| Image[Docker Image]
+    Image -->|Push| Registry[Container Registry]
+    Registry -->|Deploy| Env[{{DEPLOY_ENV}}]
+```
+
+---
+
+## How to Update
+
+- Tool or hook added/removed? → Update Container View table + Tool Dispatch flow
+- Phase chain changed? → Update State Machine Flow chain table
+- Prompt added/removed? → Update Prompts row in Container View
+- Skill added/removed? → Update Bundled Skills row
+- New architectural decision made? → Add row to decisions table
+
+## Find It Fast
+
+```bash
+grep -rn "register_tool" src/          # Tool registration
+grep -rn "register_hook" src/          # Hook registration
+ls src/jovaltus/prompts/               # Subagent goal prompts
+ls src/jovaltus/skills/                # Bundled skills
+```
