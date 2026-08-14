@@ -70,6 +70,13 @@ graph TD
 - `@cardo/*` exports point at built `dist` (Node 22 `require(ESM)`); pi-coding-agent stays external (its exports are ESM-only — do not bundle it into the CJS main bundle).
 - The vendored `@pi-gui/pi-sdk-driver` was ported from pi 0.80.6 to 0.84.1: `AuthStorage`/`ModelRegistry` replaced by `ModelRuntime`, constructors async, login via `AuthInteraction`.
 
+## Desktop timeline — reasoning streaming and tool-batch collapsing
+
+Two cardo patches shape the vendored conversation timeline (all marked `// Cardo:`):
+
+- **Reasoning streaming + collapse.** pi's `thinking_delta` agent events become a new `assistantThinkingDelta` driver event (session-driver types + pi-sdk-driver mapping); the app-store accumulates them into a live thinking block (`appendThinkingDelta`) and stamps `endedAt` when text/tools take over or the run ends (`finalizeActiveThinking`). The renderer shows the text live under a "Thinking…" header, then collapses it to a clickable "Thought for Ns" row. Persisted thinking from the session file carries `endedAt = createdAt` so reloaded sessions always render collapsed (no fabricated duration).
+- **Tool-batch collapsing.** The renderer's `buildDisplayTimelineItems` groups the consecutive tool calls of one request into a derived `TimelineToolGroup` ("Used N tools") instead of spamming individual rows; a lone tool call stays a plain row. A group auto-expands while any call is still running and collapses when the batch settles; clicking expands the individual calls and their results.
+
 ## Key Architectural Decisions
 
 | Decision                                                                                   | Rationale                                                                                                                                                                               | Status |
