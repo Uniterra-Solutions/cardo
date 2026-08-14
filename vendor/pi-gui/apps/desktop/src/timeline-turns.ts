@@ -1,5 +1,27 @@
 import type { DisplayTimelineItem, TimelineToolCall, TimelineToolGroup, TranscriptMessage } from "./timeline-types";
 
+/**
+ * Cardo: keep only expand ids that still exist. Invariant: when the result
+ * value equals `current` (nothing pruned) the SAME reference is returned so
+ * React's setState bail-out (Object.is) skips re-rendering — the renderer
+ * runs this on every transcript change, i.e. every streamed character.
+ */
+export function pruneExpandState(current: ReadonlySet<string>, available: ReadonlySet<string>): ReadonlySet<string> {
+  if (current.size === 0) {
+    return current;
+  }
+  let changed = false;
+  const next = new Set<string>();
+  for (const id of current) {
+    if (!available.has(id)) {
+      changed = true;
+      continue;
+    }
+    next.add(id);
+  }
+  return changed ? next : current;
+}
+
 const MIN_WORKED_DURATION_MS = 1_000;
 
 /**

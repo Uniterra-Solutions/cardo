@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type RefCallback, type RefObject } from "react";
 import type { TranscriptMessage } from "./desktop-state";
 import type { DisplayTimelineItem, TimelineThinking, TimelineToolGroup } from "./timeline-types";
-import { buildDisplayTimelineItems } from "./timeline-turns";
+import { buildDisplayTimelineItems, pruneExpandState } from "./timeline-turns";
 import { ThreadSearchBar } from "./thread-search";
 import { TimelineItem } from "./timeline-item";
 import { SparkIcon } from "./icons";
@@ -82,10 +82,12 @@ export function ConversationTimeline({
     transcript.length > VIRTUALIZATION_THRESHOLD &&
     !disableVirtualization &&
     !hasUnreliableVirtualizedHeights;
-  const [expandedToolCallIds, setExpandedToolCallIds] = useState<Set<string>>(() => new Set());
-  const [expandedToolGroupIds, setExpandedToolGroupIds] = useState<Set<string>>(() => new Set());
+  // Cardo: expand sets are pruned by pruneExpandState which returns the input
+  // reference when unchanged; readonly typing keeps that bail-out contract honest.
+  const [expandedToolCallIds, setExpandedToolCallIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [expandedToolGroupIds, setExpandedToolGroupIds] = useState<ReadonlySet<string>>(() => new Set());
   // Cardo: reasoning blocks and tool batches are collapsible rows too.
-  const [expandedThinkingIds, setExpandedThinkingIds] = useState<Set<string>>(() => new Set());
+  const [expandedThinkingIds, setExpandedThinkingIds] = useState<ReadonlySet<string>>(() => new Set());
   const measuredHeightsRef = useRef(new Map<string, number>());
   const [measurementVersion, setMeasurementVersion] = useState(0);
 
@@ -672,21 +674,4 @@ function estimateTimelineItemHeight(item: DisplayTimelineItem): number {
     return item.presentation === "divider" ? 44 : 38;
   }
   return 38;
-}
-
-/** Keep only ids that still exist in the available set (no-op when unchanged). */
-function pruneExpandState(current: ReadonlySet<string>, available: ReadonlySet<string>): Set<string> {
-  if (current.size === 0) {
-    return new Set();
-  }
-  let changed = false;
-  const next = new Set<string>();
-  for (const id of current) {
-    if (!available.has(id)) {
-      changed = true;
-      continue;
-    }
-    next.add(id);
-  }
-  return changed ? next : new Set(current);
 }
