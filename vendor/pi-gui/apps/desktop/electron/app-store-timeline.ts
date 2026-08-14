@@ -6,6 +6,7 @@ import {
   formatElapsedDuration,
   makeActivityItem,
   makeSummaryItem,
+  makeThinkingItem,
   makeToolItem,
   makeTranscriptMessage,
   makeTranscriptMessageWithAttachments,
@@ -29,10 +30,25 @@ interface TimelineRuntimeState {
   readonly runningSinceBySession: Map<string, string>;
   readonly activeAssistantMessageBySession: Map<string, string>;
   readonly activeWorkingActivityBySession: Map<string, string>;
+  readonly activeThinkingBySession: Map<string, ActiveThinkingRecord>;
+}
+
+// Cardo: in-progress reasoning block accumulated from assistantThinkingDelta events.
+export interface ActiveThinkingRecord {
+  readonly id: string;
+  readonly text: string;
+  readonly startedAt: string;
 }
 
 export function timelineFromDriverTranscript(items: readonly SessionTranscriptItem[]): TranscriptMessage[] {
   return items.map((item) => {
+    if (item.kind === "thinking") {
+      // Cardo: persisted thinking has no stream boundaries; render it finalized (collapsed).
+      return {
+        ...item,
+        endedAt: item.createdAt,
+      };
+    }
     if (item.kind !== "tool") {
       return item;
     }
@@ -131,13 +147,87 @@ export function clearActiveAssistantMessage(
   activeAssistantMessageBySession.delete(sessionKey(sessionRef));
 }
 
+// Cardo: append a streaming reasoning delta to the active thinking block for the
+// session, creating the block (and recording its start time) on first delta.
+export function appendThinkingDelta(
+  transcriptCache: Map<string, TranscriptMessage[]>,
+  activeThinkingBySession: Map<string, ActiveThinkingRecord>,
+  sessionRef: SessionRef,
+  text: string,
+): void {
+  const key = sessionKey(sessionRef);
+  const transcript = [...(transcriptCache.get(key) ?? [])];
+  const active = activeThinkingBySession.get(key);
+
+  if (active) {
+    const index = transcript.findIndex((item) => item.id === active.id);
+    const current = index >= 0 ? transcript[index] : undefined;
+    if (current?.kind === "thinking") {
+      transcript[index] = { ...current, text: `${current.text}${text}` };
+    } else {
+      const item = makeThinkingItem(text);
+      transcript.push(item);
+      activeThinkingBySession.set(key, { id: item.id, text, startedAt: item.startedAt ?? item.createdAt });
+    }
+  } else {
+    const item = makeThinkingItem(text);
+    transcript.push(item);
+    activeThinkingBySession.set(key, { id: item.id, text, startedAt: item.startedAt ?? item.createdAt });
+  }
+
+  transcriptCache.set(key, transcript);
+}
+
+// Cardo: finalize the session's active thinking block (if any): stamp `endedAt` so the
+// UI collapses it, and drop the active record. No-op when nothing is streaming,
+// so cache entries are left reference-identical.
+export function finalizeActiveThinking(
+  transcriptCache: Map<string, TranscriptMessage[]>,
+  activeThinkingBySession: Map<string, ActiveThinkingRecord>,
+  sessionRef: SessionRef,
+  endedAt?: string,
+): void {
+  const key = sessionKey(sessionRef);
+  const active = activeThinkingBySession.get(key);
+  if (!active) {
+    return;
+  }
+
+  const transcript = [...(transcriptCache.get(key) ?? [])];
+  const index = transcript.findIndex((item) => item.id === active.id);
+  const current = index >= 0 ? transcript[index] : undefined;
+  if (current?.kind === "thinking") {
+    transcript[index] = { ...current, endedAt: endedAt ?? new Date().toISOString() };
+    transcriptCache.set(key, transcript);
+  }
+  activeThinkingBySession.delete(key);
+}
+
 export function applyTimelineEvent(
   transcriptCache: Map<string, TranscriptMessage[]>,
   event: SessionDriverEvent,
   state: TimelineRuntimeState,
 ): void {
-  if (event.type === "assistantDelta") {
+  if (event.type === "assistantThinkingDelta") {
+    // Reasoning deltas are appended by appendThinkingDelta (mirroring assistantDelta).
     return;
+  }
+
+  if (event.type === "assistantDelta") {
+    // Text takes over from reasoning: collapse the thinking block, then let the
+    // caller append the delta via appendAssistantDelta.
+    finalizeActiveThinking(transcriptCache, state.activeThinkingBySession, event.sessionRef);
+    return;
+  }
+
+  if (
+    event.type === "toolStarted" ||
+    event.type === "queuedMessageStarted" ||
+    event.type === "runCompleted" ||
+    event.type === "runFailed" ||
+    event.type === "sessionClosed"
+  ) {
+    finalizeActiveThinking(transcriptCache, state.activeThinkingBySession, event.sessionRef);
   }
 
   const key = sessionKey(event.sessionRef);
@@ -306,6 +396,7 @@ function clearRunState(
   state.activeWorkingActivityBySession.delete(key);
   state.runningSinceBySession.delete(key);
   state.runMetricsBySession.delete(key);
+  state.activeThinkingBySession.delete(key);
 }
 
 function toolLabel(toolName: string, input: unknown): string {

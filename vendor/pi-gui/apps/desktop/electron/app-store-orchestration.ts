@@ -1842,6 +1842,10 @@ function transcriptText(message: TranscriptMessage): string {
   if (message.kind === "tool") {
     return message.detail ? `${message.label}: ${message.detail}` : message.label;
   }
+  // Cardo: reasoning blocks contribute their text to orchestration transcripts.
+  if (message.kind === "thinking") {
+    return message.text;
+  }
   return message.metadata ? `${message.label}: ${message.metadata}` : message.label;
 }
 

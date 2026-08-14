@@ -521,6 +521,18 @@ export function makeToolItem(
   };
 }
 
+// Cardo: live reasoning block factory — startedAt drives the "Thought for Ns" label.
+export function makeThinkingItem(text: string): Extract<TranscriptMessage, { kind: "thinking" }> {
+  const now = new Date().toISOString();
+  return {
+    kind: "thinking",
+    id: `thinking:${randomUUID()}`,
+    text,
+    createdAt: now,
+    startedAt: now,
+  };
+}
+
 export function previewFromTranscript(transcript: readonly TranscriptMessage[]): string | undefined {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const item = transcript[index];

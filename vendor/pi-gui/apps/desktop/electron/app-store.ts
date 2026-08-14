@@ -64,7 +64,9 @@ import {
 import {
   applyTimelineEvent,
   appendAssistantDelta,
+  appendThinkingDelta,
   clearActiveAssistantMessage,
+  finalizeActiveThinking,
   timelineFromDriverTranscript,
 } from "./app-store-timeline";
 import { applySessionEventState, updateSessionRecord } from "./app-store-session-state";
@@ -2166,7 +2168,22 @@ export class DesktopAppStore implements AppStoreInternals {
 
       switch (event.type) {
         case "assistantDelta":
+          finalizeActiveThinking(
+            this.sessionState.transcriptCache,
+            this.sessionState.activeThinkingBySession,
+            event.sessionRef,
+          );
           appendAssistantDelta(this.sessionState.transcriptCache, this.sessionState.activeAssistantMessageBySession, event.sessionRef, event.text);
+          break;
+        // Cardo: reasoning deltas stream into the live transcript and collapse
+        // when text or tools take over (see finalizeActiveThinking).
+        case "assistantThinkingDelta":
+          appendThinkingDelta(
+            this.sessionState.transcriptCache,
+            this.sessionState.activeThinkingBySession,
+            event.sessionRef,
+            event.text,
+          );
           break;
         case "sessionOpened":
         case "runCompleted":
@@ -2228,6 +2245,7 @@ export class DesktopAppStore implements AppStoreInternals {
         runningSinceBySession: this.sessionState.runningSinceBySession,
         activeAssistantMessageBySession: this.sessionState.activeAssistantMessageBySession,
         activeWorkingActivityBySession: this.sessionState.activeWorkingActivityBySession,
+        activeThinkingBySession: this.sessionState.activeThinkingBySession,
       });
       this.state = applySessionEventState(
         this.state,

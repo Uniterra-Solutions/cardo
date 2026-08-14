@@ -9,6 +9,7 @@ import type {
   TranscriptMessage,
 } from "../src/desktop-state";
 import type { RunMetrics } from "./app-store-timeline";
+import type { ActiveThinkingRecord } from "./app-store-timeline";
 
 export interface MutableSessionExtensionUiState extends ExtensionUiState {
   pendingDialogs: SessionExtensionDialogRecord[];
@@ -47,6 +48,9 @@ export class SessionStateMap {
   readonly runningSinceBySession = new Map<string, string>();
   readonly runMetricsBySession = new Map<string, RunMetrics>();
   readonly activeWorkingActivityBySession = new Map<string, string>();
+  // Cardo: reasoning blocks stream live and collapse on finalize; tracked here
+  // so the UI can stamp endedAt when text/tools take over.
+  readonly activeThinkingBySession = new Map<string, ActiveThinkingRecord>();
   readonly sessionCommandsBySession = new Map<string, RuntimeCommandRecord[]>();
   readonly extensionUiBySession = new Map<string, MutableSessionExtensionUiState>();
   readonly pendingAutoTitleBySession = new Map<string, PendingAutoTitle>();
@@ -89,6 +93,7 @@ export class SessionStateMap {
       this.runningSinceBySession,
       this.runMetricsBySession,
       this.activeWorkingActivityBySession,
+      this.activeThinkingBySession,
       this.sessionCommandsBySession,
       this.extensionUiBySession,
       this.pendingAutoTitleBySession,
@@ -134,6 +139,7 @@ export class SessionStateMap {
     this.runningSinceBySession.delete(key);
     this.runMetricsBySession.delete(key);
     this.activeWorkingActivityBySession.delete(key);
+    this.activeThinkingBySession.delete(key);
     this.composerDraftsBySession.delete(key);
     this.composerAttachmentsBySession.delete(key);
     this.queuedComposerMessagesBySession.delete(key);
