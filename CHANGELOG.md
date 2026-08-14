@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `cardo update` now stops all running cardo desktop app instances before updating: it sends an AppleScript `quit` (letting the app flush its before-quit persistence), polls for up to 10 seconds, then SIGKILLs stragglers. Skipped with `--dry-run`. The process operations are injected (`packages/cli/src/stop-app.ts`) and covered by a new CLI unit suite (`pnpm --filter @uniterra-solutions/cardo test`)
+- Desktop startup update check (replaces the vendored pi-gui checker): on launch the app probes the `@uniterra-solutions/cardo` npm `latest` dist-tag and the `Uniterra-Solutions/cardo` GitHub release, and prompts with **Update Now / Later / Skip This Version** when either is newer. Later re-prompts on the next launch; Skip persists the version (no more prompts until a newer one appears). Update Now spawns `cardo update` and quits the app. Manual **Check for Updates…** in the app menu uses the same flow
+- The update check only runs outside dev and is disabled entirely with `PI_APP_DISABLE_CARDO_UPDATE_CHECK=1`; endpoints, delay and update command are overridable via `CARDO_UPDATE_API_BASE` / `CARDO_UPDATE_NPM_URL` / `CARDO_UPDATE_DELAY_MS` / `CARDO_UPDATE_COMMAND` (used by the new e2e lane `test:cardo:core:update-flow`)
+
+### Changed
+
+- Docs: `AGENTS.md` and `docs/testing.md` document the new CLI test lane and the update-flow e2e lane
+
 ## [0.3.1] — 2026-08-14
 
 ### Added

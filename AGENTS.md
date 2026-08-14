@@ -10,7 +10,7 @@
   - `pnpm --filter @pi-gui/desktop typecheck` — type-check the app + vendored driver packages
   - `pnpm --filter @pi-gui/desktop build` — production electron-vite build
   - `pnpm --filter @pi-gui/desktop test:pbt` — property-based tests for the frontend↔backend contract layer (fast-check + node:test; compiles pure app-store modules via `tsconfig.pbt.json` into `out-pbt/`)
-  - `pnpm --filter @pi-gui/desktop run test:cardo:core:multi-window` / `test:cardo:core:mentions-diff` — Playwright e2e specs runnable from the cardo workspace (`@playwright/test` is a desktop devDep — the vendored root's copy is never installed by the cardo workspace). Requires built `out/` + `dist/`; the launch env forces `PI_OFFLINE=1` because specs seed a fake provider key (pi's model-availability refresh would otherwise hang on real network calls) — real-auth specs opt out
+  - `pnpm --filter @pi-gui/desktop run test:cardo:core:multi-window` / `test:cardo:core:mentions-diff` / `test:cardo:core:update-flow` — Playwright e2e specs runnable from the cardo workspace (`@playwright/test` is a desktop devDep — the vendored root's copy is never installed by the cardo workspace). Requires built `out/` + `dist/`; the launch env forces `PI_OFFLINE=1` because specs seed a fake provider key (pi's model-availability refresh would otherwise hang on real network calls) — real-auth specs opt out. The harness also forces `PI_APP_DISABLE_CARDO_UPDATE_CHECK=1` so no spec probes npm/GitHub; the update-flow spec deletes the key via `envOverrides` and feeds a local fixture server + stubbed `dialog.showMessageBox`
   - `pnpm --filter @pi-gui/pi-sdk-driver test` — node:test suite for vendored driver pure functions (includes PBT)
 - `packages/jovaltus`:
   - `pnpm --filter @cardo/jovaltus test:pbt` — integrated PBT for the extension ↔ pi-backend interaction (SQLite session store incl. model-based invariants, phase chains, prompt rendering, JSONL protocol, and the full tool surface against a fake `pi` backend in `test/fixtures/fake-pi.mjs`). Tests import the compiled `dist/` output; the build copies `src/prompts/*.md` → `dist/prompts/` (dist consumers must be able to load phase prompts)
@@ -19,6 +19,7 @@
 - `packages/cli`:
   - `pnpm --filter @uniterra-solutions/cardo run build` — compile the installer CLI (tsc -b)
   - `pnpm --filter @uniterra-solutions/cardo run lint` / `typecheck` — lint/type-check the CLI source
+  - `pnpm --filter @uniterra-solutions/cardo test` — CLI unit tests (node:test on compiled `dist/`; the stop-app sequence is tested with injected process ops)
 - Desktop visual design: token-driven system — see `docs/design-system.md` (03b Warm Paper Sharp: warm palette, 0–4px radii, serif page titles, terracotta accent). Restyles are token changes, not per-component sweeps
 
 # Project Business Goals
