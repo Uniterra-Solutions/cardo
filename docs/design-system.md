@@ -112,15 +112,25 @@ that expands on click.
 
 ### Composer (input box)
 
-Chat and new-thread composers share one footer convention — every control sits
-**inside** the input box's bottom row (`.composer__footer-row`), three slots
-after `justify-content: space-between`:
+Chat and new-thread composers share one **single-row layout** — every control
+lives on the same line as the textarea inside the input box
+(`.composer__editor-row`), left to right:
 
-1. **far left** — attach button (`.composer__attach`, `aria-label="Attach files"`)
-2. **center** — status hint + all selectors (`.composer__hint`): environment as a
+1. **leading** — attach button (`.composer__attach`, `aria-label="Attach files"`)
+2. **middle** — the textarea, growing (`flex: 1`), vertically centered
+3. **trailing** — selectors flush against the send button: environment as a
    native `<select>` with chevron (new-thread only), model and thinking badges
    with a `ChevronDownIcon` caret
-3. **far right** — primary action button (send arrow / stop)
+4. **far right** — primary action button (send arrow / stop)
+
+There is no second footer row. Controls are flat and borderless (transparent
+background, hover tint only) so they read as part of the single input box, not
+a second layer of boxes. Text centering is explicit: the textarea defaults to
+`rows="2"` (two intrinsic lines, text top-aligned), so the single-row textarea
+gets an explicit `height: 36px` + `padding: 7px 0 6px` to sit on the same
+center line as the 36px controls; multi-line input grows via the JS
+auto-height effect. Selector badges set `white-space: nowrap` so label +
+chevron never wrap to two lines when the row is narrow.
 
 The surface shell stays sharp and light: `1px solid var(--theme-control-border,
 var(--line))`, `--shadow-sm`, **no** `0 0 0 1px` focus-ring layer. All selectors

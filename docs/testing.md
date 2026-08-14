@@ -110,11 +110,12 @@ per-surface CSS. Regression coverage is layered, fastest first:
      (threads / new-thread / settings / skills / extensions), and compare
      against the mockup.
 3. **Composer layout regression (e2e)** — `tests/core/composer-layout.spec.ts`
-   asserts the composer footer geometry (attach far left, selectors center,
-   send far right, all inside the surface), the 1px surface border without the
-   `0 0 0 1px` focus-ring shadow layer, and the global scrollbar CSS contract
-   (7px width, transparent track, `--muted`-alpha thumb, `scrollbar-width: thin`)
-   via computed styles — hermetic, no screenshots.
+   asserts the single-row composer geometry (attach | textarea | selectors |
+   send all on one line inside the surface, textarea vertically centered with
+   the send button, environment select present on new-thread), the 1px surface
+   border without the `0 0 0 1px` focus-ring shadow layer, and the global
+   scrollbar CSS contract (7px width, transparent track, `--muted`-alpha thumb,
+   `scrollbar-width: thin`) via computed styles — hermetic, no screenshots.
 
 Pitfalls: the app uses `requestSingleInstanceLock()` — kill leftover pi
 Electron processes before each launch, or the new instance quits immediately
