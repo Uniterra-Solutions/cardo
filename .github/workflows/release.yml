@@ -32,8 +32,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          npm-version: 11.5.1
           cache: pnpm
+
+      # npm trusted publishing (OIDC exchange) requires npm CLI >= 11.5.1;
+      # Node 22 ships npm 10.x which cannot authenticate via OIDC (ENEEDAUTH).
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@11
 
       - name: Install
         run: pnpm install --frozen-lockfile
