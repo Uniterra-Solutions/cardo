@@ -74,7 +74,7 @@ pnpm --filter @pi-gui/pi-sdk-driver test  # vendored driver pure functions (incl
 #### Desktop e2e notes
 
 - Runs need built `out/` + `dist/` (the scripts run `pnpm build` first; driver `dist/` comes from `pnpm run build` at the repo root or the driver builds).
-- The app uses `requestSingleInstanceLock()` — kill leftover pi Electron processes before each run (see the visual-verification pitfall below).
+- The app uses `requestSingleInstanceLock()` — kill leftover pi Electron processes before each run. From-source runs (dev server / `electron .` / preview) now use the `pi-dev` user-data dir, so they no longer share the lock with a running packaged app — but two dev instances still clash on the `pi-dev` lock (see the visual-verification pitfall below).
 - Windows/Linux: Cmd+N / Cmd+Shift+N rely on `before-input-event`; the macOS File menu bindings are asserted platform-gated (`test.skip` inside the test body).
 
 #### Visual verification (design system)
@@ -94,11 +94,20 @@ per-surface CSS. Regression coverage is layered, fastest first:
    - seeded agent dir and `PI_APP_TEST_MODE=background`, screenshot each page
      (threads / new-thread / settings / skills / extensions), and compare
      against the mockup.
+3. **Composer layout regression (e2e)** — `tests/core/composer-layout.spec.ts`
+   asserts the composer footer geometry (attach far left, selectors center,
+   send far right, all inside the surface), the 1px surface border without the
+   `0 0 0 1px` focus-ring shadow layer, and the global scrollbar CSS contract
+   (7px width, transparent track, `--muted`-alpha thumb, `scrollbar-width: thin`)
+   via computed styles — hermetic, no screenshots.
 
 Pitfalls: the app uses `requestSingleInstanceLock()` — kill leftover pi
 Electron processes before each launch, or the new instance quits immediately
-(`persistence flush timed out during quit` in stderr). See `docs/design-system.md`
-for the token contract.
+(`persistence flush timed out during quit` in stderr). From-source runs use the
+`pi-dev` user-data dir (`electron/main.ts`, `// Cardo:` patch), so a leftover
+dev instance no longer white-screens the packaged app — but the packaged app's
+`pi` dir and dev's `pi-dev` dir each still lock against themselves. See
+`docs/design-system.md` for the token contract.
 
 ### Manual / ad-hoc verification (documented, hermetic)
 

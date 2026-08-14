@@ -6,7 +6,7 @@
 - `pnpm run format` — Prettier formatting (single quotes, trailing commas, 100 width, LF)
 - `pnpm install --frozen-lockfile` — Install dependencies in CI (never `pnpm install` without `--frozen-lockfile`)
 - Desktop app (vendored pi-gui, `vendor/pi-gui/apps/desktop`):
-  - `pnpm --filter @pi-gui/desktop dev` — run the Electron app in dev (watch mode)
+  - `pnpm --filter @pi-gui/desktop dev` — run the Electron app in dev (watch mode). From-source runs (dev server / `electron .` / preview) use the `pi-dev` user-data dir (`~/Library/Application Support/pi-dev`) so they never share the single-instance lock or state files with the packaged app's `pi` dir — see the `// Cardo:` patch in `electron/main.ts` (explicit `PI_APP_USER_DATA_DIR` always wins; e2e harness relies on this)
   - `pnpm --filter @pi-gui/desktop typecheck` — type-check the app + vendored driver packages
   - `pnpm --filter @pi-gui/desktop build` — production electron-vite build
   - `pnpm --filter @pi-gui/desktop test:pbt` — property-based tests for the frontend↔backend contract layer (fast-check + node:test; compiles pure app-store modules via `tsconfig.pbt.json` into `out-pbt/`)

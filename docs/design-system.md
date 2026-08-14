@@ -77,6 +77,45 @@ it does not flip with the app theme:
 The xterm instance in `terminal-panel.tsx` mirrors these values in its theme
 object (it cannot read CSS variables).
 
+## Surface Conventions
+
+Global elements that repeat on every page are styled once in `base.css`, not
+per surface.
+
+### Scrollbars (all pages)
+
+Scrollbars are deliberately unobtrusive — a faint warm thumb over a transparent
+track, visible only while scrolling:
+
+| Property    | Value                                                            |
+| ----------- | ---------------------------------------------------------------- |
+| Width       | `7px` (vertical and horizontal)                                  |
+| Track       | fully transparent                                                |
+| Thumb       | `color-mix(in srgb, var(--muted) 26%, transparent)` — ~26% muted |
+| Thumb hover | ~45% muted (`var(--muted)`), sharp `--radius-sm` (2px)           |
+| Firefox     | `scrollbar-width: thin` + `scrollbar-color: … transparent`       |
+
+Rules: never give scrollbars a filled track, a pill thumb, or a fixed colour
+outside the `--muted` family (preset-aware). The xterm terminal renders its own
+scrollbar (`.xterm .scrollbar`) and is exempt.
+
+### Composer (input box)
+
+Chat and new-thread composers share one footer convention — every control sits
+**inside** the input box's bottom row (`.composer__footer-row`), three slots
+after `justify-content: space-between`:
+
+1. **far left** — attach button (`.composer__attach`, `aria-label="Attach files"`)
+2. **center** — status hint + all selectors (`.composer__hint`): environment as a
+   native `<select>` with chevron (new-thread only), model and thinking badges
+   with a `ChevronDownIcon` caret
+3. **far right** — primary action button (send arrow / stop)
+
+The surface shell stays sharp and light: `1px solid var(--theme-control-border,
+var(--line))`, `--shadow-sm`, **no** `0 0 0 1px` focus-ring layer. All selectors
+are dropdowns (native `<select>` or badge menus) — no segmented button groups
+inside the composer (the fork modal keeps its segmented radio group).
+
 ## Theme Presets
 
 `theme-presets.ts` exposes 8 user-selectable presets. Presets override
