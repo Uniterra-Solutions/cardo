@@ -13,6 +13,9 @@
   - `pnpm --filter @pi-gui/pi-sdk-driver test` — node:test suite for vendored driver pure functions (includes PBT)
 - `packages/jovaltus`:
   - `pnpm --filter @cardo/jovaltus test:pbt` — integrated PBT for the extension ↔ pi-backend interaction (SQLite session store incl. model-based invariants, phase chains, prompt rendering, JSONL protocol, and the full tool surface against a fake `pi` backend in `test/fixtures/fake-pi.mjs`). Tests import the compiled `dist/` output; the build copies `src/prompts/*.md` → `dist/prompts/` (dist consumers must be able to load phase prompts)
+- `packages/cli`:
+  - `pnpm --filter @uniterra-solutions/cardo run build` — compile the installer CLI (tsc -b)
+  - `pnpm --filter @uniterra-solutions/cardo run lint` / `typecheck` — lint/type-check the CLI source
 - Desktop visual design: token-driven system — see `docs/design-system.md` (03b Warm Paper Sharp: warm palette, 0–4px radii, serif page titles, terracotta accent). Restyles are token changes, not per-component sweeps
 
 # Project Business Goals
@@ -27,6 +30,7 @@
 - `packages/*` — pnpm workspace packages (app + shared libraries)
 - `packages/jovaltus/` — pi-agent extension: Jovaltus pipeline (plan/execute/simplify/review + list_sessions/resume_session, 6 tools total). Every run is a session row in a SQLite store (`<agentDir>/jovaltus.sqlite`); a non-error stop is recorded as `interrupted` and can be resumed. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — `jiti.import(path, { default: true })` then `typeof factory === "function"`); all other modules use named exports
 - `packages/runtime/` — desktop runtime: built-in extension registry (`builtinExtensionFactories` + `builtinExtensionMetadata`). The app consumes this; add new cardo extensions here
+- `packages/cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
 - `vendor/pi-gui/` — **git-subtree-managed** third-party desktop app (MIT, `@pi-gui/*` packages + Electron shell). Cardo-specific changes are minimal and marked with `// Cardo:` comments
 - Root holds shared tooling only: eslint, prettier, husky, tsconfig.base.json
 - Every package extends `tsconfig.base.json` with `rootDir: src`, `outDir: dist`

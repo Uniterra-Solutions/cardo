@@ -69,6 +69,38 @@ After install, `/reload` (or restart pi). The six tools (`plan`/`execute`/`simpl
 - Without credentials, ship an unsigned `.dmg` for internal testing (users right-click → Open once) or distribute via Homebrew cask / MDM.
 - Before distributing, change the vendored `appId` / `productName` / `copyright` (currently pi-gui's) to the company's.
 
+## Distribution (npm CLI + GitHub Releases)
+
+Users install with one command:
+
+```bash
+npm install -g @uniterra-solutions/cardo
+cardo setup        # downloads the latest macOS app zip from GitHub Releases → ~/Applications
+cardo update       # updates the CLI, then reinstalls the latest app
+```
+
+How it works:
+
+- `.github/workflows/release.yml` runs on `v*` tag pushes (plus a `workflow_dispatch` recovery input). The CLI package is published to npm via **trusted publishing** (OIDC — no tokens in the repo), and the macOS app is built unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`) on a macOS runner and attached to a GitHub Release (zip + dmg).
+- No Apple Developer signing/notarization is involved. The CLI downloads the zip over HTTPS with Node's `fetch`, so no `com.apple.quarantine` attribute is set and Gatekeeper never checks the app.
+- The CLI matches `-arm64.zip` / `-x64.zip` assets by the host architecture and installs the `.app` bundle it finds into `~/Applications` (no admin rights needed). macOS only.
+- The desktop job depends on the npm publish job, so the GitHub Release is created only after the CLI is published.
+
+One-time setup (npm trusted publishing):
+
+1. `npm login` with an account that has publish rights on the `@uniterra-solutions` scope.
+2. First manual publish to create the package (local npm has no OIDC, so no `--provenance`):
+   `cd packages/cli && npm publish --access public`
+3. npmjs.com → `@uniterra-solutions/cardo` → Settings → Trusted Publishing → **Add publisher**: GitHub, repository `Uniterra-Solutions/cardo`, workflow `release.yml` (environment left blank; optionally restrict ref to `refs/tags/v*`). From here on, CI publishes with `npm publish --provenance`.
+4. Make the GitHub repo public (the CLI's latest-release lookup uses the unauthenticated GitHub API).
+5. First release: bump `packages/cli/package.json` version to `x.y.z`, tag `vx.y.z`, push the tag individually (`git push origin v0.1.0`), then confirm with `gh run list --workflow=release.yml`.
+
+Notes:
+
+- The app bundle inside the release zip currently keeps the vendored `productName` (e.g. `pi-gui.app`); the CLI installs whatever `.app` it finds.
+- arm64-only builds until an x64 target is added to the electron-builder config (the CLI already supports both, but only arm64 assets are produced today).
+- No GitHub secrets are needed at all: npm uses OIDC trusted publishing and the app build is unsigned.
+
 ## How to Update
 
 - Install/run command changed → update the Run + Verify sections.
