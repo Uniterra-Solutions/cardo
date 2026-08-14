@@ -57,6 +57,7 @@ import { TerminalService } from "./terminal-service";
 import type { AppView, DesktopAppState, ThemeMode, ThemePresetId } from "../src/desktop-state";
 import {
   desktopIpc,
+  desktopCommands,
   getDesktopCommandFromShortcut,
   type CustomProviderConfig,
   type CustomProviderProbeInput,
@@ -123,6 +124,7 @@ let deferredActivationWebContentsId: number | undefined;
 
 const SUPPORTED_IMAGE_TYPES = SUPPORTED_COMPOSER_IMAGE_TYPES;
 const SUPPORTED_IMAGE_MIME_TYPES = new Set<string>(SUPPORTED_IMAGE_TYPES.map((type) => type.mimeType));
+const NEW_THREAD_MENU_ITEM_ID = "file.new-thread";
 const NEW_WINDOW_MENU_ITEM_ID = "file.new-window";
 
 function createStoreBackedOrchestrationRuntimeBridge(): OrchestrationRuntimeBridge {
@@ -356,7 +358,7 @@ function createWindow(): BrowserWindow {
     if (terminalFocused) {
       return;
     }
-    if (platformModifier && !input.shift && lowerKey === "n") {
+    if (platformModifier && input.shift && lowerKey === "n") {
       event.preventDefault();
       createAppWindow(viewForWebContents(window.webContents.id));
       return;
@@ -380,6 +382,7 @@ function createWindow(): BrowserWindow {
     const command = getDesktopCommandFromShortcut({
       modifier: process.platform === "darwin" ? input.meta : input.control,
       shift: input.shift,
+      alt: input.alt,
       key: input.key,
       code: input.code,
     });
@@ -967,9 +970,20 @@ function installApplicationMenu(): void {
       label: "File",
       submenu: [
         {
+          id: NEW_THREAD_MENU_ITEM_ID,
+          label: "New Thread",
+          accelerator: "Command+N",
+          click: () => {
+            const window = getForegroundAppWindow();
+            if (window && canPublishToWindow(window)) {
+              window.webContents.send(desktopIpc.appCommand, desktopCommands.openNewThread);
+            }
+          },
+        },
+        {
           id: NEW_WINDOW_MENU_ITEM_ID,
           label: "New Window",
-          accelerator: "CommandOrControl+N",
+          accelerator: "Command+Shift+N",
           click: () => {
             createAppWindow(getForegroundAppView());
           },

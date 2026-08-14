@@ -483,6 +483,9 @@ export default function App() {
       } else if (command === desktopCommands.toggleTerminal) {
         toggleTerminal();
         return true;
+      } else if (command === desktopCommands.toggleFiles) {
+        toggleFilesPanel();
+        return true;
       } else if (command === desktopCommands.toggleSidebar) {
         return handleTogglePrimarySidebar();
       }
@@ -500,6 +503,7 @@ export default function App() {
         const command = getDesktopCommandFromShortcut({
           modifier: event.metaKey || event.ctrlKey,
           shift: event.shiftKey,
+          alt: event.altKey,
           key: event.key,
           code: event.code,
         });
@@ -528,6 +532,7 @@ export default function App() {
       const command = getDesktopCommandFromShortcut({
         modifier: event.metaKey || event.ctrlKey,
         shift: event.shiftKey,
+        alt: event.altKey,
         key: event.key,
         code: event.code,
       });
@@ -548,6 +553,7 @@ export default function App() {
     threadSearch,
     api,
     toggleChangesPanel,
+    toggleFilesPanel,
     toggleTerminal,
     handleTogglePrimarySidebar,
     newThread,

@@ -156,6 +156,7 @@ export const desktopCommands = {
   openNewThread: "open-new-thread",
   toggleTerminal: "toggle-terminal",
   toggleSidebar: "toggle-sidebar",
+  toggleFiles: "toggle-files",
 } as const;
 
 export function getDesktopShortcutLabel(platform: NodeJS.Platform, key: string): string {
@@ -226,6 +227,7 @@ export interface TerminalErrorEvent {
 export interface DesktopShortcutInput {
   readonly modifier: boolean;
   readonly shift: boolean;
+  readonly alt: boolean;
   readonly key: string;
   readonly code?: string;
 }
@@ -239,14 +241,23 @@ export function getDesktopCommandFromShortcut(input: DesktopShortcutInput): PiDe
   const isComma = input.key === "," || input.code === "Comma";
   const isB = lowerKey === "b" || input.code === "KeyB";
   const isJ = lowerKey === "j" || input.code === "KeyJ";
+  const isN = lowerKey === "n" || input.code === "KeyN";
   const isShiftO = input.shift && (lowerKey === "o" || input.code === "KeyO");
 
   if (!input.shift && isComma) {
     return desktopCommands.openSettings;
   }
 
-  if (!input.shift && isJ) {
+  if (input.alt && !input.shift && isJ) {
+    return desktopCommands.toggleFiles;
+  }
+
+  if (!input.shift && !input.alt && isJ) {
     return desktopCommands.toggleTerminal;
+  }
+
+  if (!input.shift && !input.alt && isN) {
+    return desktopCommands.openNewThread;
   }
 
   if (!input.shift && isB) {

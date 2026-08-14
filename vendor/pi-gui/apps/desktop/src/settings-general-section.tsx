@@ -89,9 +89,11 @@ export function SettingsGeneralSection({
       </SettingsGroup>
 
       <SettingsGroup title="Shortcuts">
-        <SettingsInfoRow label="New thread" value="Cmd+Shift+O" />
+        <SettingsInfoRow label="New thread" value="Cmd+N" />
+        <SettingsInfoRow label="New window" value="Cmd+Shift+N" />
         <SettingsInfoRow label="Open settings" value="Cmd+," />
         <SettingsInfoRow label="Toggle terminal" value="Cmd+J" />
+        <SettingsInfoRow label="Toggle files" value="Cmd+Alt+J" />
         <SettingsInfoRow label="New terminal tab" value="Cmd+T" />
         <SettingsInfoRow label="Send message" value="Enter" />
         <SettingsInfoRow label="New line" value="Shift+Enter" />
