@@ -1782,9 +1782,21 @@ export class SessionSupervisor {
         return [sessionUpdatedEvent(record)];
       case "message_update":
         this.updatePreviewFromMessage(record, event.message);
-        if (event.message.role === "assistant" && event.assistantMessageEvent.type === "text_delta") {
+        if (event.message.role !== "assistant") {
+          return [sessionUpdatedEvent(record)];
+        }
+        if (event.assistantMessageEvent.type === "text_delta") {
           return toDriverEvents({
             type: "assistantDelta" as const,
+            sessionRef: record.ref,
+            timestamp,
+            text: event.assistantMessageEvent.delta ?? "",
+          }, record);
+        }
+        // Cardo: map pi's thinking_delta to a driver event so reasoning streams live.
+        if (event.assistantMessageEvent.type === "thinking_delta") {
+          return toDriverEvents({
+            type: "assistantThinkingDelta" as const,
             sessionRef: record.ref,
             timestamp,
             text: event.assistantMessageEvent.delta ?? "",

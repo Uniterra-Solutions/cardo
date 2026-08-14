@@ -26,6 +26,19 @@ export interface SessionTranscriptMessage {
   readonly id: string;
 }
 
+// Cardo: persisted reasoning block in the transcript (collapsed to "Thought" in the UI).
+/**
+ * Reasoning/thinking content emitted by the model ahead of an assistant message.
+ * Carries the full thinking text as persisted in the session file (streaming
+ * deltas are delivered separately via `assistantThinkingDelta` events).
+ */
+export interface SessionTranscriptThinking {
+  readonly kind: "thinking";
+  readonly id: string;
+  readonly text: string;
+  readonly createdAt: string;
+}
+
 export interface SessionTranscriptToolCall {
   readonly kind: "tool";
   readonly id: string;
@@ -38,4 +51,4 @@ export interface SessionTranscriptToolCall {
   readonly createdAt: string;
 }
 
-export type SessionTranscriptItem = SessionTranscriptMessage | SessionTranscriptToolCall;
+export type SessionTranscriptItem = SessionTranscriptMessage | SessionTranscriptToolCall | SessionTranscriptThinking;

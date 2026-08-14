@@ -255,6 +255,19 @@ export function transcriptFromMessages(messages: readonly unknown[], fallbackTim
       continue;
     }
 
+    // Cardo: persisted assistant messages carry a thinking channel; surface it as a
+    // dedicated transcript item so reasoning survives a reload (and always renders
+    // collapsed, since the streamed timing is not persisted).
+    const thinking = messageThinking(message);
+    if (thinking) {
+      transcript.push({
+        kind: "thinking",
+        id: typeof message.id === "string" ? `${message.id}:thinking` : `${role}-${index}:thinking`,
+        text: thinking,
+        createdAt,
+      });
+    }
+
     const text = messageText(message);
     const attachments = messageAttachments(message);
     if (text || attachments.length > 0) {
@@ -386,6 +399,28 @@ export function messageText(message: unknown): string {
   }
 
   return "";
+}
+
+// Cardo: extract the model's reasoning/thinking text from an assistant message.
+// Only array-form content carries thinking parts (`{ type: "thinking" }`);
+// legacy string-form content has no thinking channel.
+export function messageThinking(message: unknown): string {
+  if (!isRecord(message) || message.role !== "assistant") {
+    return "";
+  }
+  const { content } = message;
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .map((part) =>
+      isRecord(part) && part.type === "thinking" && typeof part.thinking === "string"
+        ? stripSerializedFileAttachments(part.thinking, message.role).text.trim()
+        : "",
+    )
+    .filter((text) => text.length > 0)
+    .join("\n\n")
+    .trim();
 }
 
 function messageAttachments(message: Record<string, unknown>) {

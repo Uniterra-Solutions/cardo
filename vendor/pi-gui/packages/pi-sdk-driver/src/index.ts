@@ -26,5 +26,6 @@ export type {
   SessionTranscriptItem,
   SessionTranscriptMessage,
   SessionTranscriptRole,
+  SessionTranscriptThinking, // Cardo: reasoning block transcript item
   SessionTranscriptToolCall,
 } from "./transcript.js";

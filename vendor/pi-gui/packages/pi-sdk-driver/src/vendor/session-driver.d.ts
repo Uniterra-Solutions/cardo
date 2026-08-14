@@ -143,6 +143,12 @@ declare module "@pi-gui/session-driver" {
     readonly text: string;
   }
 
+  // Cardo: stream the model's reasoning/thinking text live to the desktop UI.
+  export interface AssistantThinkingDeltaEvent extends SessionEventBase {
+    readonly type: "assistantThinkingDelta";
+    readonly text: string;
+  }
+
   export interface QueuedMessageStartedEvent extends SessionEventBase {
     readonly type: "queuedMessageStarted";
     readonly message: SessionQueuedMessage;
@@ -277,6 +283,7 @@ declare module "@pi-gui/session-driver" {
     | SessionOpenedEvent
     | SessionUpdatedEvent
     | AssistantDeltaEvent
+    | AssistantThinkingDeltaEvent
     | QueuedMessageStartedEvent
     | ToolStartedEvent
     | ToolUpdatedEvent
