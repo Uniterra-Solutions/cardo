@@ -39,6 +39,16 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
 
+  packages/general:
+    dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: ^0.84.1
+        version: 0.84.1(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+
   packages/jovaltus:
     dependencies:
       '@earendil-works/pi-coding-agent':
@@ -57,6 +67,9 @@ importers:
 
   packages/runtime:
     dependencies:
+      '@cardo/general':
+        specifier: workspace:*
+        version: link:../general
       '@cardo/jovaltus':
         specifier: workspace:*
         version: link:../jovaltus
