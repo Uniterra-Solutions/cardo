@@ -1,4 +1,4 @@
-import type { DisplayTimelineItem, TranscriptMessage } from "./timeline-types";
+import type { DisplayTimelineItem, TimelineToolCall, TimelineToolGroup, TranscriptMessage } from "./timeline-types";
 
 const MIN_WORKED_DURATION_MS = 1_000;
 
@@ -13,10 +13,12 @@ const MIN_WORKED_DURATION_MS = 1_000;
  * least one second.
  */
 export function buildDisplayTimelineItems(transcript: readonly TranscriptMessage[]): readonly DisplayTimelineItem[] {
+  // Cardo: consecutive tool calls of one request collapse into a single group row.
+  const grouped = groupToolCalls(transcript);
   const result: DisplayTimelineItem[] = [];
 
-  for (let index = 0; index < transcript.length; index += 1) {
-    const item = transcript[index];
+  for (let index = 0; index < grouped.length; index += 1) {
+    const item = grouped[index];
     if (!item) {
       continue;
     }
@@ -32,8 +34,8 @@ export function buildDisplayTimelineItems(transcript: readonly TranscriptMessage
     }
 
     let endMs: number | null = null;
-    for (let next = index + 1; next < transcript.length; next += 1) {
-      const nextItem = transcript[next];
+    for (let next = index + 1; next < grouped.length; next += 1) {
+      const nextItem = grouped[next];
       if (!nextItem) {
         continue;
       }
@@ -59,4 +61,47 @@ export function buildDisplayTimelineItems(transcript: readonly TranscriptMessage
   }
 
   return result;
+}
+
+/**
+ * Collapse the tool calls of one request (all consecutive tool items in the
+ * transcript — every call the model emitted in a single batch) into a single
+ * {@link TimelineToolGroup} row so batches don't spam the timeline. A lone tool
+ * call stays a plain tool item.
+ */
+function groupToolCalls(transcript: readonly TranscriptMessage[]): (TranscriptMessage | TimelineToolGroup)[] {
+  const grouped: (TranscriptMessage | TimelineToolGroup)[] = [];
+  let run: TimelineToolCall[] = [];
+
+  const flush = () => {
+    if (run.length === 1) {
+      grouped.push(run[0]!);
+    } else if (run.length > 1) {
+      const first = run[0]!;
+      const last = run[run.length - 1]!;
+      const group: TimelineToolGroup = {
+        kind: "tool-group",
+        id: `tool-group:${first.callId}`,
+        items: [...run],
+        createdAt: last.createdAt,
+      };
+      grouped.push(group);
+    }
+    run = [];
+  };
+
+  for (const item of transcript) {
+    if (!item) {
+      continue;
+    }
+    if (item.kind === "tool") {
+      run.push(item);
+      continue;
+    }
+    flush();
+    grouped.push(item);
+  }
+  flush();
+
+  return grouped;
 }

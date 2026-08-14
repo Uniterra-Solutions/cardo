@@ -1,5 +1,13 @@
 import type { SessionTranscriptMessage } from "@pi-gui/pi-sdk-driver";
-import type { DisplayTimelineItem, TimelineActivity, TimelineToolCall, TimelineSummary, TimelineTurnMarker } from "./timeline-types";
+import type {
+  DisplayTimelineItem,
+  TimelineActivity,
+  TimelineThinking,
+  TimelineToolCall,
+  TimelineToolGroup,
+  TimelineSummary,
+  TimelineTurnMarker,
+} from "./timeline-types";
 import { MessageMarkdown } from "./message-markdown";
 import { InlineDiff, extractDiffFromOutput } from "./diff-inline";
 import { ChevronRightIcon, CopyIcon, DiffIcon, FileIcon, ForkIcon, SparkIcon, TerminalIcon } from "./icons";
@@ -8,14 +16,22 @@ import { extensionToLanguage } from "./syntax-highlight";
 export function TimelineItem({
   item,
   expandedToolCallIds,
+  expandedToolGroupIds,
+  expandedThinkingIds,
   onToggleToolCall,
+  onToggleToolGroup,
+  onToggleThinking,
   onViewFileInDiff,
   sourceMessageIndex,
   onForkFromMessage,
 }: {
   readonly item: DisplayTimelineItem;
   readonly expandedToolCallIds?: ReadonlySet<string>;
+  readonly expandedToolGroupIds?: ReadonlySet<string>;
+  readonly expandedThinkingIds?: ReadonlySet<string>;
   readonly onToggleToolCall?: (callId: string) => void;
+  readonly onToggleToolGroup?: (groupId: string) => void;
+  readonly onToggleThinking?: (thinkingId: string) => void;
   readonly onViewFileInDiff?: (path: string) => void;
   readonly sourceMessageIndex?: number;
   readonly onForkFromMessage?: (messageIndex: number, preview?: string) => void;
@@ -40,6 +56,25 @@ export function TimelineItem({
           expanded={expandedToolCallIds?.has(item.callId) ?? false}
           onToggle={onToggleToolCall}
           onViewFileInDiff={onViewFileInDiff}
+        />
+      );
+    case "tool-group":
+      return (
+        <TimelineToolGroupItem
+          item={item}
+          expanded={expandedToolGroupIds?.has(item.id) ?? false}
+          onToggle={onToggleToolGroup}
+          expandedToolCallIds={expandedToolCallIds}
+          onToggleToolCall={onToggleToolCall}
+          onViewFileInDiff={onViewFileInDiff}
+        />
+      );
+    case "thinking":
+      return (
+        <TimelineThinkingItem
+          item={item}
+          expanded={expandedThinkingIds?.has(item.id) ?? false}
+          onToggle={onToggleThinking}
         />
       );
     case "summary":
@@ -246,6 +281,138 @@ function TimelineToolCallItem({
 
 function isWriteTool(toolName: string): boolean {
   return /write|edit|patch|apply/i.test(toolName);
+}
+
+/* ---- Reasoning blocks --------------------------------------------------- */
+
+// Cardo: streaming reasoning block. While the model is still thinking the text is
+// shown live; once finalized (`endedAt` set) the block collapses to a
+// "Thought for Ns" row that expands on click.
+function TimelineThinkingItem({
+  item,
+  expanded,
+  onToggle,
+}: {
+  readonly item: TimelineThinking;
+  readonly expanded: boolean;
+  readonly onToggle?: (thinkingId: string) => void;
+}) {
+  const finalized = item.endedAt != null;
+  const showBody = finalized ? expanded : true;
+
+  return (
+    <article className={`timeline-thinking${finalized ? " timeline-thinking--finalized" : ""}`}>
+      <button
+        className="timeline-thinking__header"
+        type="button"
+        aria-expanded={showBody}
+        disabled={!finalized}
+        onClick={() => onToggle?.(item.id)}
+      >
+        <span className={`timeline-tool__chevron ${showBody ? "timeline-tool__chevron--expanded" : ""}`} aria-hidden="true">
+          {finalized ? <ChevronRightIcon /> : null}
+        </span>
+        <span className="timeline-thinking__glyph" aria-hidden="true">
+          <SparkIcon />
+        </span>
+        <span className="timeline-thinking__label">{finalized ? thinkingLabel(item) : "Thinking…"}</span>
+        {!finalized ? (
+          <span className="timeline-tool__meta-inline">
+            <span className="timeline-tool__status-pip" aria-hidden="true" />
+            thinking
+          </span>
+        ) : null}
+      </button>
+      {showBody ? (
+        <div className="timeline-thinking__body">
+          <pre className="timeline-thinking__pre">{item.text}</pre>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function thinkingLabel(item: TimelineThinking): string {
+  if (item.startedAt && item.endedAt) {
+    const durationMs = Date.parse(item.endedAt) - Date.parse(item.startedAt);
+    if (!Number.isNaN(durationMs) && durationMs >= 1_000) {
+      return `Thought for ${formatWorkedDuration(durationMs)}`;
+    }
+  }
+  return "Thought";
+}
+
+/* ---- Cardo: tool batches ------------------------------------------------ */
+
+/**
+ * Collapsible row for the tool calls of one request (one batch). Expanded
+ * automatically while any call is still running so progress stays visible;
+ * once every call settles it collapses to "Used N tools" unless the user
+ * opened it explicitly.
+ */
+function TimelineToolGroupItem({
+  item,
+  expanded,
+  onToggle,
+  expandedToolCallIds,
+  onToggleToolCall,
+  onViewFileInDiff,
+}: {
+  readonly item: TimelineToolGroup;
+  readonly expanded: boolean;
+  readonly onToggle?: (groupId: string) => void;
+  readonly expandedToolCallIds?: ReadonlySet<string>;
+  readonly onToggleToolCall?: (callId: string) => void;
+  readonly onViewFileInDiff?: (path: string) => void;
+}) {
+  const count = item.items.length;
+  const hasRunning = item.items.some((tool) => tool.status === "running");
+  const hasError = item.items.some((tool) => tool.status === "error");
+  const showBody = hasRunning || expanded;
+
+  return (
+    <article
+      className={[
+        "timeline-tool-group",
+        hasRunning ? "timeline-tool-group--running" : "",
+        hasError ? "timeline-tool-group--error" : "",
+      ].filter(Boolean).join(" ")}
+    >
+      <div className="timeline-tool-group__header-row">
+        <button
+          className="timeline-tool-group__header"
+          type="button"
+          aria-expanded={showBody}
+          onClick={() => onToggle?.(item.id)}
+        >
+          <span className={`timeline-tool__chevron ${showBody ? "timeline-tool__chevron--expanded" : ""}`} aria-hidden="true">
+            <ChevronRightIcon />
+          </span>
+          <span className="timeline-tool-group__glyph" aria-hidden="true">
+            <SparkIcon />
+          </span>
+          <span className="timeline-tool-group__label">{`Used ${count} ${count === 1 ? "tool" : "tools"}`}</span>
+          <span className="timeline-tool__meta-inline">
+            <span className="timeline-tool__status-pip" aria-hidden="true" />
+            {hasRunning ? `${count} running` : "done"}
+          </span>
+        </button>
+      </div>
+      {showBody ? (
+        <div className="timeline-tool-group__body">
+          {item.items.map((tool) => (
+            <TimelineToolCallItem
+              item={tool}
+              key={tool.callId}
+              expanded={expandedToolCallIds?.has(tool.callId) ?? false}
+              onToggle={onToggleToolCall}
+              onViewFileInDiff={onViewFileInDiff}
+            />
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 function toolGlyph(toolName: string) {

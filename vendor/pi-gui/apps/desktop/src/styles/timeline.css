@@ -584,6 +584,139 @@
   font-size: 12px;
 }
 
+/* ---- Cardo: reasoning blocks -------------------------------------------- */
+
+.timeline-thinking {
+  max-width: 100%;
+  display: grid;
+  gap: 6px;
+}
+
+.timeline-thinking__header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  min-width: 0;
+}
+
+.timeline-thinking__header:disabled {
+  cursor: default;
+}
+
+.timeline-thinking__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.timeline-thinking__glyph svg {
+  width: 14px;
+  height: 14px;
+}
+
+.timeline-thinking__label {
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.timeline-thinking__body {
+  margin-top: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.timeline-thinking__pre {
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted-strong);
+}
+
+/* ---- Cardo: tool batches (one request = one collapsible row) ------------ */
+
+.timeline-tool-group {
+  max-width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 0;
+}
+
+.timeline-tool-group--running .timeline-tool-group__label {
+  color: var(--muted-strong);
+}
+
+.timeline-tool-group--error .timeline-tool-group__label {
+  color: var(--error-ink);
+}
+
+.timeline-tool-group__header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timeline-tool-group__header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  min-width: 0;
+}
+
+.timeline-tool-group__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted-soft);
+}
+
+.timeline-tool-group__glyph svg {
+  width: 14px;
+  height: 14px;
+}
+
+.timeline-tool-group__label {
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.timeline-tool-group__body {
+  display: grid;
+  gap: 8px;
+}
+
 /* ---- Summary divider ---------------------------------------------------- */
 
 .timeline-summary {

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type RefCallback, type RefObject } from "react";
 import type { TranscriptMessage } from "./desktop-state";
-import type { DisplayTimelineItem } from "./timeline-types";
+import type { DisplayTimelineItem, TimelineThinking, TimelineToolGroup } from "./timeline-types";
 import { buildDisplayTimelineItems } from "./timeline-turns";
 import { ThreadSearchBar } from "./thread-search";
 import { TimelineItem } from "./timeline-item";
@@ -83,6 +83,9 @@ export function ConversationTimeline({
     !disableVirtualization &&
     !hasUnreliableVirtualizedHeights;
   const [expandedToolCallIds, setExpandedToolCallIds] = useState<Set<string>>(() => new Set());
+  const [expandedToolGroupIds, setExpandedToolGroupIds] = useState<Set<string>>(() => new Set());
+  // Cardo: reasoning blocks and tool batches are collapsible rows too.
+  const [expandedThinkingIds, setExpandedThinkingIds] = useState<Set<string>>(() => new Set());
   const measuredHeightsRef = useRef(new Map<string, number>());
   const [measurementVersion, setMeasurementVersion] = useState(0);
 
@@ -90,22 +93,16 @@ export function ConversationTimeline({
     const availableToolCallIds = new Set(
       transcript.filter((item): item is Extract<TranscriptMessage, { kind: "tool" }> => item.kind === "tool").map((item) => item.callId),
     );
-    setExpandedToolCallIds((current) => {
-      if (current.size === 0) {
-        return current;
-      }
-      let changed = false;
-      const next = new Set<string>();
-      for (const callId of current) {
-        if (!availableToolCallIds.has(callId)) {
-          changed = true;
-          continue;
-        }
-        next.add(callId);
-      }
-      return changed ? next : current;
-    });
-  }, [transcript]);
+    const availableToolGroupIds = new Set(
+      displayItems.filter((item): item is TimelineToolGroup => item.kind === "tool-group").map((item) => item.id),
+    );
+    const availableThinkingIds = new Set(
+      transcript.filter((item): item is TimelineThinking => item.kind === "thinking").map((item) => item.id),
+    );
+    setExpandedToolCallIds((current) => pruneExpandState(current, availableToolCallIds));
+    setExpandedToolGroupIds((current) => pruneExpandState(current, availableToolGroupIds));
+    setExpandedThinkingIds((current) => pruneExpandState(current, availableThinkingIds));
+  }, [displayItems, transcript]);
 
   useLayoutEffect(() => {
     const knownIds = new Set(transcript.map((item) => item.id));
@@ -140,6 +137,30 @@ export function ConversationTimeline({
         next.delete(callId);
       } else {
         next.add(callId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleToolGroup = useCallback((groupId: string) => {
+    setExpandedToolGroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleThinking = useCallback((thinkingId: string) => {
+    setExpandedThinkingIds((current) => {
+      const next = new Set(current);
+      if (next.has(thinkingId)) {
+        next.delete(thinkingId);
+      } else {
+        next.add(thinkingId);
       }
       return next;
     });
@@ -264,8 +285,12 @@ export function ConversationTimeline({
           measuredHeightsRef={measuredHeightsRef}
           measurementVersion={measurementVersion}
           expandedToolCallIds={expandedToolCallIds}
+          expandedToolGroupIds={expandedToolGroupIds}
+          expandedThinkingIds={expandedThinkingIds}
           onHeightChange={updateMeasuredHeight}
           onToggleToolCall={toggleToolCall}
+          onToggleToolGroup={toggleToolGroup}
+          onToggleThinking={toggleThinking}
           onViewFileInDiff={onViewFileInDiff}
           renderedMessageIndexById={renderedMessageIndexById}
           onForkFromMessage={onForkFromMessage}
@@ -278,7 +303,11 @@ export function ConversationTimeline({
               key={item.id}
               onHeightChange={updateMeasuredHeight}
               expandedToolCallIds={expandedToolCallIds}
+              expandedToolGroupIds={expandedToolGroupIds}
+              expandedThinkingIds={expandedThinkingIds}
               onToggleToolCall={toggleToolCall}
+              onToggleToolGroup={toggleToolGroup}
+              onToggleThinking={toggleThinking}
               onViewFileInDiff={onViewFileInDiff}
               sourceMessageIndex={renderedMessageIndexById.get(item.id)}
               onForkFromMessage={onForkFromMessage}
@@ -389,8 +418,12 @@ function VirtualizedTranscriptList({
   measuredHeightsRef,
   measurementVersion,
   expandedToolCallIds,
+  expandedToolGroupIds,
+  expandedThinkingIds,
   onHeightChange,
   onToggleToolCall,
+  onToggleToolGroup,
+  onToggleThinking,
   onViewFileInDiff,
   renderedMessageIndexById,
   onForkFromMessage,
@@ -401,8 +434,12 @@ function VirtualizedTranscriptList({
   readonly measuredHeightsRef: MutableRefObject<Map<string, number>>;
   readonly measurementVersion: number;
   readonly expandedToolCallIds: ReadonlySet<string>;
+  readonly expandedToolGroupIds: ReadonlySet<string>;
+  readonly expandedThinkingIds: ReadonlySet<string>;
   readonly onHeightChange: (id: string, height: number) => void;
   readonly onToggleToolCall: (callId: string) => void;
+  readonly onToggleToolGroup: (groupId: string) => void;
+  readonly onToggleThinking: (thinkingId: string) => void;
   readonly onViewFileInDiff?: (path: string) => void;
   readonly renderedMessageIndexById: ReadonlyMap<string, number>;
   readonly onForkFromMessage?: (messageIndex: number, preview?: string) => void;
@@ -481,7 +518,11 @@ function VirtualizedTranscriptList({
             top={rowOffsets[index] ?? 0}
             onHeightChange={onHeightChange}
             expandedToolCallIds={expandedToolCallIds}
+            expandedToolGroupIds={expandedToolGroupIds}
+            expandedThinkingIds={expandedThinkingIds}
             onToggleToolCall={onToggleToolCall}
+            onToggleToolGroup={onToggleToolGroup}
+            onToggleThinking={onToggleThinking}
             onViewFileInDiff={onViewFileInDiff}
             sourceMessageIndex={renderedMessageIndexById.get(item.id)}
             onForkFromMessage={onForkFromMessage}
@@ -498,7 +539,11 @@ function MeasuredTimelineItem({
   top,
   onHeightChange,
   expandedToolCallIds,
+  expandedToolGroupIds,
+  expandedThinkingIds,
   onToggleToolCall,
+  onToggleToolGroup,
+  onToggleThinking,
   onViewFileInDiff,
   sourceMessageIndex,
   onForkFromMessage,
@@ -508,7 +553,11 @@ function MeasuredTimelineItem({
   readonly top?: number;
   readonly onHeightChange: (id: string, height: number) => void;
   readonly expandedToolCallIds: ReadonlySet<string>;
+  readonly expandedToolGroupIds: ReadonlySet<string>;
+  readonly expandedThinkingIds: ReadonlySet<string>;
   readonly onToggleToolCall: (callId: string) => void;
+  readonly onToggleToolGroup: (groupId: string) => void;
+  readonly onToggleThinking: (thinkingId: string) => void;
   readonly onViewFileInDiff?: (path: string) => void;
   readonly sourceMessageIndex?: number;
   readonly onForkFromMessage?: (messageIndex: number, preview?: string) => void;
@@ -546,7 +595,11 @@ function MeasuredTimelineItem({
       <TimelineItem
         item={item}
         expandedToolCallIds={expandedToolCallIds}
+        expandedToolGroupIds={expandedToolGroupIds}
+        expandedThinkingIds={expandedThinkingIds}
         onToggleToolCall={onToggleToolCall}
+        onToggleToolGroup={onToggleToolGroup}
+        onToggleThinking={onToggleThinking}
         onViewFileInDiff={onViewFileInDiff}
         sourceMessageIndex={sourceMessageIndex}
         onForkFromMessage={onForkFromMessage}
@@ -609,8 +662,31 @@ function estimateTimelineItemHeight(item: DisplayTimelineItem): number {
   if (item.kind === "tool") {
     return 52;
   }
+  if (item.kind === "tool-group") {
+    return 40;
+  }
+  if (item.kind === "thinking") {
+    return item.endedAt != null ? 36 : 120;
+  }
   if (item.kind === "summary") {
     return item.presentation === "divider" ? 44 : 38;
   }
   return 38;
+}
+
+/** Keep only ids that still exist in the available set (no-op when unchanged). */
+function pruneExpandState(current: ReadonlySet<string>, available: ReadonlySet<string>): Set<string> {
+  if (current.size === 0) {
+    return new Set();
+  }
+  let changed = false;
+  const next = new Set<string>();
+  for (const id of current) {
+    if (!available.has(id)) {
+      changed = true;
+      continue;
+    }
+    next.add(id);
+  }
+  return changed ? next : new Set(current);
 }
