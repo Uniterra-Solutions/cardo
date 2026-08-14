@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import type { SessionTranscriptMessage } from "@pi-gui/pi-sdk-driver";
 import type {
   DisplayTimelineItem,
@@ -299,6 +300,20 @@ function TimelineThinkingItem({
 }) {
   const finalized = item.endedAt != null;
   const showBody = finalized ? expanded : true;
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  // Cardo: the body is a fixed-height window over the streaming text, so every
+  // new chunk pins the scroll to the bottom — the newest content is always in
+  // view while the model is still thinking.
+  useLayoutEffect(() => {
+    if (finalized) {
+      return;
+    }
+    const body = bodyRef.current;
+    if (body) {
+      body.scrollTop = body.scrollHeight;
+    }
+  }, [item.text, finalized]);
 
   return (
     <article className={`timeline-thinking${finalized ? " timeline-thinking--finalized" : ""}`}>
@@ -324,7 +339,7 @@ function TimelineThinkingItem({
         ) : null}
       </button>
       {showBody ? (
-        <div className="timeline-thinking__body">
+        <div className="timeline-thinking__body" ref={bodyRef}>
           <pre className="timeline-thinking__pre">{item.text}</pre>
         </div>
       ) : null}
