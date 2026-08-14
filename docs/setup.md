@@ -91,7 +91,7 @@ One-time setup (npm trusted publishing):
 1. `npm login` with an account that has publish rights on the `@uniterra-solutions` scope.
 2. First manual publish to create the package (local npm has no OIDC, so no `--provenance`):
    `cd packages/cli && npm publish --access public`
-3. npmjs.com → `@uniterra-solutions/cardo` → Settings → Trusted Publishing → **Add publisher**: GitHub, repository `Uniterra-Solutions/cardo`, workflow `release.yml` (environment left blank; optionally restrict ref to `refs/tags/v*`). From here on, CI publishes with `npm publish --provenance`.
+3. npmjs.com → `@uniterra-solutions/cardo` → Settings → Trusted Publishing → **Add publisher**: GitHub, repository `Uniterra-Solutions/cardo`, workflow `release.yml` (environment left blank; optionally restrict ref to `refs/tags/v*`). From here on, CI publishes with `npm publish --provenance`. The workflow checks npm first and **skips the publish when the version already exists** (e.g. a manually published version can still get its GitHub Release).
 4. Make the GitHub repo public (the CLI's latest-release lookup uses the unauthenticated GitHub API).
 5. First release: bump `packages/cli/package.json` version to `x.y.z`, tag `vx.y.z`, push the tag individually (`git push origin v0.1.0`), then confirm with `gh run list --workflow=release.yml`.
 

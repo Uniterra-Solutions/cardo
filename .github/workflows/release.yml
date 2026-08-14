@@ -61,7 +61,21 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+      - name: Check if version already published
+        id: check
+        env:
+          PACKAGE_NAME: '@uniterra-solutions/cardo'
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${RELEASE_VERSION} already published — skipping npm publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
+        if: steps.check.outputs.exists != 'true'
         working-directory: packages/cli
         run: npm publish --provenance --access public
 
