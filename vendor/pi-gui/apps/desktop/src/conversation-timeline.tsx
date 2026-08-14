@@ -1,4 +1,14 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type RefCallback, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type RefCallback,
+  type RefObject,
+} from "react";
 import type { TranscriptMessage } from "./desktop-state";
 import type { DisplayTimelineItem, TimelineThinking, TimelineToolGroup } from "./timeline-types";
 import { buildDisplayTimelineItems, pruneExpandState } from "./timeline-turns";
@@ -535,7 +545,7 @@ function VirtualizedTranscriptList({
   );
 }
 
-function MeasuredTimelineItem({
+function MeasuredTimelineItemImpl({
   item,
   className,
   top,
@@ -609,6 +619,33 @@ function MeasuredTimelineItem({
     </div>
   );
 }
+
+// Cardo: the store streams full-transcript snapshots (~1 per
+// STREAM_PUBLISH_INTERVAL_MS from the main process); without memoization every
+// snapshot re-renders and re-parses markdown/syntax for every row, so the UI
+// falls behind the backend on long tasks (agent finishes, UI still replaying).
+// Rows are memoized by content fingerprint: the growing assistant/thinking rows
+// are the only ones that change while a task streams, so only they re-render.
+// The other props (expanded sets, callbacks) are referentially stable across
+// snapshots, so identity checks keep the comparator cheap.
+const MeasuredTimelineItem = memo(MeasuredTimelineItemImpl, (prev, next) => {
+  if (
+    prev.sourceMessageIndex !== next.sourceMessageIndex ||
+    prev.top !== next.top ||
+    prev.expandedToolCallIds !== next.expandedToolCallIds ||
+    prev.expandedToolGroupIds !== next.expandedToolGroupIds ||
+    prev.expandedThinkingIds !== next.expandedThinkingIds ||
+    prev.onHeightChange !== next.onHeightChange ||
+    prev.onToggleToolCall !== next.onToggleToolCall ||
+    prev.onToggleToolGroup !== next.onToggleToolGroup ||
+    prev.onToggleThinking !== next.onToggleThinking ||
+    prev.onViewFileInDiff !== next.onViewFileInDiff ||
+    prev.onForkFromMessage !== next.onForkFromMessage
+  ) {
+    return false;
+  }
+  return prev.item === next.item || JSON.stringify(prev.item) === JSON.stringify(next.item);
+});
 
 function findStartIndex(offsets: readonly number[], heights: readonly number[], targetOffset: number): number {
   let low = 0;

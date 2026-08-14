@@ -45,6 +45,7 @@ import {
 import * as orchestrationTools from "./app-store-orchestration";
 import { getChangedFiles, getFileDiff, stageFile } from "./app-store-diff";
 import { listWorkspaceFiles, readWorkspaceFile } from "./app-store-files";
+import { createCoalescedPublisher } from "./stream-publish";
 import { MAIN_DEV_RELOAD_MARKER } from "./dev-reload-main-probe";
 import { NotificationManager } from "./notification-manager";
 import {
@@ -754,15 +755,31 @@ function attachStatePublisher(window: BrowserWindow): void {
   const startPublishing = () => {
     stopPublishingStateByWebContentsId.get(webContentsId)?.();
     stopPublishingSelectedTranscriptByWebContentsId.get(webContentsId)?.();
-    const stopPublishingState = store.subscribe((state) => {
-      publishStateToWindow(window, state);
+    // Cardo: coalesce per-event pushes (see electron/stream-publish.ts). The driver
+    // emits one event per text delta; forwarding each full state + transcript push
+    // makes the renderer fall behind the backend on long tasks. Bounded to one push
+    // per interval, always carrying the latest state.
+    const publishStateScheduler = createCoalescedPublisher(() => {
+      publishStateToWindow(window, store.state);
       void publishSelectedTranscriptToWindow(window);
+    });
+    const publishTranscriptScheduler = createCoalescedPublisher(() => {
+      void publishSelectedTranscriptToWindow(window);
+    });
+    const stopPublishingState = store.subscribe(() => {
+      publishStateScheduler.schedule();
     });
     const stopPublishingSelectedTranscript = store.subscribeToSelectedTranscript(() => {
-      void publishSelectedTranscriptToWindow(window);
+      publishTranscriptScheduler.schedule();
     });
-    stopPublishingStateByWebContentsId.set(webContentsId, stopPublishingState);
-    stopPublishingSelectedTranscriptByWebContentsId.set(webContentsId, stopPublishingSelectedTranscript);
+    stopPublishingStateByWebContentsId.set(webContentsId, () => {
+      stopPublishingState();
+      publishStateScheduler.dispose();
+    });
+    stopPublishingSelectedTranscriptByWebContentsId.set(webContentsId, () => {
+      stopPublishingSelectedTranscript();
+      publishTranscriptScheduler.dispose();
+    });
   };
   const stopPublishing = () => {
     stopPublishingStateByWebContentsId.get(webContentsId)?.();
