@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] — 2026-08-15
+
+### Added
+
+- Desktop composer: single-row layout with flat inline controls — attach button, textarea, environment/model/thinking selectors and send all on one line inside the surface; environment as a native select with chevron; the new-thread surface follows the same row. Covered by the `composer-layout` e2e spec (geometry, 1px surface border, global scrollbar CSS contract via computed styles) and the composer controls specs
+
+### Fixed
+
+- Desktop streaming delivery: on long tasks the frontend no longer falls irrecoverably behind the backend (the agent finished while the UI kept showing "running" and slowly replayed the work). The driver emits one event per text delta; each event previously shipped a full state + transcript push (several full clones per event) and re-rendered the entire timeline, so delivery cost was O(events²). Window pushes are now coalesced via the new `electron/stream-publish.ts` (at most one per 80ms — leading edge for isolated updates like selection changes and run completion, trailing edge always carrying the latest state) and `conversation-timeline.tsx` memoizes timeline rows by content fingerprint so each snapshot re-renders only the changed rows. The contract is locked by the new `streaming-sync` PBT suite (content accounting, item-identity stability, payload monotonicity, liveness)
+
+### Changed
+
+- Docs: `AGENTS.md`, `docs/architecture.md`, `docs/conventions.md` and `docs/testing.md` document the streaming sync contract (coalesced pushes + memoized rows) and the `streaming-sync.test.mts` PBT lane
+
 ## [0.3.2] — 2026-08-15
 
 ### Added
