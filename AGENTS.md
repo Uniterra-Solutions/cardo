@@ -30,6 +30,7 @@
 - `packages/*` — pnpm workspace packages (app + shared libraries)
 - `packages/jovaltus/` — pi-agent extension: Jovaltus pipeline (plan/execute/simplify/review + list_sessions/resume_session, 6 tools total). Every run is a session row in a SQLite store (`<agentDir>/jovaltus.sqlite`); a non-error stop is recorded as `interrupted` and can be resumed. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — `jiti.import(path, { default: true })` then `typeof factory === "function"`); all other modules use named exports
 - `packages/runtime/` — desktop runtime: built-in extension registry (`builtinExtensionFactories` + `builtinExtensionMetadata`). The app consumes this; add new cardo extensions here
+- `packages/skills/` — built-in skill registry: bundles the company-standard skills (5 Jovaltus pipeline skills + Caelterra `create-skill`, vendored from those Hermes plugins) and injects them into the app by provisioning `<agentDir>/skills/` at desktop startup (`provisionBuiltinSkills`); idempotent — existing skills are never clobbered
 - `packages/cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
 - `vendor/pi-gui/` — **git-subtree-managed** third-party desktop app (MIT, `@pi-gui/*` packages + Electron shell). Cardo-specific changes are minimal and marked with `// Cardo:` comments
 - Root holds shared tooling only: eslint, prettier, husky, tsconfig.base.json
@@ -52,7 +53,7 @@
 
 - Run `pnpm run lint` and `pnpm run typecheck` before committing
 - Add tests for new behaviour
-- After changing `packages/jovaltus` or `packages/runtime` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
+- After changing `packages/jovaltus`, `packages/runtime`, or `packages/skills` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
 - After changing the pi-gui frontend↔backend contract layer (pure app-store modules, vendored driver pure functions, state/persistence/timeline logic), run the PBT suites: `pnpm --filter @pi-gui/desktop test:pbt` and `pnpm --filter @pi-gui/pi-sdk-driver test`. Properties found failing because of a real bug → fix source with a `// Cardo:` marker + deterministic regression test
 - After changing desktop styles/tokens (`vendor/pi-gui/apps/desktop/src/styles/*`), run `pnpm --filter @pi-gui/desktop build` + `pnpm --filter @pi-gui/desktop typecheck`, and verify the rendered app against the token contract (see `docs/testing.md` → Visual verification; `docs/design-system.md` for tokens)
 - After changing `packages/jovaltus` business logic (state machine / SQLite session store, chains, prompts, dispatch), run `pnpm --filter @cardo/jovaltus test:pbt`. Properties found failing because of a real bug → fix source + add a deterministic regression test with the minimal counterexample
