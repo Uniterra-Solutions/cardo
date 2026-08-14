@@ -60,6 +60,7 @@
 - Add tests for new behaviour
 - After changing `packages/jovaltus`, `packages/general`, `packages/runtime`, or `packages/skills` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
 - After changing the pi-gui frontend↔backend contract layer (pure app-store modules, vendored driver pure functions, state/persistence/timeline logic), run the PBT suites: `pnpm --filter @pi-gui/desktop test:pbt` and `pnpm --filter @pi-gui/pi-sdk-driver test`. Properties found failing because of a real bug → fix source with a `// Cardo:` marker + deterministic regression test
+- When touching the streaming delivery path (driver event → `electron/stream-publish.ts` coalesced window push → renderer), keep the sync contract locked by `test/pbt/streaming-sync.test.mts`: pushes at most one per `STREAM_PUBLISH_INTERVAL_MS` always carrying the latest state, and timeline rows memoized by content fingerprint so unchanged rows bail out of re-rendering
 - After changing desktop styles/tokens (`vendor/pi-gui/apps/desktop/src/styles/*`), run `pnpm --filter @pi-gui/desktop build` + `pnpm --filter @pi-gui/desktop typecheck`, and verify the rendered app against the token contract (see `docs/testing.md` → Visual verification; `docs/design-system.md` for tokens)
 - After changing `packages/jovaltus` business logic (state machine / SQLite session store, chains, prompts, dispatch), run `pnpm --filter @cardo/jovaltus test:pbt`. Properties found failing because of a real bug → fix source + add a deterministic regression test with the minimal counterexample
 

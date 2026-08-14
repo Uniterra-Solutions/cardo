@@ -21,12 +21,13 @@ Enforced by tooling (`eslint`, `prettier`, `tsc`); documented here because they 
 
 ## Style Conventions
 
-| Convention                             | Rule                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------ |
-| Comments explain "why", not "what"     | Match existing module docstrings: intent, contract, port provenance            |
-| Ported code keeps provenance note      | Modules state "Ported from the Hermes plugin's `src/jovaltus/<file>`"          |
-| No default exports except the pi entry | All other modules export named symbols only                                    |
-| Cardo patches in `vendor/` are marked  | `// Cardo:` comment on each minimal change; keep them small for subtree merges |
+| Convention                             | Rule                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Comments explain "why", not "what"     | Match existing module docstrings: intent, contract, port provenance                                                                                                                                                                                                                                                                                                                |
+| Ported code keeps provenance note      | Modules state "Ported from the Hermes plugin's `src/jovaltus/<file>`"                                                                                                                                                                                                                                                                                                              |
+| No default exports except the pi entry | All other modules export named symbols only                                                                                                                                                                                                                                                                                                                                        |
+| Cardo patches in `vendor/` are marked  | `// Cardo:` comment on each minimal change; keep them small for subtree merges                                                                                                                                                                                                                                                                                                     |
+| Streaming window delivery is coalesced | The driver emits one event per text delta; window pushes go through `electron/stream-publish.ts` (`createCoalescedPublisher`, ≤ 1 per `STREAM_PUBLISH_INTERVAL_MS`) — leading edge for isolated updates, trailing edge always carrying the latest state. Timeline rows memoize by content fingerprint (`conversation-timeline.tsx`), so each snapshot re-renders only changed rows |
 
 ## Vendored code conventions (`vendor/pi-gui`)
 
