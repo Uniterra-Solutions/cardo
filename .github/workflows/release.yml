@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release-cli:
+    name: Publish CLI to npm (trusted publishing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          REF_NAME="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "ref_name=${REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify CLI package version matches tag
+        run: |
+          PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          if [ "$PKG_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "package.json version ($PKG_VERSION) != tag version (${{ steps.version.outputs.version }})" >&2
+            exit 1
+          fi
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Publish to npm
+        working-directory: packages/cli
+        run: npm publish --provenance --access public
+
+  release-desktop:
+    name: Build macOS app and attach to GitHub Release
+    runs-on: macos-latest
+    timeout-minutes: 60
+    needs: [release-cli]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          REF_NAME="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "ref_name=${REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build cardo packages
+        run: pnpm run build
+
+      - name: Build desktop app
+        run: pnpm --filter @pi-gui/desktop run build
+
+      - name: Package unsigned macOS app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          cd vendor/pi-gui/apps/desktop
+          pnpm exec electron-builder --mac --publish never \
+            "-c.extraMetadata.version=${{ steps.version.outputs.version }}"
+
+      - name: Verify packaged runtime dependencies
+        run: pnpm --filter @pi-gui/desktop run verify:packaged-runtime-deps
+
+      - name: Attach artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.ref_name }}
+          files: |
+            vendor/pi-gui/apps/desktop/release/*.zip
+            vendor/pi-gui/apps/desktop/release/*.dmg
+          generate_release_notes: true
