@@ -7,7 +7,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc -b && node packages/jovaltus/scripts/copy-prompts.mjs",
+    "build": "tsc -b && node packages/jovaltus/scripts/copy-prompts.mjs && node packages/skills/scripts/copy-skills.mjs",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
