@@ -31,6 +31,7 @@
     "electron/app-store-persistence.ts",
     "electron/app-store-diff.ts",
     "electron/app-store-files.ts",
+    "electron/cardo-update-logic.ts",
     "electron/orchestration-runtime.ts",
     "electron/atomic-file-write.ts",
     "electron/json-file-store.ts",

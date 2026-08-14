@@ -50,6 +50,7 @@
     "test:core:composer-controls": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm --dir ../.. exec playwright test -c apps/desktop/playwright.config.ts apps/desktop/tests/core/composer-controls.spec.ts",
     "test:core:mentions-diff": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm --dir ../.. exec playwright test -c apps/desktop/playwright.config.ts apps/desktop/tests/core/mentions-diff.spec.ts",
     "test:cardo:core:multi-window": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm exec playwright test -c playwright.config.ts tests/core/multi-window.spec.ts",
+    "test:cardo:core:update-flow": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm exec playwright test -c playwright.config.ts tests/core/cardo-update-flow.spec.ts",
     "test:cardo:core:mentions-diff": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm exec playwright test -c playwright.config.ts tests/core/mentions-diff.spec.ts",
     "test:core:persistence": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm --dir ../.. exec playwright test -c apps/desktop/playwright.config.ts apps/desktop/tests/core/persistence.spec.ts",
     "test:core:reopen-state": "pnpm build && cross-env PI_APP_TEST_MODE=background pnpm --dir ../.. exec playwright test -c apps/desktop/playwright.config.ts apps/desktop/tests/core/reopen-state.spec.ts",

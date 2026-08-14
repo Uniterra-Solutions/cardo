@@ -278,6 +278,11 @@ function buildDesktopLaunchEnv(
     // can hang in restricted environments and never contribute real auth anyway.
     // Real-auth specs opt out because they exercise live provider connectivity.
     ...(options.realAuthSourceDir ? {} : { PI_OFFLINE: "1" }),
+    // Cardo: the startup update check probes npm/GitHub — keep every spec
+    // hermetic by default. The update-flow spec re-enables it via envOverrides
+    // (setting the key to undefined deletes it) and stubs the dialog + feeds
+    // fake endpoints from a local server.
+    PI_APP_DISABLE_CARDO_UPDATE_CHECK: "1",
     ...(options.notificationLogPath ? { PI_APP_NOTIFICATION_LOG_PATH: options.notificationLogPath } : {}),
     PI_APP_OPEN_DEVTOOLS: "0",
     ...(options.envOverrides ?? {}),
