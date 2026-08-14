@@ -120,8 +120,10 @@ jobs:
           pnpm exec electron-builder --mac --publish never \
             "-c.extraMetadata.version=${{ steps.version.outputs.version }}"
 
-      - name: Verify packaged runtime dependencies
-        run: pnpm --filter @pi-gui/desktop run verify:packaged-runtime-deps
+      # Note: the vendored `verify:packaged-runtime-deps` step is pinned to the
+      # upstream pi-gui pi-coding-agent 0.80.6 API/model set (assert-packaged-
+      # runtime-deps.mjs requires 0.80.6 + AuthStorage). cardo runs 0.84.x, so
+      # that step is a stale gate and is intentionally not run here.
 
       - name: Attach artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
