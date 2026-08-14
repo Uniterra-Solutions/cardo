@@ -7,7 +7,7 @@ import {
   makeWorkspace,
 } from "../helpers/electron-app";
 
-test("composer footer layout: attach left, selects center, send right; scrollbars are thin and semi-transparent", async () => {
+test("composer single-row layout: attach | textarea | selects | send on one line; scrollbars are thin and semi-transparent", async () => {
   test.setTimeout(120_000);
   const userDataDir = await makeUserDataDir();
   const workspacePath = await makeWorkspace("tmp-verify");
@@ -27,7 +27,8 @@ test("composer footer layout: attach left, selects center, send right; scrollbar
     const chatLayout = await window.evaluate(() => {
       const surface = document.querySelector(".composer__surface");
       const attach = document.querySelector(".composer__attach");
-      const hint = document.querySelector(".composer__hint");
+      const textarea = document.querySelector(".composer textarea");
+      const badge = document.querySelector(".model-selector__badge");
       const send = document.querySelector('[data-testid="send"]');
       const rect = (el: Element | null) => {
         const r = el?.getBoundingClientRect();
@@ -38,7 +39,8 @@ test("composer footer layout: attach left, selects center, send right; scrollbar
       return {
         surfaceRect,
         attachRect: rect(attach),
-        hintRect: rect(hint),
+        textareaRect: rect(textarea),
+        badgeRect: rect(badge),
         sendRect: rect(send),
         borderTopWidth: surfaceStyle?.borderTopWidth,
         borderTopColor: surfaceStyle?.borderTopColor,
@@ -47,11 +49,15 @@ test("composer footer layout: attach left, selects center, send right; scrollbar
     });
     console.log("CHAT-LAYOUT: " + JSON.stringify(chatLayout));
     const s = chatLayout.surfaceRect!;
+    const centerY = (r: { readonly top: number; readonly bottom: number } | null) =>
+      r ? (r.top + r.bottom) / 2 : 0;
     expect(chatLayout.attachRect!.left).toBeGreaterThanOrEqual(s.left);
-    expect(chatLayout.hintRect!.left).toBeGreaterThan(chatLayout.attachRect!.right);
-    expect(chatLayout.sendRect!.left).toBeGreaterThan(chatLayout.hintRect!.right);
+    expect(chatLayout.textareaRect!.left).toBeGreaterThan(chatLayout.attachRect!.right);
+    expect(chatLayout.badgeRect!.left).toBeGreaterThan(chatLayout.textareaRect!.right);
+    expect(chatLayout.sendRect!.left).toBeGreaterThan(chatLayout.badgeRect!.right);
     expect(chatLayout.sendRect!.right).toBeLessThanOrEqual(s.right + 1);
     expect(chatLayout.sendRect!.bottom).toBeLessThanOrEqual(s.bottom + 1);
+    expect(Math.abs(centerY(chatLayout.textareaRect) - centerY(chatLayout.sendRect))).toBeLessThan(1);
     expect(chatLayout.borderTopWidth).toBe("1px");
 
     const scrollbarInfo = await window.evaluate(() => {
@@ -85,9 +91,10 @@ test("composer footer layout: attach left, selects center, send right; scrollbar
     const ntLayout = await window.evaluate(() => {
       const surface = document.querySelector(".composer__surface");
       const attach = document.querySelector(".composer__attach");
-      const hint = document.querySelector(".new-thread__hint");
-      const send = document.querySelector(".composer__footer-row .button--cta-icon");
+      const textarea = document.querySelector(".composer textarea");
       const envSelect = document.querySelector(".new-thread__environment-select");
+      const badge = document.querySelector(".model-selector__badge");
+      const send = document.querySelector(".button--cta-icon");
       const rect = (el: Element | null) => {
         const r = el?.getBoundingClientRect();
         return r ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom } : null;
@@ -96,23 +103,24 @@ test("composer footer layout: attach left, selects center, send right; scrollbar
       return {
         surfaceRect,
         attachRect: rect(attach),
-        hintRect: rect(hint),
-        sendRect: rect(send),
+        textareaRect: rect(textarea),
         envSelectRect: rect(envSelect),
+        badgeRect: rect(badge),
+        sendRect: rect(send),
         envTagName: envSelect?.tagName,
         envValue: (envSelect as HTMLSelectElement | null)?.value,
-        hintContainsSelector: Boolean(hint?.querySelector(".model-selector__badge")),
         surfaceBorderTopWidth: surface ? getComputedStyle(surface).borderTopWidth : null,
       };
     });
     console.log("NT-LAYOUT: " + JSON.stringify(ntLayout));
     expect(ntLayout.envTagName).toBe("SELECT");
     expect(ntLayout.envValue).toBe("local");
-    expect(ntLayout.hintContainsSelector).toBe(true);
     expect(ntLayout.attachRect!.left).toBeGreaterThanOrEqual(ntLayout.surfaceRect!.left);
+    expect(ntLayout.textareaRect!.left).toBeGreaterThan(ntLayout.attachRect!.right);
+    expect(ntLayout.envSelectRect!.left).toBeGreaterThan(ntLayout.textareaRect!.right);
+    expect(ntLayout.sendRect!.left).toBeGreaterThan(ntLayout.badgeRect!.right);
     expect(ntLayout.sendRect!.right).toBeLessThanOrEqual(ntLayout.surfaceRect!.right + 1);
-    expect(ntLayout.envSelectRect!.left).toBeGreaterThan(ntLayout.attachRect!.right);
-    expect(ntLayout.sendRect!.left).toBeGreaterThan(ntLayout.envSelectRect!.right);
+    expect(ntLayout.sendRect!.bottom).toBeLessThanOrEqual(ntLayout.surfaceRect!.bottom + 1);
 
     await window.locator(".new-thread__environment-select").selectOption("worktree");
     const newValue = await window

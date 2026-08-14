@@ -192,7 +192,7 @@ async function expectComposerModelState(
   },
 ): Promise<void> {
   await expect(window.getByRole("button", { name: expectations.activeModel }).first()).toBeVisible();
-  await expectModelOptions(window, ".composer__bar", expectations);
+  await expectModelOptions(window, ".composer__editor-row", expectations);
 }
 
 async function expectComposerModelOptions(
@@ -202,7 +202,7 @@ async function expectComposerModelOptions(
     readonly hiddenModelLabels: readonly string[];
   },
 ): Promise<void> {
-  await expectModelOptions(window, ".composer__bar", expectations);
+  await expectModelOptions(window, ".composer__editor-row", expectations);
 }
 
 async function expectNewThreadModelState(
@@ -214,7 +214,7 @@ async function expectNewThreadModelState(
   },
 ): Promise<void> {
   await expect(window.getByRole("button", { name: expectations.activeModel }).first()).toBeVisible();
-  await expectModelOptions(window, ".new-thread__hint", expectations);
+  await expectModelOptions(window, ".composer__editor-row", expectations);
 }
 
 async function expectModelOptions(
@@ -241,9 +241,9 @@ async function expectModelOptions(
 }
 
 async function selectComposerModel(window: Page, label: string): Promise<void> {
-  const badge = window.locator(".composer__bar .model-selector__badge").first();
+  const badge = window.locator(".composer__editor-row .model-selector__badge").first();
   await badge.click();
-  const dropdown = window.locator(".composer__bar .model-selector__dropdown").first();
+  const dropdown = window.locator(".composer__editor-row .model-selector__dropdown").first();
   await expect(dropdown).toBeVisible();
   await dropdown.getByRole("button", { name: new RegExp(label, "i") }).click();
 }

@@ -33,9 +33,9 @@ test("new thread reuses composer behaviors for slash commands, image previews, a
     await expect(window.getByTestId("new-thread-logo")).toBeVisible();
     await expect(window.getByRole("heading", { name: "Let's build" })).toBeVisible();
     await expect(composer).toBeFocused();
-    await expect(composer).toHaveAttribute("placeholder", "Ask pi anything, use / for commands and skills");
+    await expect(composer).toHaveAttribute("placeholder", "Ask pi anything, or use / for commands");
 
-    const modelBadge = window.locator(".new-thread__hint .model-selector__badge").first();
+    const modelBadge = window.locator(".composer__editor-row .model-selector__badge").first();
     await expect(modelBadge).toBeVisible();
     await expect(window.locator('.new-thread input[type="file"]')).toBeHidden();
 
@@ -98,7 +98,7 @@ test("new thread hides the onboarding notice after picking a thread model", asyn
 
     const notice = window.getByTestId("model-onboarding-notice");
     const startButton = window.getByRole("button", { name: "Start thread" });
-    const modelBadge = window.locator(".new-thread__hint .model-selector__badge").first();
+    const modelBadge = window.locator(".composer__editor-row .model-selector__badge").first();
 
     await window.getByTestId("new-thread-composer").fill("start a thread without a default");
     await expect(notice).toContainText("No default model set");
@@ -106,7 +106,7 @@ test("new thread hides the onboarding notice after picking a thread model", asyn
     await expect(startButton).toBeDisabled();
 
     await modelBadge.click();
-    const dropdown = window.locator(".new-thread__hint .model-selector__dropdown").first();
+    const dropdown = window.locator(".composer__editor-row .model-selector__dropdown").first();
     await expect(dropdown).toContainText("GPT-5");
     await expect(dropdown).toContainText("GPT-4o");
     const modelFilter = dropdown.locator(".model-selector__filter-input");
@@ -164,14 +164,14 @@ test("new thread routes disabled-model recovery to settings models", async () =>
     }, { workspaceId: selectedWorkspaceId });
 
     await window.getByTestId("new-thread-composer").fill("try to start with all models disabled");
-    const modelBadge = window.locator(".new-thread__hint .model-selector__badge").first();
+    const modelBadge = window.locator(".composer__editor-row .model-selector__badge").first();
     await expect(modelBadge).toBeVisible();
     await expect(modelBadge).toHaveText("No models available");
     await expect(window.getByTestId("model-onboarding-notice")).toContainText("Settings > Models");
     await expect(window.getByRole("button", { name: "Start thread" })).toBeDisabled();
 
     await modelBadge.click();
-    const dropdown = window.locator(".new-thread__hint .model-selector__dropdown").first();
+    const dropdown = window.locator(".composer__editor-row .model-selector__dropdown").first();
     await expect(dropdown).toBeVisible();
     await expect(dropdown).toContainText("No models available");
     await expect(dropdown).not.toContainText("Open Settings > Models");
@@ -207,7 +207,7 @@ test("refreshing after a provider becomes available auto-enables that provider's
 
     const composer = window.getByTestId("new-thread-composer");
     const notice = window.getByTestId("model-onboarding-notice");
-    const modelBadge = window.locator(".new-thread__hint .model-selector__badge").first();
+    const modelBadge = window.locator(".composer__editor-row .model-selector__badge").first();
     await composer.fill("connect provider");
     await expect(modelBadge).toHaveText("No models available");
     await expect(notice).toContainText("Open Settings > Providers");
@@ -232,7 +232,7 @@ test("refreshing after a provider becomes available auto-enables that provider's
     await expect(notice).toContainText("No default model set");
 
     await modelBadge.click();
-    const dropdown = window.locator(".new-thread__hint .model-selector__dropdown").first();
+    const dropdown = window.locator(".composer__editor-row .model-selector__dropdown").first();
     await expect(dropdown).toContainText("GPT-5");
     await expect(dropdown).toContainText("GPT-4o");
   } finally {

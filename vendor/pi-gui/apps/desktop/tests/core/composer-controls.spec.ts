@@ -102,7 +102,7 @@ test("supports keyboard shortcuts, slash menus, and topbar controls through the 
     await composer.press("Enter");
     await expect(optionsMenu).toHaveCount(0);
     await expect(window.getByTestId("transcript")).toContainText("Thinking set to max");
-    await expect(window.locator(".composer__hint")).toContainText("max");
+    await expect(window.locator(".composer__editor-row")).toContainText("max");
 
     await composer.fill("Keep the draft /thinking");
     await expect(optionsMenu).toBeVisible();
