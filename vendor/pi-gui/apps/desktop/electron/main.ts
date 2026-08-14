@@ -1024,7 +1024,15 @@ if (missingPaths.length > 0) {
 
 app.setName("pi");
 
-const configuredUserDataDir = process.env.PI_APP_USER_DATA_DIR?.trim() || app.getPath("userData");
+// Cardo: from-source runs (dev server / `electron .` / preview) get their own
+// user-data dir so they never share the single-instance lock or state files
+// with the packaged production app. An orphaned dev electron (e.g. its vite
+// server died) otherwise holds the shared lock and shows a white dead-server
+// window while the packaged app silently quits instead of opening. An explicit
+// PI_APP_USER_DATA_DIR always wins (e2e harness, custom setups).
+const configuredUserDataDir =
+  process.env.PI_APP_USER_DATA_DIR?.trim() ||
+  (app.isPackaged ? app.getPath("userData") : path.join(app.getPath("appData"), "pi-dev"));
 app.setPath("userData", configuredUserDataDir);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
