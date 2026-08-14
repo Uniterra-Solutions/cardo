@@ -5,5 +5,5 @@
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../jovaltus" }]
+  "references": [{ "path": "../general" }, { "path": "../jovaltus" }]
 }

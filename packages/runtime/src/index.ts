@@ -9,10 +9,11 @@
  * join the monorepo.
  */
 
+import generalFactory from '@cardo/general';
 import jovaltusFactory from '@cardo/jovaltus';
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
-export const builtinExtensionFactories: ExtensionFactory[] = [jovaltusFactory];
+export const builtinExtensionFactories: ExtensionFactory[] = [generalFactory, jovaltusFactory];
 
 export interface BuiltinExtensionMetadata {
   readonly displayName: string;
@@ -21,6 +22,10 @@ export interface BuiltinExtensionMetadata {
 
 /** Display metadata for each built-in factory, same order as the factories. */
 export const builtinExtensionMetadata: BuiltinExtensionMetadata[] = [
+  {
+    displayName: 'General',
+    description: 'App-wide working rules injected into the system prompt',
+  },
   {
     displayName: 'Jovaltus',
     description: 'Jovaltus pipeline: plan/execute/simplify/review',
