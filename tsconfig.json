@@ -1,4 +1,8 @@
 {
   "files": [],
-  "references": [{ "path": "./packages/jovaltus" }, { "path": "./packages/runtime" }]
+  "references": [
+    { "path": "./packages/jovaltus" },
+    { "path": "./packages/runtime" },
+    { "path": "./packages/cli" }
+  ]
 }
