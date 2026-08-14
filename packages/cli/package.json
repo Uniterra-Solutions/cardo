@@ -25,6 +25,7 @@
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint src",
     "format": "prettier --write src",
+    "test": "pnpm run build && tsc -p tsconfig.test.json && node --test \"test/**/*.test.mts\"",
     "prepack": "pnpm run build"
   },
   "devDependencies": {
