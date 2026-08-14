@@ -10,7 +10,6 @@ import {
   shell,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
-  type MessageBoxOptions,
 } from "electron";
 import { isValidHttpBaseUrl } from "@pi-gui/pi-sdk-driver";
 import { builtinExtensionFactories, builtinExtensionMetadata } from "@cardo/runtime";
@@ -51,7 +50,12 @@ import { NotificationManager } from "./notification-manager";
 import {
   NotificationPermissionService,
 } from "./notification-permission";
-import { checkForUpdate, initUpdateChecker, openReleasesPage } from "./update-checker";
+import {
+  initCardoUpdateChecker,
+  runCardoStartupUpdateCheck,
+  runManualCardoUpdateCheck,
+  type CardoUpdateCheckerOptions,
+} from "./cardo-update-checker";
 import { ThemeManager } from "./theme-manager";
 import { TerminalService } from "./terminal-service";
 import type { AppView, DesktopAppState, ThemeMode, ThemePresetId } from "../src/desktop-state";
@@ -883,59 +887,11 @@ async function pickWorkspaceViaDialog(parentWindow?: BrowserWindow | null): Prom
   return runWindowScopedForWindow(window, () => addPickedWorkspace(window, workspacePath));
 }
 
-async function runManualUpdateCheck(): Promise<void> {
-  const window = mainWindow && canPublishToWindow(mainWindow) ? mainWindow : undefined;
-  const showDialog = (options: MessageBoxOptions) =>
-    window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
-
-  try {
-    const result = await checkForUpdate();
-
-    if (result.status === "update-available") {
-      // The manual menu path always confirms with a dialog — a notification may
-      // be silently suppressed if the OS permission is denied.
-      const choice = await showDialog({
-        type: "info",
-        title: "pi-gui",
-        message: `Version ${result.latestVersion} is available.`,
-        detail: `You have ${result.currentVersion}.`,
-        buttons: ["Download", "Later"],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (choice.response === 0) {
-        await openReleasesPage();
-      }
-      return;
-    }
-
-    if (result.status === "up-to-date") {
-      await showDialog({
-        type: "info",
-        title: "pi-gui",
-        message: `You're up to date on version ${result.currentVersion}.`,
-        buttons: ["OK"],
-      });
-      return;
-    }
-
-    await showDialog({
-      type: "warning",
-      title: "pi-gui",
-      message: "Could not check for updates right now.",
-      detail: result.message,
-      buttons: ["OK"],
-    });
-  } catch (error) {
-    console.error("pi-gui: manual update check failed:", error);
-    await showDialog({
-      type: "warning",
-      title: "pi-gui",
-      message: "Could not check for updates right now.",
-      detail: error instanceof Error ? error.message : String(error),
-      buttons: ["OK"],
-    }).catch(() => undefined);
-  }
+// Cardo: the manual menu check now consults the cardo npm CLI dist-tag and the
+// cardo GitHub release (the upstream pi-gui checker targeted its own repo and
+// could only open a releases page — cardo's checker can run the update).
+function runManualUpdateCheck(): void {
+  void runManualCardoUpdateCheck(cardoUpdateCheckerOptions);
 }
 
 function installApplicationMenu(): void {
@@ -1035,6 +991,13 @@ const configuredUserDataDir =
   (app.isPackaged ? app.getPath("userData") : path.join(app.getPath("appData"), "pi-dev"));
 app.setPath("userData", configuredUserDataDir);
 
+// Cardo: startup + manual update checks probe the cardo npm CLI dist-tag and
+// the cardo GitHub release; the prompt dialog attaches to the main window.
+const cardoUpdateCheckerOptions: CardoUpdateCheckerOptions = {
+  userDataDir: configuredUserDataDir,
+  getWindow: () => mainWindow,
+};
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -1133,6 +1096,8 @@ app.whenReady().then(async () => {
             applyWindowActivation(mainWindow);
           }
         },
+        // Cardo: trigger the startup update-check flow on demand for e2e.
+        runCardoUpdateCheck: () => runCardoStartupUpdateCheck(cardoUpdateCheckerOptions),
         promptForText: (message: string, placeholder?: string, allowEmpty?: boolean) =>
           promptForText(mainWindow, message, placeholder ?? "", allowEmpty ?? false),
         runOrchestrationRuntimeTool: (input: OrchestrationRuntimeToolTestInput) =>
@@ -1181,8 +1146,12 @@ app.whenReady().then(async () => {
     },
   );
   stopNotifications = notificationManager.start();
-  if (!isDev) {
-    stopUpdateChecker = initUpdateChecker();
+  // Cardo: the startup update check probes the cardo npm CLI dist-tag and the
+  // cardo GitHub release (replaces the upstream pi-gui checker, which targeted
+  // minghinmatthewlam/pi-gui and only surfaced a notification). Dev runs and
+  // hermetic e2e launches opt out via PI_APP_DISABLE_CARDO_UPDATE_CHECK.
+  if (!isDev && !process.env.PI_APP_DISABLE_CARDO_UPDATE_CHECK) {
+    stopUpdateChecker = initCardoUpdateChecker(cardoUpdateCheckerOptions);
   }
 
   ipcMain.handle(desktopIpc.ping, () =>
