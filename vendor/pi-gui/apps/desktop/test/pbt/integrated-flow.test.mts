@@ -65,7 +65,7 @@ interface SessionCatalogEntry {
 }
 
 import { applySessionEventState } from "../../out-pbt/desktop/electron/app-store-session-state.js";
-import { applyTimelineEvent, appendAssistantDelta } from "../../out-pbt/desktop/electron/app-store-timeline.js";
+import { applyTimelineEvent, appendAssistantDelta, appendThinkingDelta, finalizeActiveThinking } from "../../out-pbt/desktop/electron/app-store-timeline.js";
 import { buildWorkspaceRecords, previewFromTranscript } from "../../out-pbt/desktop/electron/app-store-utils.js";
 import { createEmptyDesktopAppState } from "../../out-pbt/desktop/src/desktop-state.js";
 import type { DesktopAppState, SessionRecord, TranscriptMessage } from "../../out-pbt/desktop/src/desktop-state.js";
@@ -101,6 +101,7 @@ interface FlowCaches {
   lastViewedAtBySession: Map<string, string>;
   activeAssistantMessageBySession: Map<string, string>;
   activeWorkingActivityBySession: Map<string, string>;
+  activeThinkingBySession: Map<string, { id: string; text: string; startedAt: string }>;
   runMetricsBySession: Map<string, {
     startedAt: string;
     toolCount: number;
@@ -116,6 +117,7 @@ function freshCaches(): FlowCaches {
     lastViewedAtBySession: new Map(),
     activeAssistantMessageBySession: new Map(),
     activeWorkingActivityBySession: new Map(),
+    activeThinkingBySession: new Map(),
     runMetricsBySession: new Map(),
   };
 }
@@ -123,9 +125,21 @@ function freshCaches(): FlowCaches {
 /** Mirrors electron/app-store.ts handleDriverEvent ordering. */
 function driveEvent(caches: FlowCaches, event: SessionDriverEvent): void {
   if (event.type === "assistantDelta") {
+    finalizeActiveThinking(
+      caches.transcriptCache,
+      caches.activeThinkingBySession,
+      event.sessionRef,
+    );
     appendAssistantDelta(
       caches.transcriptCache,
       caches.activeAssistantMessageBySession,
+      event.sessionRef,
+      event.text,
+    );
+  } else if (event.type === "assistantThinkingDelta") {
+    appendThinkingDelta(
+      caches.transcriptCache,
+      caches.activeThinkingBySession,
       event.sessionRef,
       event.text,
     );
@@ -135,6 +149,7 @@ function driveEvent(caches: FlowCaches, event: SessionDriverEvent): void {
     runningSinceBySession: caches.runningSinceBySession,
     activeAssistantMessageBySession: caches.activeAssistantMessageBySession,
     activeWorkingActivityBySession: caches.activeWorkingActivityBySession,
+    activeThinkingBySession: caches.activeThinkingBySession,
   });
 }
 

@@ -223,6 +223,77 @@ test("transcriptFromMessages regression: out-of-range numeric timestamps must no
   assert.equal(transcriptFromMessages([{ role: "assistant", content: "hi", timestamp: Number.NaN }], FALLBACK)[0]!.createdAt, FALLBACK);
 });
 
+test("PBT transcriptFromMessages: thinking parts yield one thinking item per assistant message, ahead of text/tools", () => {
+  const thinkingPartArb = fc.record({
+    type: fc.constant("thinking"),
+    thinking: fc.string({ minLength: 0, maxLength: 40 }),
+  });
+  fc.assert(
+    fc.property(
+      fc.array(thinkingPartArb, { maxLength: 3 }),
+      fc.option(fc.string({ minLength: 1, maxLength: 20 }), { nil: undefined }),
+      (parts, id) => {
+        const message = { role: "assistant", id, content: [...parts, { type: "text", text: "answer" }], createdAt: FALLBACK };
+        const out = transcriptFromMessages([message], FALLBACK);
+        const thinking = out.filter((item) => item.kind === "thinking");
+        const qualifying = parts.filter((part) => part.thinking.trim().length > 0);
+        assert.equal(thinking.length, Math.min(1, qualifying.length), "at most one thinking item per assistant message");
+        if (qualifying.length > 0) {
+          const item = thinking[0]!;
+          assert.equal(item.kind, "thinking");
+          assert.equal(item.text, qualifying.map((p) => p.thinking.trim()).join("\n\n"));
+          assert.equal(item.createdAt, FALLBACK);
+          if (typeof id === "string") {
+            assert.equal(item.id, `${id}:thinking`);
+          }
+          const messageIndex = out.findIndex((entry) => entry.kind === "message");
+          assert.ok(messageIndex > 0, "thinking item is emitted before the message text");
+          assert.equal(out[messageIndex]!.kind, "message");
+        } else {
+          assert.equal(thinking.length, 0, "empty thinking parts yield no thinking item");
+        }
+        return true;
+      },
+    ),
+  );
+});
+
+test("PBT transcriptFromMessages: thinking extraction never throws on arbitrary content arrays", () => {
+  fc.assert(
+    fc.property(fc.array(fc.anything(), { maxLength: 10 }), (content) => {
+      const out = transcriptFromMessages([{ role: "assistant", content }], FALLBACK);
+      for (const item of out) {
+        if (item.kind === "thinking") {
+          assert.equal(typeof item.text, "string");
+        }
+      }
+      return true;
+    }),
+  );
+});
+
+test("transcriptFromMessages regression: thinking item counts are independent of tool/text items", () => {
+  const out = transcriptFromMessages(
+    [
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "step one" },
+          { type: "text", text: "doing it" },
+          { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
+        ],
+        createdAt: FALLBACK,
+      },
+    ],
+    FALLBACK,
+  );
+  assert.deepEqual(
+    out.map((item) => item.kind),
+    ["thinking", "message", "tool"],
+  );
+  assert.equal((out[0] as Extract<SessionTranscriptItem, { kind: "thinking" }>).text, "step one");
+});
+
 test("transcriptFromMessages edge cases: non-records and unknown roles are skipped safely", () => {
   assert.deepEqual(transcriptFromMessages([null, undefined, 42, "text", { role: "weird" }], FALLBACK), []);
   // toolResult without toolCallId is skipped

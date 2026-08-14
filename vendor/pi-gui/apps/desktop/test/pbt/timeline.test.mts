@@ -17,8 +17,10 @@ import * as fc from "fast-check";
 import {
   appendAssistantDelta,
   appendQueuedUserMessage,
+  appendThinkingDelta,
   appendUserMessage,
   applyTimelineEvent,
+  finalizeActiveThinking,
   timelineFromDriverTranscript,
 } from "../../out-pbt/desktop/electron/app-store-timeline.js";
 import {
@@ -28,6 +30,7 @@ import {
   arbQueuedMessage,
   arbSessionDriverEvent,
   arbSessionRef,
+  arbSessionSnapshot,
   arbTranscript,
   arbTranscriptCache,
   arbUnknown,
@@ -65,6 +68,7 @@ function runtimeState() {
     runningSinceBySession: new Map<string, string>(),
     activeAssistantMessageBySession: new Map<string, string>(),
     activeWorkingActivityBySession: new Map<string, string>(),
+    activeThinkingBySession: new Map<string, { id: string; text: string; startedAt: string }>(),
   };
 }
 
@@ -80,12 +84,12 @@ test("timelineFromDriverTranscript: one output item per input item (map)", () =>
   );
 });
 
-test("timelineFromDriverTranscript: non-tool items pass through as-is (kind preserved)", () => {
+test("timelineFromDriverTranscript: non-tool, non-thinking items pass through as-is (kind preserved)", () => {
   fc.assert(
     fc.property(fc.array(arbDriverTranscriptItem(), { maxLength: 8 }), (items) => {
       const output = timelineFromDriverTranscript(items);
       items.forEach((item, index) => {
-        if (item.kind !== "tool") {
+        if (item.kind !== "tool" && item.kind !== "thinking") {
           assert.equal(output[index], item);
         }
       });
@@ -309,6 +313,229 @@ test("appendAssistantDelta: creates a new assistant message when none is active;
   );
 });
 
+/* ── appendThinkingDelta / finalizeActiveThinking ───────── */
+
+function thinkingItemsOf(transcript: readonly TranscriptMessage[]) {
+  return transcript.filter((item) => item.kind === "thinking") as Extract<TranscriptMessage, { kind: "thinking" }>[];
+}
+
+test("appendThinkingDelta: sequential deltas accumulate into one thinking item with startedAt", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      fc.string({ minLength: 0, maxLength: 40 }),
+      fc.string({ minLength: 0, maxLength: 40 }),
+      (cache, ref, first, second) => {
+        const key = keyOf(ref);
+        const active = new Map<string, { id: string; text: string; startedAt: string }>();
+        const before = transcriptOf(cache, ref);
+        const beforeThinking = thinkingItemsOf(before).length;
+
+        appendThinkingDelta(cache, active, ref, first);
+        const afterFirst = transcriptOf(cache, ref);
+        assert.equal(afterFirst.length, before.length + 1, "first delta appends exactly one item");
+        assert.equal(thinkingItemsOf(afterFirst).length, beforeThinking + 1);
+        const record = active.get(key);
+        assert.ok(record, "active thinking record must be recorded");
+        assert.ok(record.startedAt, "startedAt must be set");
+        const firstItem = afterFirst.find((item) => item.id === record.id);
+        assert.ok(firstItem && firstItem.kind === "thinking");
+        assert.equal(firstItem.text, first);
+
+        appendThinkingDelta(cache, active, ref, second);
+        const after = transcriptOf(cache, ref);
+        assert.equal(after.length, afterFirst.length, "second delta appends to the same item");
+        assert.equal(thinkingItemsOf(after).length, beforeThinking + 1);
+        const item = after.find((item) => item.id === record.id);
+        assert.ok(item && item.kind === "thinking");
+        assert.equal(item.text, `${first}${second}`);
+        assert.equal(active.get(key)?.id, record.id, "active record id stays stable");
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("appendThinkingDelta: never throws on arbitrary input; only the event's session key is touched", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      fc.string(),
+      (cache, ref, text) => {
+        const key = keyOf(ref);
+        const active = new Map<string, { id: string; text: string; startedAt: string }>();
+        const beforeOthers = [...cache.entries()].filter(([k]) => k !== key);
+        appendThinkingDelta(cache, active, ref, text);
+        const afterOthers = [...cache.entries()].filter(([k]) => k !== key);
+        assert.equal(afterOthers.length, beforeOthers.length);
+        beforeOthers.forEach(([k, v]) => assert.equal(cache.get(k), v));
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("finalizeActiveThinking: stamps endedAt on the active item and clears the record", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      fc.string({ minLength: 0, maxLength: 60 }),
+      arbIsoTimestamp(),
+      (cache, ref, text, endedAt) => {
+        const key = keyOf(ref);
+        const active = new Map<string, { id: string; text: string; startedAt: string }>();
+        appendThinkingDelta(cache, active, ref, text);
+        const record = active.get(key);
+        assert.ok(record);
+
+        finalizeActiveThinking(cache, active, ref, endedAt);
+
+        assert.equal(active.get(key), undefined, "active record cleared");
+        const item = transcriptOf(cache, ref).find((i) => i.id === record.id);
+        assert.ok(item && item.kind === "thinking");
+        assert.equal(item.endedAt, endedAt);
+        assert.equal(item.text, text, "finalize must not mutate the thinking text");
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("finalizeActiveThinking: no-op (cache reference-identical) when nothing is streaming", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      (cache, ref) => {
+        const key = keyOf(ref);
+        const active = new Map<string, { id: string; text: string; startedAt: string }>();
+        const before = [...cache.entries()];
+        const beforeTranscript = cache.get(key);
+
+        finalizeActiveThinking(cache, active, ref);
+
+        assert.equal(cache.size, before.length);
+        for (const [k, v] of before) {
+          assert.equal(cache.get(k), v);
+        }
+        assert.equal(cache.get(key), beforeTranscript, "cache entry must be reference-identical when nothing active");
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("applyTimelineEvent: assistantThinkingDelta is a complete no-op (append happens via appendThinkingDelta)", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      fc.string(),
+      arbRuntimeMaps(),
+      (cache, ref, text, runtime) => {
+        const key = keyOf(ref);
+        const before = [...cache.entries()];
+        const event = { type: "assistantThinkingDelta", sessionRef: ref, timestamp: new Date().toISOString(), text } as SessionDriverEvent;
+
+        applyTimelineEvent(cache, event, runtime as never);
+
+        assert.equal(cache.size, before.length);
+        for (const [k, v] of before) {
+          assert.equal(cache.get(k), v, `cache entry ${k} must be reference-identical`);
+        }
+        assert.equal(cache.get(key), before.find(([k]) => k === key)?.[1]);
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("applyTimelineEvent: toolStarted finalizes the active thinking block (collapses it)", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      fc.string({ minLength: 0, maxLength: 60 }),
+      fc.string({ minLength: 1, maxLength: 20 }),
+      (cache, ref, thinkingText, toolName) => {
+        const key = keyOf(ref);
+        const runtime = runtimeState();
+        appendThinkingDelta(cache, runtime.activeThinkingBySession, ref, thinkingText);
+        const record = (runtime.activeThinkingBySession as Map<string, { id: string; text: string; startedAt: string }>).get(key);
+        assert.ok(record, "thinking must be streaming before the tool starts");
+
+        applyTimelineEvent(
+          cache,
+          { type: "toolStarted", sessionRef: ref, timestamp: new Date().toISOString(), toolName, callId: "call-1" } as SessionDriverEvent,
+          runtime as never,
+        );
+
+        assert.equal((runtime.activeThinkingBySession as Map<string, string>).get(key), undefined, "thinking finalized");
+        const thinking = transcriptOf(cache, ref).find((item) => item.id === record.id);
+        assert.ok(thinking && thinking.kind === "thinking");
+        assert.ok(thinking.endedAt, "endedAt must be stamped");
+        assert.equal(thinking.text, thinkingText);
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("applyTimelineEvent: runCompleted finalizes the active thinking block", () => {
+  fc.assert(
+    fc.property(
+      arbTranscriptCache(),
+      arbSessionRef(),
+      fc.string({ minLength: 0, maxLength: 60 }),
+      arbSessionSnapshot(),
+      (cache, ref, thinkingText, snapshot) => {
+        const key = keyOf(ref);
+        const runtime = runtimeState();
+        appendThinkingDelta(cache, runtime.activeThinkingBySession, ref, thinkingText);
+        const record = (runtime.activeThinkingBySession as Map<string, { id: string; text: string; startedAt: string }>).get(key);
+        assert.ok(record);
+
+        applyTimelineEvent(
+          cache,
+          { type: "runCompleted", sessionRef: ref, timestamp: new Date().toISOString(), snapshot } as SessionDriverEvent,
+          runtime as never,
+        );
+
+        assert.equal((runtime.activeThinkingBySession as Map<string, string>).get(key), undefined);
+        const thinking = transcriptOf(cache, ref).find((item) => item.id === record.id);
+        assert.ok(thinking && thinking.kind === "thinking");
+        assert.ok(thinking.endedAt, "endedAt must be stamped");
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("timelineFromDriverTranscript: thinking items map with endedAt set to createdAt (persisted blocks render collapsed)", () => {
+  fc.assert(
+    fc.property(fc.array(arbDriverTranscriptItem(), { maxLength: 8 }), (items) => {
+      const output = timelineFromDriverTranscript(items);
+      assert.equal(output.length, items.length);
+      items.forEach((item, index) => {
+        if (item.kind !== "thinking") {
+          return;
+        }
+        const out = output[index] as Extract<TranscriptMessage, { kind: "thinking" }>;
+        assert.equal(out.kind, "thinking");
+        assert.equal(out.id, item.id);
+        assert.equal(out.text, item.text);
+        assert.equal(out.createdAt, item.createdAt);
+        assert.equal(out.endedAt, item.createdAt, "persisted thinking must be finalized");
+        assert.equal(out.startedAt, undefined);
+      });
+    }),
+    { numRuns: NUM_RUNS },
+  );
+});
+
 /* ── applyTimelineEvent ─────────────────────────────────── */
 
 function arbRuntimeMaps(): fc.Arbitrary<{
@@ -316,12 +543,14 @@ function arbRuntimeMaps(): fc.Arbitrary<{
   runningSinceBySession: AnyMap;
   activeAssistantMessageBySession: AnyMap;
   activeWorkingActivityBySession: AnyMap;
+  activeThinkingBySession: AnyMap;
 }> {
   return fc.record({
     runMetricsBySession: fc.array(fc.tuple(fc.string(), fc.record({ startedAt: arbIsoTimestamp(), toolCount: fc.integer(), searchCount: fc.integer(), fileCount: fc.integer() }))).map((p) => new Map(p)),
     runningSinceBySession: fc.array(fc.tuple(fc.string(), arbIsoTimestamp())).map((p) => new Map(p)),
     activeAssistantMessageBySession: fc.array(fc.tuple(fc.string(), fc.uuid())).map((p) => new Map(p)),
     activeWorkingActivityBySession: fc.array(fc.tuple(fc.string(), fc.uuid())).map((p) => new Map(p)),
+    activeThinkingBySession: fc.array(fc.tuple(fc.string(), fc.record({ id: fc.uuid(), text: fc.string({ minLength: 0, maxLength: 60 }), startedAt: arbIsoTimestamp() }))).map((p) => new Map(p)),
   });
 }
 

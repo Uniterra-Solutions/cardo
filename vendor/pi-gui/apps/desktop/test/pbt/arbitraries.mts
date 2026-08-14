@@ -87,6 +87,14 @@ export const arbTranscriptMessageItem = (): fc.Arbitrary<TranscriptMessage> =>
       createdAt: arbIsoTimestamp(),
     }),
     fc.record({
+      kind: fc.constant("thinking" as const),
+      id: fc.uuid(),
+      text: fc.string({ minLength: 0, maxLength: 80 }),
+      createdAt: arbIsoTimestamp(),
+      startedAt: arbOptionalString(),
+      endedAt: arbOptionalString(),
+    }),
+    fc.record({
       kind: fc.constant("summary" as const),
       id: fc.uuid(),
       createdAt: arbIsoTimestamp(),
@@ -111,6 +119,12 @@ export const arbDriverTranscriptItem = (): fc.Arbitrary<SessionTranscriptItem> =
       kind: fc.constant("message" as const),
       id: fc.uuid(),
       role: fc.constantFrom("user", "assistant", "branchSummary", "compactionSummary"),
+      text: fc.string({ minLength: 0, maxLength: 80 }),
+      createdAt: arbIsoTimestamp(),
+    }),
+    fc.record({
+      kind: fc.constant("thinking" as const),
+      id: fc.uuid(),
       text: fc.string({ minLength: 0, maxLength: 80 }),
       createdAt: arbIsoTimestamp(),
     }),
@@ -212,6 +226,13 @@ export const arbSessionDriverEvent = (refArb: fc.Arbitrary<SessionRef>): fc.Arbi
     }),
     fc.record({
       type: fc.constant("assistantDelta" as const),
+      sessionRef: refArb,
+      timestamp: arbIsoTimestamp(),
+      runId: fc.option(fc.string(), { nil: undefined }),
+      text: fc.string({ minLength: 0, maxLength: 60 }),
+    }),
+    fc.record({
+      type: fc.constant("assistantThinkingDelta" as const),
       sessionRef: refArb,
       timestamp: arbIsoTimestamp(),
       runId: fc.option(fc.string(), { nil: undefined }),
