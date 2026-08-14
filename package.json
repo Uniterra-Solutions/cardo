@@ -1,6 +1,7 @@
 {
   "name": "cardo",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@11.17.0",
   "engines": {
     "node": ">=22.0.0"
