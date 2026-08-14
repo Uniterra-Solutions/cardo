@@ -723,9 +723,7 @@
   border: 1px solid var(--theme-control-border, var(--line));
   background: var(--theme-control-bg, var(--surface));
   width: 100%;
-  box-shadow:
-    0 0 0 1px var(--theme-focus-ring, transparent),
-    var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   overflow: visible;
   transition:
     border-color var(--motion-base) var(--ease-out),
@@ -736,7 +734,7 @@
 .composer__surface--drag-active {
   border-color: var(--focus-ring-border);
   background: var(--accent-tint-bg);
-  box-shadow: var(--focus-ring), var(--shadow-md);
+  box-shadow: var(--focus-ring), var(--shadow-sm);
 }
 
 .composer__drop-indicator {
@@ -939,12 +937,6 @@
 
 .composer__config {
   color: var(--muted);
-}
-
-.composer__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .composer__attach {

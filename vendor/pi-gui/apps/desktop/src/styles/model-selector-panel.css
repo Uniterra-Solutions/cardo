@@ -37,6 +37,12 @@
     color var(--motion-base) var(--ease-out);
 }
 
+.model-selector__badge svg {
+  width: 12px;
+  height: 12px;
+  color: var(--muted-soft);
+}
+
 .model-selector__badge:hover:not(:disabled) {
   background: var(--overlay-hover);
   border-color: var(--border-heavy);

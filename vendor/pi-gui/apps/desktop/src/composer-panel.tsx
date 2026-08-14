@@ -165,6 +165,14 @@ export function ComposerPanel({
           footer={(
             <div className="composer__footer">
               <div className="composer__footer-row">
+                <button
+                  aria-label="Attach files"
+                  className="icon-button composer__attach"
+                  type="button"
+                  onClick={onPickAttachments}
+                >
+                  <PlusIcon />
+                </button>
                 <div className="composer__hint">
                   {selectedSession.status === "running"
                     ? `${runningLabel} · Enter to queue · Cmd+Enter to steer`
@@ -182,29 +190,19 @@ export function ComposerPanel({
                     onSetThinking={onSetThinking}
                   />
                 </div>
-                <div className="composer__actions">
-                  <button
-                    aria-label="Attach files"
-                    className="icon-button composer__attach"
-                    type="button"
-                    onClick={onPickAttachments}
-                  >
-                    <PlusIcon />
-                  </button>
-                  <button
-                    aria-label={primaryActionIsStop ? "Stop run" : "Send message"}
-                    className="button button--primary button--cta-icon"
-                    data-testid="send"
-                    type="button"
-                    disabled={
-                      !primaryActionIsStop &&
-                      ((!composerDraft.trim() && attachments.length === 0) || modelOnboarding.requiresModelSelection)
-                    }
-                    onClick={onSubmit}
-                  >
-                    {primaryActionIsStop ? <StopSquareIcon /> : <ArrowUpIcon />}
-                  </button>
-                </div>
+                <button
+                  aria-label={primaryActionIsStop ? "Stop run" : "Send message"}
+                  className="button button--primary button--cta-icon"
+                  data-testid="send"
+                  type="button"
+                  disabled={
+                    !primaryActionIsStop &&
+                    ((!composerDraft.trim() && attachments.length === 0) || modelOnboarding.requiresModelSelection)
+                  }
+                  onClick={onSubmit}
+                >
+                  {primaryActionIsStop ? <StopSquareIcon /> : <ArrowUpIcon />}
+                </button>
               </div>
             </div>
           )}

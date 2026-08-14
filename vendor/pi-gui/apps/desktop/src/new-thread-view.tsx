@@ -2,7 +2,7 @@ import { useEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEv
 import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
 import type { ComposerAttachment, NewThreadEnvironment, WorkspaceRecord } from "./desktop-state";
 import type { MentionOption } from "./hooks/use-mention-menu";
-import { ArrowUpIcon, PiLogoMark, PlusIcon } from "./icons";
+import { ArrowUpIcon, ChevronDownIcon, PiLogoMark, PlusIcon } from "./icons";
 import {
   MODEL_OPTIONS_EMPTY_TITLE,
   type ComposerSlashCommand,
@@ -257,23 +257,27 @@ function NewThreadComposerFooter({
     <>
       <div className="composer__footer">
         <div className="composer__footer-row">
+          <button
+            aria-label="Attach files"
+            className="icon-button composer__attach"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <PlusIcon />
+          </button>
           <div className="composer__hint new-thread__hint">
-            <div className="new-thread__environment-group">
-              <button
-                className={`new-thread__environment ${environment === "local" ? "new-thread__environment--active" : ""}`}
-                type="button"
-                onClick={() => onSelectEnvironment("local")}
+            <label className="new-thread__environment-picker">
+              <select
+                aria-label="Environment"
+                className="new-thread__environment-select"
+                value={environment}
+                onChange={(event) => onSelectEnvironment(event.target.value as NewThreadEnvironment)}
               >
-                <span>Local</span>
-              </button>
-              <button
-                className={`new-thread__environment ${environment === "worktree" ? "new-thread__environment--active" : ""}`}
-                type="button"
-                onClick={() => onSelectEnvironment("worktree")}
-              >
-                <span>Worktree</span>
-              </button>
-            </div>
+                <option value="local">Local</option>
+                <option value="worktree">Worktree</option>
+              </select>
+              <ChevronDownIcon />
+            </label>
             <span className="new-thread__hint-separator">·</span>
             <ModelSelector
               runtime={runtime}
@@ -289,41 +293,30 @@ function NewThreadComposerFooter({
               onSetThinking={onSetThinking}
             />
           </div>
-
-          <div className="composer__actions">
-            <input
-              ref={fileInputRef}
-              hidden
-              type="file"
-              multiple
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                if (files.length > 0) {
-                  onAddAttachments(files);
-                }
-                event.currentTarget.value = "";
-              }}
-            />
-            <button
-              aria-label="Attach files"
-              className="icon-button composer__attach"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <PlusIcon />
-            </button>
-            <button
-              aria-label="Start thread"
-              className="button button--primary button--cta-icon"
-              type="button"
-              disabled={!hasContent || modelOnboarding.requiresModelSelection}
-              onClick={onSubmit}
-            >
-              <ArrowUpIcon />
-            </button>
-          </div>
+          <button
+            aria-label="Start thread"
+            className="button button--primary button--cta-icon"
+            type="button"
+            disabled={!hasContent || modelOnboarding.requiresModelSelection}
+            onClick={onSubmit}
+          >
+            <ArrowUpIcon />
+          </button>
         </div>
       </div>
+      <input
+        ref={fileInputRef}
+        hidden
+        type="file"
+        multiple
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 0) {
+            onAddAttachments(files);
+          }
+          event.currentTarget.value = "";
+        }}
+      />
     </>
   );
 }

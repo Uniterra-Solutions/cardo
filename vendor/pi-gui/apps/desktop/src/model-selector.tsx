@@ -6,6 +6,7 @@ import {
   THINKING_OPTIONS,
   type ComposerModelOption,
 } from "./composer-commands";
+import { ChevronDownIcon } from "./icons";
 
 interface ModelSelectorProps {
   readonly runtime: RuntimeSnapshot | undefined;
@@ -102,6 +103,7 @@ export function ModelSelector({
             onClick={() => setOpen(open === "model" ? "none" : "model")}
           >
             {modelBadgeLabel}
+            <ChevronDownIcon />
           </button>
           {open === "model" ? (
             <div
@@ -162,6 +164,7 @@ export function ModelSelector({
             onClick={() => setOpen(open === "thinking" ? "none" : "thinking")}
           >
             {thinkingLevel}
+            <ChevronDownIcon />
           </button>
           {open === "thinking" ? (
             <div

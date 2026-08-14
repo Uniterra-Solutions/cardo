@@ -102,6 +102,35 @@
   color: var(--text-strong);
 }
 
+.new-thread__environment-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.new-thread__environment-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 5px 26px 5px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+}
+
+.new-thread__environment-picker svg {
+  position: absolute;
+  right: 7px;
+  width: 12px;
+  height: 12px;
+  color: var(--muted-soft);
+  pointer-events: none;
+}
+
 .new-thread__textarea {
   min-height: 100px;
   resize: vertical;
