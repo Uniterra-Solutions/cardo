@@ -2,9 +2,11 @@
 
 | Directory / File                 | Responsibility                               | Key Files                                                                                                                   |
 | -------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `packages/general/`              | App-wide working-rules extension             | `src/index.ts` (factory + `before_agent_start` append)                                                                      |
 | `packages/jovaltus/src/`         | Jovaltus pipeline extension (all logic)      | `index.ts`, `state.ts`, `chain.ts`, `dispatch.ts`, `prompts.ts`                                                             |
 | `packages/jovaltus/src/prompts/` | Phase goal documents for pipeline subagents  | `prd.md`, `research.md`, `acceptance.md`, `tasks.md`, `execute.md`, `simplify-review.md`, `review.md`                       |
 | `packages/jovaltus/`             | Package manifest + pi entry declaration      | `package.json` (`"pi": {"extensions": ["./src/index.ts"]}`; `exports` → `dist`)                                             |
+| `packages/general/`              | Package manifest + pi entry declaration      | `package.json` (`"pi": {"extensions": ["./src/index.ts"]}`; `exports` → `dist`)                                             |
 | `packages/runtime/`              | Desktop runtime: built-in extension registry | `src/index.ts` (`builtinExtensionFactories`, `builtinExtensionMetadata`)                                                    |
 | `vendor/pi-gui/`                 | Vendored desktop app (git subtree)           | `apps/desktop/` (Electron shell), `packages/pi-sdk-driver/`, `packages/session-driver/`, `packages/catalogs/`               |
 | Root (`.`)                       | Shared tooling + workspace wiring only       | `package.json`, `tsconfig.json`, `tsconfig.base.json`, `eslint.config.mjs`, `.prettierrc`, `.husky/`, `pnpm-workspace.yaml` |
@@ -19,6 +21,12 @@
 | `dispatch.ts` | 211 | `PhaseResult`, `runPhase`                                                                                                                                                                         |
 | `chain.ts`    | 85  | `CHAIN`, `WAITING_PHASES`, `waitingPhase`, `readVerdict`, `readFindings`                                                                                                                          |
 | `prompts.ts`  | 104 | `PROMPT_NAMES`, `loadPrompt`, `renderPrompt`, `buildContext`                                                                                                                                      |
+
+## Module map (`packages/general/src/`)
+
+| Module     | Public API                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| `index.ts` | `default` factory (entry) — registers `before_agent_start` to append `WORKING_RULES` (8 rules) |
 
 ## Module map (`packages/runtime/src/`)
 

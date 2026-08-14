@@ -7,7 +7,9 @@ graph TD
   User["User"] -->|"prompts / approves plans"| Pi["pi CLI (host)<br/>@earendil-works/pi-coding-agent"]
   User -->|"desktop workspace"| App["pi-gui desktop app<br/>vendor/pi-gui (Electron)"]
   Pi -->|"loads extension via jiti<br/>(default-exported factory)"| Jov["Jovaltus extension<br/>packages/jovaltus"]
+  Pi -->|"loads extension via jiti<br/>(default-exported factory)"| Gen["General extension<br/>packages/general"]
   App -->|"built-in factories via<br/>packages/runtime"| Jov
+  App -->|"built-in factories via<br/>packages/runtime"| Gen
   App -->|"in-process SDK<br/>createAgentSessionRuntime"| PiCore["pi-coding-agent core"]
   Jov -->|"spawns phase subagents<br/>pi --mode json -p --no-session --no-extensions"| Child["Child pi processes"]
   Child -->|"LLM calls"| Provider["Model providers<br/>(anthropic / openai / custom)"]
@@ -64,7 +66,7 @@ graph TD
 ## Desktop app integration (cardo → pi-gui)
 
 - pi-gui is vendored via `git subtree` under `vendor/pi-gui` (MIT, upstream tag `v0.1.0-beta.33`); cardo's `pnpm-workspace.yaml` includes `vendor/pi-gui/apps/*` and `vendor/pi-gui/packages/*`.
-- `packages/runtime` (`@cardo/runtime`) exports `builtinExtensionFactories` (jovaltus factory) + `builtinExtensionMetadata` (display names); `vendor/pi-gui/apps/desktop/electron/main.ts` spreads both into the driver's `extensionFactories` / `inlineExtensionMetadata` seams.
+- `packages/runtime` (`@cardo/runtime`) exports `builtinExtensionFactories` (general + jovaltus factories) + `builtinExtensionMetadata` (display names); `vendor/pi-gui/apps/desktop/electron/main.ts` spreads both into the driver's `extensionFactories` / `inlineExtensionMetadata` seams. `General` runs first in the chain, so its working rules precede Jovaltus's pipeline status in the assembled system prompt.
 - `@cardo/*` exports point at built `dist` (Node 22 `require(ESM)`); pi-coding-agent stays external (its exports are ESM-only — do not bundle it into the CJS main bundle).
 - The vendored `@pi-gui/pi-sdk-driver` was ported from pi 0.80.6 to 0.84.1: `AuthStorage`/`ModelRegistry` replaced by `ModelRuntime`, constructors async, login via `AuthInteraction`.
 

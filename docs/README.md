@@ -1,6 +1,6 @@
 # Cardo Documentation
 
-Cardo is a pnpm monorepo whose first package, `packages/jovaltus`, ports the Jovaltus subagent-driven pipeline (plan/execute/simplify/review) to a pi-agent extension. Built on the pi-agent core; plugins live as separate workspace packages. The desktop shell is pi-gui (vendored under `vendor/pi-gui`), consuming cardo extensions as built-ins via `packages/runtime`.
+Cardo is a pnpm monorepo whose first package, `packages/jovaltus`, ports the Jovaltus subagent-driven pipeline (plan/execute/simplify/review) to a pi-agent extension. `packages/general` appends app-wide working rules to every turn's system prompt. Built on the pi-agent core; plugins live as separate workspace packages. The desktop shell is pi-gui (vendored under `vendor/pi-gui`), consuming cardo extensions as built-ins via `packages/runtime`.
 
 Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack](tech-stack.md) · [Root README](../README.md)
 
