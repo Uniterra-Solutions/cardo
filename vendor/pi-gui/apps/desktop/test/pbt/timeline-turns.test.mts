@@ -12,7 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
-import { buildDisplayTimelineItems } from "../../out-pbt/desktop/src/timeline-turns.js";
+import { buildDisplayTimelineItems, pruneExpandState } from "../../out-pbt/desktop/src/timeline-turns.js";
 import type { DisplayTimelineItem, TimelineToolGroup, TranscriptMessage } from "../../out-pbt/desktop/src/timeline-types.js";
 
 const NUM_RUNS = 150;
@@ -149,6 +149,65 @@ test("buildDisplayTimelineItems: never throws on arbitrary transcript arrays", (
       assert.ok(Array.isArray(items));
       return true;
     }),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+/* ── pruneExpandState ───────────────────────────────────── */
+
+function toSet(ids: readonly string[]): ReadonlySet<string> {
+  return new Set(ids);
+}
+
+/** The renderer prunes expand state on every transcript change; unchanged
+ * results must return the identical reference so React's setState bail-out
+ * (Object.is) skips re-rendering instead of re-rendering per streamed char. */
+test("pruneExpandState: no pruning returns the identical Set reference", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string(), { maxLength: 12 }),
+      fc.uniqueArray(fc.string(), { maxLength: 12 }),
+      (currentIds, extraIds) => {
+        const current = toSet(currentIds);
+        const available = toSet([...currentIds, ...extraIds]); // superset => nothing pruned
+        const result = pruneExpandState(current, available);
+        assert.equal(result, current, "unchanged value must keep the same reference");
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("pruneExpandState: result equals current intersect available (no ids lost, none invented)", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string(), { maxLength: 12 }),
+      fc.uniqueArray(fc.string(), { maxLength: 12 }),
+      (currentIds, availableIds) => {
+        const current = toSet(currentIds);
+        const available = toSet(availableIds);
+        const result = pruneExpandState(current, available);
+        const expected = currentIds.filter((id) => available.has(id)).sort();
+        assert.deepEqual([...result].sort(), expected);
+      },
+    ),
+    { numRuns: NUM_RUNS },
+  );
+});
+
+test("pruneExpandState: pruning an already-pruned set is a reference-stable no-op", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(fc.string(), { maxLength: 12 }),
+      fc.uniqueArray(fc.string(), { maxLength: 12 }),
+      (currentIds, availableIds) => {
+        const current = toSet(currentIds);
+        const available = toSet(availableIds);
+        const first = pruneExpandState(current, available);
+        const second = pruneExpandState(first, available);
+        assert.equal(second, first, "second prune must not create a new reference");
+      },
+    ),
     { numRuns: NUM_RUNS },
   );
 });
