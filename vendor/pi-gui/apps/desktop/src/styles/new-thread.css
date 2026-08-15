@@ -144,26 +144,25 @@
   pointer-events: none;
 }
 
-/* ---- Cardo: two-state composer (wrapped) ----------------------------------
- * Row child order is fixed by composer-surface.tsx: attach(1) → textarea(2)
- * → env/model/send(3+). Wrapped = textarea on full first row, attach left and
- * trailing controls right on the bottom row. All rules scoped under the
- * --wrapped modifier; base .composer__editor-row / .composer__surface live in
- * main.css (owned by T4) and are untouched here. --------------------------- */
-.new-thread__composer--wrapped .composer__editor-row {
+/* ---- Cardo: two-state composer (wrapped) — shared by chat + new-thread ----
+ * Row child order is fixed by composer-surface.tsx: leading(attach, 1) →
+ * textarea(2) → trailing controls (3+). Wrapped = textarea on the full first
+ * row, attach left and trailing controls right on the bottom row. The class
+ * is applied by ComposerSurface's auto-grow effect. ------------------------ */
+.composer__surface--wrapped .composer__editor-row {
   flex-wrap: wrap;
 }
 
-.new-thread__composer--wrapped .composer textarea {
+.composer__surface--wrapped .composer textarea {
   order: 1;
   flex-basis: 100%;
 }
 
-.new-thread__composer--wrapped .composer__attach {
+.composer__surface--wrapped .composer__editor-row > :first-child {
   order: 2;
 }
 
-.new-thread__composer--wrapped .composer__editor-row > :nth-child(n + 3) {
+.composer__surface--wrapped .composer__editor-row > :nth-child(n + 3) {
   order: 3;
   margin-left: auto;
 }

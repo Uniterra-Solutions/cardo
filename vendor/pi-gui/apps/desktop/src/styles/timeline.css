@@ -595,14 +595,14 @@
 }
 
 .timeline-thinking__header {
-  /* Cardo: T2 relayout — collapsed chip: mono 11px, dashed border, sharp radius */
+  /* Cardo: collapsed chip — mono 11px, no border (review feedback) */
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   background: transparent;
-  border: 1px dashed var(--line-strong);
-  padding: 3px 8px;
+  border: 0;
+  padding: 2px 4px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 11px;

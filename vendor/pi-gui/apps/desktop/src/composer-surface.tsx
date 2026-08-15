@@ -1,4 +1,4 @@
-import { useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { ComposerAttachment } from "./desktop-state";
 import type { MentionOption } from "./hooks/use-mention-menu";
 import type {
@@ -119,7 +119,24 @@ export function ComposerSurface({
   onOpenJovaltusGraph,
 }: ComposerSurfaceProps) {
   const [isDragActive, setIsDragActive] = useState(false);
+  // Cardo: two-state composer — wrapped when the draft exceeds one line
+  // (auto-wrap) or contains an explicit newline; shared by chat + new-thread.
+  const [wrapped, setWrapped] = useState(false);
   const dragDepthRef = useRef(0);
+
+  // Cardo: auto-grow the textarea and flip the wrapped class. 36px is the
+  // single-line height of `.composer textarea` (main.css). This unifies the
+  // two-state behavior across chat and new-thread composers.
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) {
+      return;
+    }
+    composer.style.height = "0px";
+    const scrollHeight = composer.scrollHeight;
+    composer.style.height = `${Math.min(scrollHeight, 260)}px`;
+    setWrapped(scrollHeight > 36 || composerDraft.includes("\n"));
+  }, [composerRef, composerDraft]);
 
   const clearDragState = () => {
     dragDepthRef.current = 0;
@@ -163,7 +180,7 @@ export function ComposerSurface({
 
   return (
     <div
-      className={`composer__surface ${isDragActive ? "composer__surface--drag-active" : ""}`}
+      className={`composer__surface ${isDragActive ? "composer__surface--drag-active" : ""} ${wrapped ? "composer__surface--wrapped" : ""}`}
       data-testid={`${textareaTestId}-surface`}
       onPaste={onComposerPaste}
       onDragEnter={handleDragEnter}

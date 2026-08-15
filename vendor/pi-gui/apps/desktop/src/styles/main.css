@@ -721,7 +721,8 @@
   position: relative;
   border-radius: var(--radius-4xl);
   padding: 12px 14px 11px;
-  border: 1px solid var(--theme-control-border, var(--line-strong));
+  /* Cardo: review feedback — borderless composer shell */
+  border: 0;
   background: var(--theme-control-bg, var(--surface));
   width: 100%;
   box-shadow: var(--shadow-md);
