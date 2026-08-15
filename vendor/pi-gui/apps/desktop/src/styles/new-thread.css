@@ -43,7 +43,8 @@
   margin: 0;
   font-family: var(--font-serif);
   color: var(--text-strong);
-  font-size: 30px;
+  /* Cardo: hero scale bump 30px → 44px (demo) */
+  font-size: 44px;
   font-weight: 640;
   letter-spacing: -0.04em;
   line-height: 0.98;
@@ -62,13 +63,16 @@
   padding: 8px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
+  /* Cardo: shadow-sm per demo (sharp radius kept — no pill) */
+  box-shadow: var(--shadow-sm);
   background: var(--surface);
   color: var(--text-strong);
   font: inherit;
 }
 
 .new-thread__composer {
-  width: min(820px, 100%);
+  /* Cardo: 820px → 860px (demo) */
+  width: min(860px, 100%);
   margin: 0 auto;
 }
 
@@ -138,5 +142,29 @@
   height: 12px;
   color: var(--muted-soft);
   pointer-events: none;
+}
+
+/* ---- Cardo: two-state composer (wrapped) ----------------------------------
+ * Row child order is fixed by composer-surface.tsx: attach(1) → textarea(2)
+ * → env/model/send(3+). Wrapped = textarea on full first row, attach left and
+ * trailing controls right on the bottom row. All rules scoped under the
+ * --wrapped modifier; base .composer__editor-row / .composer__surface live in
+ * main.css (owned by T4) and are untouched here. --------------------------- */
+.new-thread__composer--wrapped .composer__editor-row {
+  flex-wrap: wrap;
+}
+
+.new-thread__composer--wrapped .composer textarea {
+  order: 1;
+  flex-basis: 100%;
+}
+
+.new-thread__composer--wrapped .composer__attach {
+  order: 2;
+}
+
+.new-thread__composer--wrapped .composer__editor-row > :nth-child(n + 3) {
+  order: 3;
+  margin-left: auto;
 }
 

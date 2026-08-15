@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type RefObject } from "react";
 import type { RuntimeSnapshot } from "@pi-gui/session-driver/runtime-types";
 import type { ComposerAttachment, NewThreadEnvironment, WorkspaceRecord } from "./desktop-state";
 import type { MentionOption } from "./hooks/use-mention-menu";
@@ -103,6 +103,8 @@ export function NewThreadView({
   onSubmit,
 }: NewThreadViewProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Cardo: two-state composer — wrapped when the prompt exceeds one line
+  const [wrapped, setWrapped] = useState(false);
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId);
 
   useEffect(() => {
@@ -116,7 +118,10 @@ export function NewThreadView({
     }
 
     composer.style.height = "0px";
-    composer.style.height = `${Math.min(composer.scrollHeight, 260)}px`;
+    // Cardo: wrapped state — content exceeding one line (36px) or an explicit newline
+    const scrollHeight = composer.scrollHeight;
+    composer.style.height = `${Math.min(scrollHeight, 260)}px`;
+    setWrapped(scrollHeight > 36 || prompt.includes("\n"));
   }, [composerRef, prompt]);
 
   if (!workspace) {
@@ -156,7 +161,8 @@ export function NewThreadView({
           </label>
         </div>
 
-        <div className="new-thread__composer composer">
+        {/* Cardo: two-state composer — wrapped class flips layout when the prompt exceeds one line */}
+        <div className={`new-thread__composer composer${wrapped ? " new-thread__composer--wrapped" : ""}`}>
           <div className="conversation conversation--composer">
             <ComposerSurface
               lastError={lastError}
