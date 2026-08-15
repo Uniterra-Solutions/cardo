@@ -277,3 +277,48 @@ test("keeps collapsed sidebar out of narrow windows and reopens from the button"
     }
   }
 });
+
+// Cardo: the sidebar toggle sits flush at the window's top-left corner and the
+// New thread button starts below the 48px titlebar strip (macOS traffic lights
+// + corner toggle), so neither overlaps the native window controls in windowed
+// mode and the toggle never covers the button in fullscreen.
+test("keeps the sidebar toggle at the corner and the new-thread button clear of the titlebar strip", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("sidebar-corner-workspace");
+  const run = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await run.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
+
+    const geometry = await window.evaluate(() => {
+      const toggle = document.querySelector<HTMLElement>("[data-testid='sidebar-toggle']");
+      const newThread = document.querySelector<HTMLElement>(".sidebar__new");
+      if (!toggle || !newThread) {
+        return null;
+      }
+      const toggleRect = toggle.getBoundingClientRect();
+      const newThreadRect = newThread.getBoundingClientRect();
+      return {
+        toggleLeft: toggleRect.left,
+        toggleTop: toggleRect.top,
+        toggleBottom: toggleRect.bottom,
+        newThreadTop: newThreadRect.top,
+      };
+    });
+    expect(geometry).not.toBeNull();
+    // Toggle flush with the top-left corner (sidebar padding ≈ 12px).
+    expect(geometry?.toggleLeft ?? 999).toBeLessThanOrEqual(20);
+    expect(geometry?.toggleTop ?? 999).toBeLessThanOrEqual(20);
+    // New thread below the 48px titlebar strip — clear of the traffic lights.
+    expect(geometry?.newThreadTop ?? 0).toBeGreaterThanOrEqual(44);
+    // Toggle and new thread never overlap in any window mode.
+    expect(geometry?.toggleBottom ?? 999).toBeLessThanOrEqual(geometry?.newThreadTop ?? 0);
+  } finally {
+    await run.close();
+  }
+});

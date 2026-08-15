@@ -328,7 +328,10 @@ function createWindow(): BrowserWindow {
     vibrancy: process.platform === "darwin" && enableTransparency ? "under-window" : undefined,
     titleBarStyle: "hiddenInset",
     backgroundColor: enableTransparency ? "#00000000" : "#f3f4f8",
-    trafficLightPosition: { x: 18, y: 18 },
+    // Cardo: the sidebar toggle sits flush at the window's top-left corner
+    // (`.sidebar-toggle` at 12px), so the traffic lights move right of it
+    // (x 56 → lights span ≈56–110px) and never cover it in windowed mode.
+    trafficLightPosition: { x: 56, y: 18 },
     show: false,
     icon: appIcon,
     webPreferences: {
