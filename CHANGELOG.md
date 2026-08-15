@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Desktop titlebar strip: the sidebar toggle sits flush at the window's top-left
+  corner (`12px 11px`), the macOS traffic lights are positioned right of it
+  (`trafficLightPosition {x:56, y:18}`, spanning ≈56–110px) so they never cover
+  it in windowed mode, and the sidebar's New thread button moved below the 48px
+  strip — clear of the traffic lights and the toggle in every window mode.
+  Locked by geometry assertions in `tests/core/sidebar-toggle.spec.ts`
+
+### Fixed
+
+- Toggling Jovaltus plan mode no longer paints a phantom "message sent to the
+  agent" row: `/planmode` is a runtime slash command that executes in the
+  extension host without a transcript message, so the composer submit path
+  suppresses the optimistic timeline row for runtime commands (regression spec
+  `tests/live/jovaltus-mode-toggle.spec.ts`)
+- The generic extension dock no longer renders the jovaltus statuses
+  (`jovaltus-mode` / `jovaltus-execute`) — the mode button and the execute panel
+  already render them above the composer
+- The extension dock now collapses when the extension UI is rebuilt during
+  /reload or extension refresh: the store bumps a per-session extension-UI
+  `revision` on every clear and the renderer resets dock expansion on a
+  revision change — deterministic even though the cleared snapshot is coalesced
+  away during a fast reload (`tests/live/extension-dock-reload.spec.ts`)
+
+### Changed
+
+- Docs: `AGENTS.md`, `docs/design-system.md` and `docs/testing.md` document the
+  titlebar strip contract, the silent plan-mode toggle, and the dock rebuild
+  reset (plus the new `tests/live/` behavior specs)
+
 ## [0.4.1] — 2026-08-15
 
 ### Fixed

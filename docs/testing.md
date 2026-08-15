@@ -99,6 +99,7 @@ pnpm --filter @uniterra-solutions/cardo test
 - The harness forces `PI_APP_DISABLE_CARDO_UPDATE_CHECK=1` in `buildDesktopLaunchEnv` so no spec ever probes npm/GitHub; `test:cardo:core:update-flow` opts out by deleting the key via `envOverrides` and feeds a local fixture server (`CARDO_UPDATE_API_BASE` / `CARDO_UPDATE_NPM_URL`) with a fake updater command (`CARDO_UPDATE_COMMAND`) and a stubbed `dialog.showMessageBox`.
 - The app uses `requestSingleInstanceLock()` — kill leftover pi Electron processes before each run. From-source runs (dev server / `electron .` / preview) now use the `pi-dev` user-data dir, so they no longer share the lock with a running packaged app — but two dev instances still clash on the `pi-dev` lock (see the visual-verification pitfall below).
 - Windows/Linux: Cmd+N / Cmd+Shift+N rely on `before-input-event`; the macOS File menu bindings are asserted platform-gated (`test.skip` inside the test body).
+- Extension-UI behavior specs live in `tests/live/`: `extension-dock.spec.ts` (single collapsed dock inside the composer surface, literal fallback summaries, no transcript spam from widget ticks), `extension-dock-reload.spec.ts` (dock collapses on /reload and extension refresh — locked by the per-session extension-UI `revision`), `jovaltus-mode-toggle.spec.ts` (plan-mode toggle runs silently: no timeline message, no dock bar). The `tests/core/*` lane holds the layout/visual contracts.
 
 #### Visual verification (design system)
 
@@ -124,6 +125,12 @@ per-surface CSS. Regression coverage is layered, fastest first:
    border without the `0 0 0 1px` focus-ring shadow layer, and the global
    scrollbar CSS contract (7px width, transparent track, `--muted`-alpha thumb,
    `scrollbar-width: thin`) via computed styles — hermetic, no screenshots.
+4. **Titlebar strip geometry (e2e)** — `tests/core/sidebar-toggle.spec.ts`
+   asserts the sidebar toggle is flush at the window's top-left corner (≤20px),
+   the New thread button starts below the 48px titlebar strip (≥44px, so it
+   clears the macOS traffic lights and the corner toggle in every window mode),
+   and the collapsed-mode clearances (`toggleRight <= topbarLeft`) keep the
+   main column out of the traffic-light zone.
 
 Pitfalls: the app uses `requestSingleInstanceLock()` — kill leftover pi
 Electron processes before each launch, or the new instance quits immediately

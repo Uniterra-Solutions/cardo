@@ -83,8 +83,15 @@ object (it cannot read CSS variables).
 
 The sidebar follows the approved demo ("Warm Workbench"):
 
-- **Top** — only the "New thread" button (`--radius-lg`, dashed border that
-  turns terracotta on hover).
+- **Titlebar strip (0–48px)** — the sidebar toggle sits flush at the window's
+  top-left corner (`.sidebar-toggle` at `12px 11px`, 30×30); the macOS traffic
+  lights are positioned right of it (`trafficLightPosition {x:56, y:18}`, so
+  they span ≈56–110px) and never cover it in windowed mode. In collapsed
+  sidebar mode the main column clears both (`--traffic-light-right: 110px`).
+  The strip is a drag region.
+- **Top (below the strip)** — only the "New thread" button (`--radius-lg`,
+  dashed border that turns terracotta on hover), starting at y 48 so it is
+  clear of the traffic lights and the corner toggle in every window mode.
 - **Middle** — thread list bucketed into **Today / Earlier** group labels
   (`.thread-group__label`: 10.5px uppercase bold, `--muted-subtle`, sharp
   0px radius) by `session.updatedAt` (display-only; sort order preserved).
