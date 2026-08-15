@@ -70,6 +70,61 @@
   font: inherit;
 }
 
+/* Cardo: Jovaltus mode selection (standard vs plan) on the new-thread page.
+ * Segmented control reusing the plan-mode button language: dot = state,
+ * active option carries the accent tint. 03b tokens only. */
+.new-thread__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.new-thread__mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.new-thread__mode-option:hover {
+  background: var(--overlay-hover);
+  color: var(--text);
+}
+
+.new-thread__mode-option--active {
+  background: var(--accent-tint-bg);
+  color: var(--accent);
+}
+
+.new-thread__mode-option--active .new-thread__mode-dot {
+  background: var(--accent);
+}
+
+.new-thread__mode-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--muted-soft);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
 .new-thread__composer {
   /* Cardo: 820px → 860px (demo) */
   width: min(860px, 100%);

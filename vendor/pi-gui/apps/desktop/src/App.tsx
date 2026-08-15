@@ -889,6 +889,8 @@ export default function App() {
               modelId={newThread.resolvedModelId}
               thinkingLevel={newThread.resolvedThinkingLevel}
               modelOnboarding={newThread.modelOnboarding}
+              jovaltusMode={newThread.jovaltusMode}
+              onSelectJovaltusMode={newThread.setJovaltusMode}
               composerRef={newThread.composerRef}
               activeSlashCommand={newThread.slashMenu.activeSlashFlow?.command}
               activeSlashCommandMeta={newThread.slashMenu.activeSlashFlow?.command?.description}

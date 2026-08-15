@@ -161,6 +161,18 @@ export async function startThread(store: AppStoreInternals, input: StartThreadIn
       activeView: "threads",
     });
 
+    // Cardo: start the new thread in Jovaltus plan mode. /planmode is a
+    // runtime slash command executed by the extension host (no transcript
+    // message), so the optimistic row is suppressed; it runs before the
+    // first message so plan/execute_plan are already available to the model.
+    if (input.jovaltusMode) {
+      await sendMessageToSession(store, session.ref, "/planmode", [], {
+        suppressOptimisticMessage: true,
+      }).catch((error) => {
+        void store.withError(error);
+      });
+    }
+
     // Fire message in background — assistantDelta events flow through
     // handleSessionEvent → emit() and update React while on the thread view
     if (prompt || attachments.length > 0) {

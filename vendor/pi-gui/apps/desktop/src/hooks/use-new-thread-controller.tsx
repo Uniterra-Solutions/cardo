@@ -67,6 +67,9 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
   const [provider, setProvider] = useState<string | undefined>();
   const [modelId, setModelId] = useState<string | undefined>();
   const [thinkingLevel, setThinkingLevel] = useState<string | undefined>();
+  // Cardo: Jovaltus plan mode for the new thread (plan vs standard), chosen
+  // on the new-thread page before the conversation exists.
+  const [jovaltusMode, setJovaltusMode] = useState(false);
   const [composerError, setComposerError] = useState<string | undefined>();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const previousActiveViewRef = useRef<AppView | null>(null);
@@ -130,6 +133,9 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       setProvider(undefined);
       setModelId(undefined);
       setThinkingLevel(undefined);
+      // Cardo: new threads start in standard mode; the picker resets with the
+      // rest of the surface.
+      setJovaltusMode(false);
       setComposerError(undefined);
     },
     [rootWorkspace?.id, rootWorkspaceOptions, snapshot, visibleWorkspaces],
@@ -153,6 +159,8 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
     setProvider(undefined);
     setModelId(undefined);
     setThinkingLevel(undefined);
+    // Cardo: keep the mode picker in sync with the other surface resets.
+    setJovaltusMode(false);
     setComposerError(undefined);
   }, []);
 
@@ -242,6 +250,8 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       provider: resolvedProvider,
       modelId: resolvedModelId,
       thinkingLevel: resolvedThinkingLevel,
+      // Cardo: start the new conversation in the selected Jovaltus mode.
+      jovaltusMode,
     };
     expandWorkspace(rootWorkspaceId);
     void updateSnapshot(api, setSnapshot, () => api.startThread(input)).then(() => {
@@ -257,6 +267,7 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
     attachments,
     environment,
     expandWorkspace,
+    jovaltusMode,
     modelOnboarding.requiresModelSelection,
     prompt,
     resolvedModelId,
@@ -373,6 +384,8 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       resolvedModelId,
       resolvedThinkingLevel,
       modelOnboarding,
+      jovaltusMode,
+      setJovaltusMode,
       slashMenu,
       mentionMenu,
       setPrompt,
@@ -404,6 +417,8 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       resolvedModelId,
       resolvedThinkingLevel,
       modelOnboarding,
+      jovaltusMode,
+      setJovaltusMode,
       slashMenu,
       mentionMenu,
       selectWorkspace,

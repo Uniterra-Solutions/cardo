@@ -27,6 +27,10 @@ interface NewThreadViewProps {
   readonly modelId: string | undefined;
   readonly thinkingLevel: string | undefined;
   readonly modelOnboarding: ModelOnboardingState;
+  // Cardo: Jovaltus plan mode selection (plan vs standard) on the new-thread
+  // page, available before the conversation exists.
+  readonly jovaltusMode: boolean;
+  readonly onSelectJovaltusMode: (plan: boolean) => void;
   readonly composerRef: RefObject<HTMLTextAreaElement | null>;
   readonly activeSlashCommand?: ComposerSlashCommand;
   readonly activeSlashCommandMeta?: string;
@@ -71,6 +75,8 @@ export function NewThreadView({
   modelId,
   thinkingLevel,
   modelOnboarding,
+  jovaltusMode,
+  onSelectJovaltusMode,
   composerRef,
   activeSlashCommand,
   activeSlashCommandMeta,
@@ -144,6 +150,35 @@ export function NewThreadView({
               ))}
             </select>
           </label>
+          {/* Cardo: Jovaltus mode selection — available before the
+              conversation exists, not only inside an open thread. */}
+          <div
+            aria-label="Mode"
+            className="new-thread__mode"
+            data-testid="new-thread-mode"
+            role="group"
+          >
+            <button
+              aria-pressed={!jovaltusMode}
+              className={`new-thread__mode-option ${!jovaltusMode ? "new-thread__mode-option--active" : ""}`}
+              data-testid="new-thread-mode-standard"
+              type="button"
+              onClick={() => onSelectJovaltusMode(false)}
+            >
+              <span aria-hidden="true" className="new-thread__mode-dot" />
+              standard
+            </button>
+            <button
+              aria-pressed={jovaltusMode}
+              className={`new-thread__mode-option ${jovaltusMode ? "new-thread__mode-option--active" : ""}`}
+              data-testid="new-thread-mode-plan"
+              type="button"
+              onClick={() => onSelectJovaltusMode(true)}
+            >
+              <span aria-hidden="true" className="new-thread__mode-dot" />
+              plan
+            </button>
+          </div>
         </div>
 
         <div className="new-thread__composer composer">
