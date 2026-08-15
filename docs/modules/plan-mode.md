@@ -17,13 +17,14 @@ The pre-plan-mode tool set is remembered once so disabling restores it exactly (
 
 ## Toggle surface
 
-| Surface             | Host    | Notes                                                                                      |
-| ------------------- | ------- | ------------------------------------------------------------------------------------------ |
-| `/planmode` command | all     | `registerCommand('planmode', ...)` — the canonical toggle                                  |
-| `shift+p` shortcut  | TUI     | Bare shift+P (user-mandated fallback — the TUI keeps shift+tab for `app.thinking.cycle`)   |
-| `shift+tab`         | desktop | Composer keydown submits `/planmode` (only wired while the extension's live status exists) |
-| mode button         | desktop | `apps/desktop/src/jovaltus-ui.tsx` — aria-pressed toggle, accent dot when on               |
-| `--plan-mode` flag  | any     | `registerFlag('plan-mode', ...)` — start ON                                                |
+| Surface                | Host    | Notes                                                                                                                                            |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/planmode` command    | all     | `registerCommand('planmode', ...)` — the canonical toggle                                                                                        |
+| `shift+p` shortcut     | TUI     | Bare shift+P (user-mandated fallback — the TUI keeps shift+tab for `app.thinking.cycle`)                                                         |
+| `shift+tab`            | desktop | Composer keydown submits `/planmode` (only wired while the extension's live status exists)                                                       |
+| mode button            | desktop | `apps/desktop/src/jovaltus-ui.tsx` — aria-pressed toggle, accent dot when on                                                                     |
+| new-thread mode picker | desktop | `new-thread-view.tsx` `.new-thread__mode` — standard/plan picker on the new-thread page; `startThread` runs `/planmode` before the first message |
+| `--plan-mode` flag     | any     | `registerFlag('plan-mode', ...)` — start ON                                                                                                      |
 
 ## Persistence & restore
 

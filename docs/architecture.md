@@ -84,7 +84,7 @@ Plan mode is a per-session toggle that gates the plan-mode pipeline tools (`plan
 4. **execute_plan `<plan_id>`** (plan-mode-exclusive) resolves the done plan session and dispatches its subagents: batches serial, agents within a batch parallel, each child = `execute-agent.md` role prompt + `[[task_prompt]]` + auto-injected PRD/design context. `simplify`/`review` are intentionally not chained after execute.
 5. The desktop surfaces execution live: `ctx.ui.setWidget("jovaltus-execute", …)` streams `STATUS|MODE|STEP|BATCH|AGENT` lines that the execute panel (spinner → green light → 3s auto-fade) and the right-side graph popup render natively — same JSON the plan was parsed from, never mermaid/free text.
 
-Mode toggle: `/planmode` command, `shift+p` shortcut (TUI — bare shift+p since shift+tab is taken by `app.thinking.cycle`), and the desktop composer's shift+tab + mode button (submits `/planmode`). Mode state persists via `pi.appendEntry` and restores on `session_start` (also via the `--plan-mode` flag).
+Mode toggle: `/planmode` command, `shift+p` shortcut (TUI — bare shift+p since shift+tab is taken by `app.thinking.cycle`), and the desktop composer's shift+tab + mode button (submits `/planmode`). The desktop new-thread page also exposes a standard/plan picker, so a conversation can start in plan mode — `startThread` (electron/app-store-worktree.ts) runs `/planmode` before the first message. Mode state persists via `pi.appendEntry` and restores on `session_start` (also via the `--plan-mode` flag).
 
 ## Desktop timeline — reasoning streaming and tool-batch collapsing
 

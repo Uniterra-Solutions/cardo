@@ -52,7 +52,7 @@ pnpm --filter @pi-gui/desktop dev          # dev (Electron + watch)
 pnpm --filter @pi-gui/desktop build        # production build (out/)
 ```
 
-After install, `/reload` (or restart pi). The six tools (`plan`/`execute_plan`/`simplify`/`review`/`list_sessions`/`resume_session`) are registered — `plan` and `execute_plan` appear in the tool list once plan mode is on (`/planmode`, TUI shift+P, or desktop shift+tab / mode button). In the desktop app they are available without any install step — open a thread, toggle plan mode in the composer, and the agent can call them.
+After install, `/reload` (or restart pi). The six tools (`plan`/`execute_plan`/`simplify`/`review`/`list_sessions`/`resume_session`) are registered — `plan` and `execute_plan` appear in the tool list once plan mode is on (`/planmode`, TUI shift+P, or desktop shift+tab / mode button). In the desktop app they are available without any install step — pick **plan** on the new-thread page's mode selector (standard/plan) to start the conversation in plan mode, or toggle plan mode in the composer of an existing thread, and the agent can call them.
 
 ## Verify
 

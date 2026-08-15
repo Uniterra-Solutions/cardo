@@ -195,6 +195,16 @@ right edge. The wrapped rules are scoped under
 `.composer__surface--wrapped` in `new-thread.css` so the thread composer's
 base `.composer__editor-row` in `main.css` stays untouched.
 
+### New-thread mode picker (Jovaltus plan vs standard)
+
+The new-thread hero (below the workspace picker, **outside** the composer)
+carries a small segmented control `.new-thread__mode` for the Jovaltus
+thread mode — `standard | plan` buttons with a status dot, active option on
+`--accent-tint-bg` with accent ink (same dot-language as the composer's
+plan-mode button in `jovaltus.css`). Default is `standard`; the selection
+resets with the rest of the new-thread surface. Choosing `plan` starts the
+conversation already in plan mode (see `docs/modules/plan-mode.md`).
+
 ## Theme Presets
 
 `theme-presets.ts` exposes 8 user-selectable presets. Presets override
