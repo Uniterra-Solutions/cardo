@@ -14,6 +14,7 @@ import {
   type TerminalPanelSnapshot,
   type TerminalSize,
 } from "../src/ipc";
+import type { TranscriptDeltaPayload } from "../src/transcript-delta";
 import type {
   NavigateSessionTreeOptions,
   NavigateSessionTreeResult,
@@ -92,6 +93,10 @@ contextBridge.exposeInMainWorld("piApp", {
       ipcRenderer.removeListener(desktopIpc.selectedTranscriptChanged, handle);
     };
   },
+  // Cardo: incremental transcript delivery. The renderer applies these ops to
+  // its local transcript instead of re-receiving the full array per push.
+  onTranscriptDelta: (listener: (payload: TranscriptDeltaPayload) => void) =>
+    subscribeIpc(desktopIpc.transcriptDelta, listener),
   onCommand: (listener: (command: PiDesktopCommand) => void) => {
     const handle = (_event: Electron.IpcRendererEvent, command: PiDesktopCommand) => {
       listener(command);

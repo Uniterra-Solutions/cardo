@@ -39,6 +39,7 @@
     "electron/stream-publish.ts",
     "src/desktop-state.ts",
     "src/timeline-turns.ts",
+    "src/transcript-delta.ts",
     "src/ipc.ts",
     "src/message-markdown.tsx"
   ]

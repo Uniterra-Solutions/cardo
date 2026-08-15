@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { TranscriptMessage } from "./desktop-state";
 import type { DisplayTimelineItem, TimelineThinking, TimelineToolGroup } from "./timeline-types";
-import { buildDisplayTimelineItems, pruneExpandState } from "./timeline-turns";
+import { buildDisplayTimelineItems, pruneExpandState, sameDisplayItemContent } from "./timeline-turns";
 import { ThreadSearchBar } from "./thread-search";
 import { TimelineItem } from "./timeline-item";
 import { SparkIcon } from "./icons";
@@ -620,14 +620,17 @@ function MeasuredTimelineItemImpl({
   );
 }
 
-// Cardo: the store streams full-transcript snapshots (~1 per
-// STREAM_PUBLISH_INTERVAL_MS from the main process); without memoization every
-// snapshot re-renders and re-parses markdown/syntax for every row, so the UI
-// falls behind the backend on long tasks (agent finishes, UI still replaying).
-// Rows are memoized by content fingerprint: the growing assistant/thinking rows
-// are the only ones that change while a task streams, so only they re-render.
-// The other props (expanded sets, callbacks) are referentially stable across
-// snapshots, so identity checks keep the comparator cheap.
+// Cardo: the main process streams transcript snapshots (~1 per
+// STREAM_PUBLISH_INTERVAL_MS) — full on session switch, incremental deltas
+// afterwards (see src/transcript-delta.ts). Without memoization every snapshot
+// re-renders and re-parses markdown/syntax for every row, so the UI falls
+// behind the backend on long tasks (agent finishes, UI still replaying).
+// Rows are memoized by content: the delta protocol keeps untouched items
+// reference-stable in the renderer, so the reference check below short-circuits
+// for every unchanged row (O(1)) and only the changed assistant/thinking/tool
+// rows fall through to a deep content comparison. The other props (expanded
+// sets, callbacks) are referentially stable across snapshots, so identity
+// checks keep the comparator cheap.
 const MeasuredTimelineItem = memo(MeasuredTimelineItemImpl, (prev, next) => {
   if (
     prev.sourceMessageIndex !== next.sourceMessageIndex ||
@@ -644,7 +647,7 @@ const MeasuredTimelineItem = memo(MeasuredTimelineItemImpl, (prev, next) => {
   ) {
     return false;
   }
-  return prev.item === next.item || JSON.stringify(prev.item) === JSON.stringify(next.item);
+  return sameDisplayItemContent(prev.item, next.item);
 });
 
 function findStartIndex(offsets: readonly number[], heights: readonly number[], targetOffset: number): number {

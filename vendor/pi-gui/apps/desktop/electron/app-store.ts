@@ -258,6 +258,32 @@ export class DesktopAppStore implements AppStoreInternals {
     return this.buildSelectedTranscriptRecord(sessionRef);
   }
 
+  /**
+   * Cardo: raw (uncloned) transcript items for the view's selected session.
+   * Unlike {@link getSelectedTranscriptForView} this returns the immutable cache
+   * array directly so the delta publisher can diff reference-identical items
+   * against the last published snapshot without cloning the whole transcript on
+   * every push. Callers must treat the array as read-only.
+   */
+  async getSelectedTranscriptItemsForView(view: DesktopAppViewState): Promise<{
+    readonly workspaceId: string;
+    readonly sessionId: string;
+    readonly items: readonly TranscriptMessage[];
+  } | null> {
+    await this.initialize();
+    const sessionRef = this.selectedSessionRefForView(view);
+    if (!sessionRef) {
+      return null;
+    }
+    await this.ensureTranscriptLoaded(sessionRef);
+    const items = this.sessionState.transcriptCache.get(sessionKey(sessionRef)) ?? [];
+    return {
+      workspaceId: sessionRef.workspaceId,
+      sessionId: sessionRef.sessionId,
+      items,
+    };
+  }
+
   projectStateForView(
     view: DesktopAppViewState,
     state: DesktopAppState = this.state,

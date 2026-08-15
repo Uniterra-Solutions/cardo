@@ -1,5 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { DesktopAppState, SelectedTranscriptRecord } from "../desktop-state";
+import { applyTranscriptDelta } from "../transcript-delta";
 
 export function useDesktopAppState() {
   const [snapshot, setSnapshot] = useState<DesktopAppState | null>(null);
@@ -42,11 +43,37 @@ export function useDesktopAppState() {
         setSelectedTranscript(payload);
       }
     });
+    // Cardo: incremental transcript delivery. The main process sends the full
+    // snapshot on session switch (onSelectedTranscriptChanged above) and only
+    // changed items afterwards. Applying ops locally keeps the object identity
+    // of untouched items, so the timeline memo comparator short-circuits on
+    // reference equality instead of JSON.stringify-ing every row per push.
+    const unsubscribeTranscriptDelta = api.onTranscriptDelta((payload) => {
+      if (!active) {
+        return;
+      }
+      receivedPushedTranscript = true;
+      setSelectedTranscript((current) => {
+        if (
+          !current ||
+          current.workspaceId !== payload.workspaceId ||
+          current.sessionId !== payload.sessionId
+        ) {
+          // Not the selected session yet; the full snapshot will arrive on switch.
+          return current;
+        }
+        return {
+          ...current,
+          transcript: applyTranscriptDelta(current.transcript, payload.ops),
+        };
+      });
+    });
 
     return () => {
       active = false;
       unsubscribeState();
       unsubscribeTranscript();
+      unsubscribeTranscriptDelta();
     };
   }, []);
 

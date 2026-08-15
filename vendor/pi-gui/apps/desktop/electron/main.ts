@@ -85,6 +85,10 @@ import type {
 import type { SessionDriverEvent } from "@pi-gui/session-driver";
 import type { GenerateThreadTitleOptions } from "@pi-gui/pi-sdk-driver";
 import type { SessionRef, WorkspaceRef } from "@pi-gui/session-driver";
+import {
+  decideTranscriptDelivery,
+  type PublishedTranscriptSnapshot,
+} from "../src/transcript-delta";
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 const windowTestMode = resolveWindowTestMode();
@@ -115,6 +119,10 @@ const appWindows = new Set<BrowserWindow>();
 const windowViews = new Map<number, WindowViewState>();
 const stopPublishingStateByWebContentsId = new Map<number, () => void>();
 const stopPublishingSelectedTranscriptByWebContentsId = new Map<number, () => void>();
+// Cardo: last full/delta snapshot sent per webContents, so the next publish can
+// diff against it (see publishSelectedTranscriptToWindow). Deleted on renderer
+// recovery so a reloaded window always starts from a full snapshot.
+const lastPublishedTranscriptByWebContentsId = new Map<number, PublishedTranscriptSnapshot>();
 const stopTrackingWindowActivationByWebContentsId = new Map<number, () => void>();
 let stopNotifications: (() => void) | undefined;
 let stopUpdateChecker: (() => void) | undefined;
@@ -470,18 +478,43 @@ async function publishSelectedTranscriptToWindow(window: BrowserWindow): Promise
     return;
   }
   const webContentsId = window.webContents.id;
-  const payload = await store.getSelectedTranscriptForView(viewForWebContents(webContentsId));
-  if (canPublishToWindow(window)) {
-    const projected = projectStateForWindow(webContentsId);
-    if (payload) {
-      if (projected.selectedWorkspaceId !== payload.workspaceId || projected.selectedSessionId !== payload.sessionId) {
-        return;
-      }
-    } else if (projected.selectedSessionId) {
+  const current = await store.getSelectedTranscriptItemsForView(viewForWebContents(webContentsId));
+  if (!canPublishToWindow(window)) {
+    return;
+  }
+  const projected = projectStateForWindow(webContentsId);
+  if (current) {
+    if (projected.selectedWorkspaceId !== current.workspaceId || projected.selectedSessionId !== current.sessionId) {
       return;
     }
-    window.webContents.send(desktopIpc.selectedTranscriptChanged, payload);
+  } else if (projected.selectedSessionId) {
+    return;
   }
+
+  // Cardo: snapshot + delta delivery. On session switch / first publish the full
+  // record flows over selectedTranscriptChanged (the existing channel); after
+  // that only changed items flow over transcriptDelta. Empty deltas are skipped
+  // entirely — no payload, no renderer work.
+  const delivery = decideTranscriptDelivery(lastPublishedTranscriptByWebContentsId.get(webContentsId), current);
+  if (delivery.kind === "full") {
+    const payload = await store.getSelectedTranscriptForView(viewForWebContents(webContentsId));
+    if (canPublishToWindow(window)) {
+      window.webContents.send(desktopIpc.selectedTranscriptChanged, payload);
+    }
+    if (current) {
+      lastPublishedTranscriptByWebContentsId.set(webContentsId, current);
+    }
+    return;
+  }
+  if (delivery.ops.length === 0) {
+    return;
+  }
+  window.webContents.send(desktopIpc.transcriptDelta, {
+    workspaceId: current!.workspaceId,
+    sessionId: current!.sessionId,
+    ops: delivery.ops,
+  });
+  lastPublishedTranscriptByWebContentsId.set(webContentsId, current!);
 }
 
 function setActiveWindow(window: BrowserWindow): void {
@@ -755,6 +788,9 @@ function attachStatePublisher(window: BrowserWindow): void {
   const startPublishing = () => {
     stopPublishingStateByWebContentsId.get(webContentsId)?.();
     stopPublishingSelectedTranscriptByWebContentsId.get(webContentsId)?.();
+    // Cardo: a (re)mounting renderer has no local transcript yet — force the
+    // next transcript delivery to be a full snapshot, not a delta.
+    lastPublishedTranscriptByWebContentsId.delete(webContentsId);
     // Cardo: coalesce per-event pushes (see electron/stream-publish.ts). The driver
     // emits one event per text delta; forwarding each full state + transcript push
     // makes the renderer fall behind the backend on long tasks. Bounded to one push

@@ -1,4 +1,46 @@
 import type { DisplayTimelineItem, TimelineToolCall, TimelineToolGroup, TranscriptMessage } from "./timeline-types";
+import { sameTranscriptItemContent } from "./transcript-delta";
+
+/**
+ * Cardo: deep content equality for rendered timeline items. The memo comparator
+ * in conversation-timeline.tsx short-circuits on reference identity (the delta
+ * protocol keeps untouched items reference-stable in the renderer) and falls
+ * back to this only for items that were actually replaced. This replaces the
+ * old JSON.stringify-per-row comparison: O(changed) instead of O(transcript)
+ * per snapshot.
+ */
+export function sameDisplayItemContent(a: DisplayTimelineItem, b: DisplayTimelineItem): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a.kind !== b.kind || a.id !== b.id) {
+    return false;
+  }
+  switch (a.kind) {
+    case "turn-marker": {
+      const other = b as Extract<DisplayTimelineItem, { kind: "turn-marker" }>;
+      return a.durationMs === other.durationMs;
+    }
+    case "tool-group": {
+      const other = b as TimelineToolGroup;
+      if (a.items.length !== other.items.length) {
+        return false;
+      }
+      for (let index = 0; index < a.items.length; index += 1) {
+        const left = a.items[index];
+        const right = other.items[index];
+        if (!left || !right || !sameTranscriptItemContent(left, right)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    default:
+      // turn-marker / tool-group handled above; remaining kinds are
+      // TranscriptMessage variants (message/thinking/tool/activity/summary).
+      return sameTranscriptItemContent(a as TranscriptMessage, b as TranscriptMessage);
+  }
+}
 
 /**
  * Cardo: keep only expand ids that still exist. Invariant: when the result

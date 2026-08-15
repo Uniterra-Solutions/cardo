@@ -22,6 +22,7 @@ import type {
   ThemePresetId,
   WorkspaceSessionTarget,
 } from "./desktop-state";
+import type { TranscriptDeltaPayload } from "./transcript-delta";
 
 export type DesktopNotificationPermissionStatus =
   | "granted"
@@ -57,6 +58,10 @@ export const desktopIpc = {
   stateChanged: "pi-gui:state-changed",
   selectedTranscriptRequest: "pi-gui:selected-transcript-request",
   selectedTranscriptChanged: "pi-gui:selected-transcript-changed",
+  // Cardo: incremental transcript delivery (snapshot + delta). The full
+  // transcript still flows over selectedTranscriptChanged on session switch /
+  // first publish; subsequent pushes carry only changed items.
+  transcriptDelta: "pi-gui:transcript-delta",
   appCommand: "pi-gui:app-command",
   workspacePicked: "pi-gui:workspace-picked",
   clipboardImagePasted: "pi-gui:clipboard-image-pasted",
@@ -279,6 +284,9 @@ export interface PiDesktopApi {
   onStateChanged(listener: PiDesktopStateListener): () => void;
   getSelectedTranscript(): Promise<SelectedTranscriptRecord | null>;
   onSelectedTranscriptChanged(listener: PiDesktopSelectedTranscriptListener): () => void;
+  // Cardo: incremental transcript delivery — the renderer applies these ops to
+  // its local transcript instead of receiving the full array on every push.
+  onTranscriptDelta(listener: (payload: TranscriptDeltaPayload) => void): () => void;
   onCommand(listener: (command: PiDesktopCommand) => void): () => void;
   onWorkspacePicked(listener: (workspaceId: string) => void): () => void;
   onClipboardImagePasted(listener: (attachment: ComposerImageAttachment) => void): () => void;
