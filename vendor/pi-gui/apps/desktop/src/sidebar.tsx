@@ -686,6 +686,8 @@ function PinnedThreadsSection({
       <div className="pinned-thread-group__head">
         <PinIcon filled />
         <span>Pinned</span>
+        {/* Cardo: pinned count (T1 relayout) */}
+        <span className="pinned-thread-group__count">{pinnedThreads.length}</span>
       </div>
       <SortableContext items={[...sortableIds]} strategy={verticalListSortingStrategy}>
         <div className="session-list session-list--pinned">

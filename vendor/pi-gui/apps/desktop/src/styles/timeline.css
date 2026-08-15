@@ -275,12 +275,14 @@
 }
 
 .timeline-item__bubble {
-  width: min(620px, 100%);
+  /* Cardo: T2 relayout — 62% cap, surface fallback (theme override kept), shadow */
+  max-width: 62%;
   min-width: 0;
   padding: 13px 17px;
   border-radius: var(--radius-3xl);
   border: 1px solid var(--theme-bubble-border, var(--line));
-  background: var(--theme-bubble-bg, var(--main));
+  background: var(--theme-bubble-bg, var(--surface));
+  box-shadow: var(--shadow-sm);
 }
 
 .timeline-item__attachments {
@@ -593,17 +595,25 @@
 }
 
 .timeline-thinking__header {
+  /* Cardo: T2 relayout — collapsed chip: mono 11px, dashed border, sharp radius */
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-strong);
   text-align: left;
-  color: inherit;
   min-width: 0;
+}
+
+.timeline-thinking__header:hover {
+  border-color: var(--accent-tint-border);
+  color: var(--accent);
 }
 
 .timeline-thinking__header:disabled {
@@ -611,12 +621,15 @@
 }
 
 .timeline-thinking__glyph {
+  /* Cardo: T2 relayout — small chip behind the 16px glyph */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
   color: var(--accent);
 }
 
@@ -629,6 +642,12 @@
   color: var(--muted-strong);
   font-size: 13px;
   line-height: 1.45;
+}
+
+/* Cardo: T2 relayout — label text inside the collapsed chip follows the chip's mono 11px */
+.timeline-thinking__header .timeline-thinking__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .timeline-thinking__body {
@@ -652,10 +671,19 @@
 /* ---- Cardo: tool batches (one request = one collapsible row) ------------ */
 
 .timeline-tool-group {
-  max-width: 100%;
+  /* Cardo: T2 relayout — card shell */
+  max-width: 680px;
   display: grid;
   gap: 6px;
   padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.timeline-tool-group--running {
+  border-color: var(--accent-tint-border);
 }
 
 .timeline-tool-group--running .timeline-tool-group__label {
@@ -673,29 +701,37 @@
 }
 
 .timeline-tool-group__header {
+  /* Cardo: T2 relayout — padded header bar with surface-muted bg */
   flex: 1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
   cursor: pointer;
-  background: none;
+  background: var(--surface-muted);
   border: none;
-  padding: 0;
+  padding: 8px 12px;
   font: inherit;
   text-align: left;
   color: inherit;
   min-width: 0;
 }
 
+.timeline-tool-group__header:hover {
+  background: var(--overlay-hover);
+}
+
 .timeline-tool-group__glyph {
+  /* Cardo: T2 relayout — 22px chip */
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
-  color: var(--muted-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text);
 }
 
 .timeline-tool-group__glyph svg {
@@ -704,14 +740,45 @@
 }
 
 .timeline-tool-group__label {
-  color: var(--muted-strong);
-  font-size: 13px;
+  /* Cardo: T2 relayout — mono 12px 600 */
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.45;
+  color: var(--text-strong);
 }
 
 .timeline-tool-group__body {
+  /* Cardo: T2 relayout — top divider */
   display: grid;
   gap: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---- Cardo: T2 relayout — per-tool rows, descendant-scoped under the group ---- */
+
+.timeline-tool-group .timeline-tool {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline-tool-group .timeline-tool:last-child {
+  border-bottom: 0;
+}
+
+.timeline-tool-group .timeline-tool__glyph {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.timeline-tool-group .timeline-tool__label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
 }
 
 /* ---- Summary divider ---------------------------------------------------- */

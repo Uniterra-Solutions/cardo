@@ -50,16 +50,18 @@
 
 /* ---- Execute panel (above the composer input) --------------------------- */
 
+/* Cardo: T4 relayout — execute panel as a strip above the input */
 .jovaltus-execute {
   display: flex;
   align-items: center;
   gap: var(--space-2-5);
   width: 100%;
-  padding: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  padding: 7px 14px;
+  margin-bottom: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  background: var(--surface-muted);
   color: var(--text);
   font-size: var(--text-sm);
   text-align: left;
@@ -129,7 +131,7 @@
 }
 
 .jovaltus-graph {
-  width: min(420px, 100vw);
+  width: min(360px, 100vw);
   height: 100%;
   background: var(--surface);
   border-left: 1px solid var(--border-default);
@@ -146,10 +148,13 @@
   border-bottom: 1px solid var(--border-default);
 }
 
+/* Cardo: T4 relayout — mono uppercase title */
 .jovaltus-graph__title {
-  font-size: var(--text-md);
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: var(--font-semibold);
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .jovaltus-graph__close {
@@ -183,7 +188,8 @@
   padding: var(--space-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--surface-2);
+  /* Cardo: T4 relayout — batch bg fix: undefined token → --surface-muted */
+  background: var(--surface-muted);
 }
 
 .jovaltus-graph__batch--active {
@@ -199,10 +205,11 @@
   margin-bottom: var(--space-2);
 }
 
+/* Cardo: T4 relayout — stacked node list */
 .jovaltus-graph__nodes {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 6px;
 }
 
 .jovaltus-graph__node {
@@ -213,7 +220,8 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
   font-weight: var(--font-medium);
 }
 
