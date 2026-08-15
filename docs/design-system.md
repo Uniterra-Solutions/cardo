@@ -79,6 +79,24 @@ object (it cannot read CSS variables).
 
 ## Surface Conventions
 
+### Sidebar (2026-08-16 relayout)
+
+The sidebar follows the approved demo ("Warm Workbench"):
+
+- **Top** — only the "New thread" button (`--radius-lg`, dashed border that
+  turns terracotta on hover).
+- **Middle** — thread list bucketed into **Today / Earlier** group labels
+  (`.thread-group__label`: 10.5px uppercase bold, `--muted-subtle`, sharp
+  0px radius) by `session.updatedAt` (display-only; sort order preserved).
+  Pinned threads (`.pinned-thread-group__head` + count) sit above, Archived
+  (`--toggle` + count) below.
+- **Bottom** — `sidebar__footer` nav: a 4-column icon+label grid
+  (Threads / Skills / Extensions / Settings), 10.5px labels, active item =
+  `--surface` bg + `--shadow-sm` + accent ink. The active thread row uses a
+  2px accent left border + surface bg + shadow (not a filled block).
+
+## Surface Conventions
+
 Global elements that repeat on every page are styled once in `base.css`, not
 per surface.
 
@@ -110,6 +128,12 @@ still thinking the window is pinned to the newest content (past text scrolls
 up and out of view); finalized thinking collapses to a "Thought for Ns" row
 that expands on click.
 
+The collapsed chip (`.timeline-thinking__header`) is **borderless** (review
+feedback, 2026-08-16): mono 11px `--muted-strong`, no dashed border, sharp
+`--radius-sm`, glyph in a small `--surface-muted` chip. The parent
+`.timeline-thinking` uses `justify-items: start` so the chip stays at content
+width instead of stretching to the full timeline row.
+
 ### Composer (input box)
 
 Chat and new-thread composers share one **single-row layout** — every control
@@ -132,10 +156,37 @@ center line as the 36px controls; multi-line input grows via the JS
 auto-height effect. Selector badges set `white-space: nowrap` so label +
 chevron never wrap to two lines when the row is narrow.
 
-The surface shell stays sharp and light: `1px solid var(--theme-control-border,
-var(--line))`, `--shadow-sm`, **no** `0 0 0 1px` focus-ring layer. All selectors
-are dropdowns (native `<select>` or badge menus) — no segmented button groups
-inside the composer (the fork modal keeps its segmented radio group).
+The surface shell is **borderless** with a soft shadow (review feedback,
+2026-08-16): `border: 0`, `box-shadow: var(--shadow-md)`, `--radius-4xl`
+(4px). There is **no** `0 0 0 1px` focus-ring layer, and the composer
+textarea suppresses the global accent `:focus-visible` ring
+(`.composer textarea { box-shadow: none }`) — the shell's shadow already
+marks the focus surface. All selectors are dropdowns (native `<select>` or
+badge menus) — no segmented button groups inside the composer (the fork
+modal keeps its segmented radio group).
+
+### Composer two-state (wrapped) behavior
+
+Both chat and new-thread composers share a **two-state layout** driven by
+`ComposerSurface` (a single `composer__surface--wrapped` class toggle, no
+per-view logic):
+
+| State                                | Layout                                                                                                                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Single line** (draft fits)         | `[+] [textarea] [model] [thinking] [send]` on one center line                                                                                                                         |
+| **Wrapped** (draft exceeds one line) | textarea takes the full first row; attach (first child) + trailing controls (model/thinking/send, `:nth-child(3)` and later) wrap to a bottom row — attach left, controls flush right |
+
+Trigger: the auto-grow effect measures `scrollHeight > 36px` **or** an
+explicit newline in the draft (Shift+Enter in chat; the new-thread composer
+maps plain Enter to submit and Shift+Enter to a newline). Clearing the draft
+returns to single line. Height grows up to 260px, then internal scroll.
+
+Important: only the **first** trailing control gets `margin-left: auto`
+(`:nth-child(3)`) — a second auto margin on the plan-mode button
+(`:nth-child(4)`) would split the free space and shift the controls off the
+right edge. The wrapped rules are scoped under
+`.composer__surface--wrapped` in `new-thread.css` so the thread composer's
+base `.composer__editor-row` in `main.css` stays untouched.
 
 ## Theme Presets
 
