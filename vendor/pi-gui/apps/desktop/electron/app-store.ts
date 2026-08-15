@@ -1951,8 +1951,16 @@ export class DesktopAppStore implements AppStoreInternals {
     }
 
     this.clearExtensionDialogTimeoutsForSession(sessionRef);
+    // Cardo: bump the UI generation first so the repopulated record carries a
+    // fresh revision; the renderer resets transient UI state (dock expansion)
+    // on a revision change. This is deterministic even though the cleared
+    // snapshot below is coalesced away during a fast reload.
+    this.sessionState.extensionUiRevisionBySession.set(key, (this.sessionState.extensionUiRevisionBySession.get(key) ?? 0) + 1);
     this.sessionState.extensionUiBySession.delete(key);
     this.state = this.syncDerivedSessionState(this.state, sessionRef);
+    // Cardo: publish the cleared extension UI immediately so the dock does not
+    // linger with stale content while the reload repopulates it.
+    this.emit();
   }
 
   private async refreshSessionCommandsForWorkspace(workspaceId: string): Promise<void> {
@@ -2237,6 +2245,7 @@ export class DesktopAppStore implements AppStoreInternals {
         case "sessionClosed":
           this.clearExtensionDialogTimeoutsForSession(event.sessionRef);
           this.sessionState.extensionUiBySession.delete(key);
+          this.sessionState.extensionUiRevisionBySession.delete(key);
           this.sessionState.sessionCommandsBySession.delete(key);
           this.sessionState.queuedComposerMessagesBySession.delete(key);
           this.sessionState.queuedComposerEditsBySession.delete(key);
@@ -2437,7 +2446,10 @@ export class DesktopAppStore implements AppStoreInternals {
 
   private serializeSessionExtensionUiState() {
     return Object.fromEntries(
-      [...this.sessionState.extensionUiBySession.entries()].map(([key, value]) => [key, serializeExtensionUiState(value)] as const),
+      [...this.sessionState.extensionUiBySession.entries()].map(([key, value]) => [
+        key,
+        serializeExtensionUiState(value, this.sessionState.extensionUiRevisionBySession.get(key) ?? 0),
+      ] as const),
     );
   }
 
@@ -2455,7 +2467,9 @@ export class DesktopAppStore implements AppStoreInternals {
       sessionExtensionUiBySession: updateRecordValue(
         state.sessionExtensionUiBySession,
         key,
-        serializedExtensionUi ? serializeExtensionUiState(serializedExtensionUi) : undefined,
+        serializedExtensionUi
+          ? serializeExtensionUiState(serializedExtensionUi, this.sessionState.extensionUiRevisionBySession.get(key) ?? 0)
+          : undefined,
       ),
       extensionCommandCompatibilityByWorkspace: serializeCompatibilityByWorkspace(this.extensionCommandCompatibilityByWorkspace),
       lastViewedAtBySession: updateRecordValue(

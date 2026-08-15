@@ -225,6 +225,11 @@ export interface SessionExtensionUiStateRecord {
   readonly pendingDialogs: readonly SessionExtensionDialogRecord[];
   readonly title?: string;
   readonly editorText?: string;
+  // Cardo: bumped whenever the extension UI for a session is torn down (clear
+  // → reload/refresh), so the renderer can reset transient UI state such as
+  // dock expansion even when the intermediate cleared snapshot is coalesced
+  // away during delivery.
+  readonly revision: number;
 }
 
 export type ExtensionCommandCompatibilityStatus = "supported" | "terminal-only";

@@ -470,6 +470,35 @@ export default function App() {
     });
   }, [snapshot?.sessionExtensionUiBySession]);
 
+  // Cardo: collapse the extension dock when the selected session's extension
+  // UI instance is rebuilt (the store bumps `revision` on every clear during
+  // /reload or extension refresh). The cleared snapshot can be coalesced away
+  // during a fast reload, so expansion keys off the revision rather than
+  // observing the empty UI state.
+  const lastExtensionUiRevisionBySessionRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (!selectedSessionKey) {
+      return;
+    }
+    const currentRevision = selectedExtensionUi?.revision ?? 0;
+    const lastRevision = lastExtensionUiRevisionBySessionRef.current[selectedSessionKey] ?? 0;
+    if (currentRevision === lastRevision) {
+      return;
+    }
+    lastExtensionUiRevisionBySessionRef.current = {
+      ...lastExtensionUiRevisionBySessionRef.current,
+      [selectedSessionKey]: currentRevision,
+    };
+    setDockExpandedBySession((current) => {
+      if (!(selectedSessionKey in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[selectedSessionKey];
+      return next;
+    });
+  }, [selectedExtensionUi, selectedSessionKey]);
+
   useEffect(() => {
     if (rootWorkspaceOptions.length === 0) {
       setSettingsWorkspaceId("");

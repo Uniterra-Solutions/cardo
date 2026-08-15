@@ -53,6 +53,10 @@ export class SessionStateMap {
   readonly activeThinkingBySession = new Map<string, ActiveThinkingRecord>();
   readonly sessionCommandsBySession = new Map<string, RuntimeCommandRecord[]>();
   readonly extensionUiBySession = new Map<string, MutableSessionExtensionUiState>();
+  // Cardo: per-session generation of the extension UI instance; bumped on
+  // clear so the renderer can detect a rebuilt dock even when the cleared
+  // snapshot never reaches it.
+  readonly extensionUiRevisionBySession = new Map<string, number>();
   readonly pendingAutoTitleBySession = new Map<string, PendingAutoTitle>();
   readonly loadedTranscriptKeys = new Set<string>();
 
@@ -96,6 +100,7 @@ export class SessionStateMap {
       this.activeThinkingBySession,
       this.sessionCommandsBySession,
       this.extensionUiBySession,
+      this.extensionUiRevisionBySession,
       this.pendingAutoTitleBySession,
     ];
     for (const map of maps) {
@@ -151,6 +156,7 @@ export class SessionStateMap {
     this.sessionErrorsBySession.delete(key);
     this.sessionCommandsBySession.delete(key);
     this.extensionUiBySession.delete(key);
+    this.extensionUiRevisionBySession.delete(key);
     this.pendingAutoTitleBySession.delete(key);
     pendingAutoTitle?.cancel();
     this.loadedTranscriptKeys.delete(key);
@@ -165,12 +171,16 @@ export function createEmptyExtensionUiState(): MutableSessionExtensionUiState {
   };
 }
 
-export function serializeExtensionUiState(state: MutableSessionExtensionUiState): SessionExtensionUiStateRecord {
+export function serializeExtensionUiState(
+  state: MutableSessionExtensionUiState,
+  revision: number,
+): SessionExtensionUiStateRecord {
   return {
     statuses: [...state.statuses.entries()].map(([key, text]) => ({ key, text })),
     widgets: [...state.widgets.values()],
     pendingDialogs: [...state.pendingDialogs],
     ...(state.title ? { title: state.title } : {}),
     ...(state.editorText ? { editorText: state.editorText } : {}),
+    revision,
   };
 }
