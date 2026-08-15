@@ -52,25 +52,33 @@ test('CHAIN closure: every edge lands in-domain', async () => {
   );
 });
 
-test('chains: plan/execute terminate at done; simplify/review oscillate and are verdict-driven', () => {
-  // Plan and execute chains are acyclic and reach 'done'.
-  for (const tool of ['plan', 'execute']) {
-    const chain = CHAIN[tool];
-    assert.ok(chain !== undefined);
-    let phase = Object.keys(chain)[0];
-    const visited = new Set<string>();
-    let reachedDone = false;
-    while (phase !== undefined && !visited.has(phase)) {
-      visited.add(phase);
-      const next = chain[phase];
-      if (next === 'done') {
-        reachedDone = true;
-        break;
-      }
-      phase = next;
+test('chains: plan parks at plan_waiting; execute terminates at done; simplify/review oscillate and are verdict-driven', () => {
+  // Plan chain parks in plan_waiting: prd → design → plan_waiting. Completion
+  // is artifact-driven (agent_settled verifies execution-plan.json), so the
+  // chain deliberately has no edge past the parking phase.
+  const planChain = CHAIN['plan'];
+  assert.ok(planChain !== undefined);
+  assert.equal(planChain['prd'], 'design');
+  assert.equal(planChain['design'], 'plan_waiting');
+  assert.equal(Object.keys(planChain).length, 2, 'no chain edge past the parking phase');
+  assert.ok(WAITING_PHASES.includes('plan_waiting'));
+
+  // Execute chain is acyclic and reaches 'done'.
+  const executeChain = CHAIN['execute'];
+  assert.ok(executeChain !== undefined);
+  let phase = Object.keys(executeChain)[0];
+  const visited = new Set<string>();
+  let reachedDone = false;
+  while (phase !== undefined && !visited.has(phase)) {
+    visited.add(phase);
+    const next = executeChain[phase];
+    if (next === 'done') {
+      reachedDone = true;
+      break;
     }
-    assert.ok(reachedDone, `${tool} chain terminates at done`);
+    phase = next;
   }
+  assert.ok(reachedDone, 'execute chain terminates at done');
   // Simplify/review chains have NO done edge: the reviewer verdict ('pass')
   // is what terminates the loop, injected by the tool layer. The chain only
   // alternates phase ↔ waiting phase.

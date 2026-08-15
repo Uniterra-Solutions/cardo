@@ -11,12 +11,15 @@
  * aborted or ended run is recorded as `interrupted`, never `failed`.
  *
  * Invariants locked here:
- *  1. plan: dispatches exactly CHAIN['plan']'s phases in order (the
- *     handler's hardcoded phase list must not drift from the chain table),
- *     ends done, and the run dir follows <cwd>/.plan/<date>/<slug>/.
- *     A mid-chain backend failure fails the pipeline with the phase named.
- *  2. execute: run dir is the plan's directory; execute → done; a missing
- *     plan path errors before any pipeline is started.
+ *  1. plan: dispatches the plan pipeline's child phases in order (prd →
+ *     design), parks in plan_waiting, and finishes once the main agent
+ *     writes a valid execution-plan.json; the run dir follows
+ *     <cwd>/.plan/<date>/<slug>/. A mid-chain backend failure fails the
+ *     pipeline with the phase named.
+ *  2. execute_plan: resolves a completed plan session, parses its
+ *     execution-plan.json, and dispatches the agents per execution_mode
+ *     (steps serial, agents within a step parallel); unknown/incomplete
+ *     plan ids error before any pipeline is started.
  *  3. review/simplify: 'pass' on round 1 → done; 'fix' parks the pipeline in
  *     the waiting phase with loop_iteration +1 and the findings surfaced;
  *     each `agent_settled` round consumes one verdict — fix keeps parking
@@ -25,7 +28,7 @@
  *  4. agent_settled is a no-op outside a running *waiting pipeline (idle,
  *     finished, non-waiting phase, non-reviewer tool).
  *  5. before_agent_start injects the pipeline status into every turn (and
- *     nothing when idle); the plan-complete summary names tasks.md.
+ *     nothing when idle); the plan-complete summary names execution-plan.json.
  *  6. MODEL-BASED property over random verdict plans: after any fix/pass
  *     sequence ending in pass, loop_iteration == fix count, user messages ==
  *     fix rounds consumed by agent_settled, and the terminal state is done +
@@ -39,7 +42,6 @@ import * as fc from 'fast-check';
 import jovaltusFactory from '../../dist/index.js';
 import { getPipeline, setPhase, startPipeline, finishPipeline } from '../../dist/state.js';
 import type { PipelineState } from '../../dist/state.js';
-import { CHAIN } from '../../dist/chain.js';
 import {
   captureApi,
   clearFakeEnv,
@@ -49,7 +51,12 @@ import {
   setAgentDir,
   useVerdictPlan,
 } from '../helpers/stub-api.mts';
-import type { CapturedTool, StubApi, ToolCallResult } from '../helpers/stub-api.mts';
+import {
+  handlerFor,
+  type CapturedTool,
+  type StubApi,
+  type ToolCallResult,
+} from '../helpers/stub-api.mts';
 
 interface FakeLogEntry {
   argv: string[];
@@ -115,54 +122,88 @@ function currentPipeline(): PipelineState {
   return p;
 }
 
+/** Run plan → write a valid execution-plan.json → settle → done; returns run dir. */
+async function completePlanSession(
+  stub: StubApi,
+  cwd: string,
+  requirements: string,
+  plan: unknown,
+): Promise<string> {
+  const result = await callTool(stub, 'plan', { user_requirements: requirements }, cwd);
+  assert.ok(!result.details['isError'], `plan succeeds: ${result.content[0]?.text}`);
+  const runDir = String(result.details['run_dir']);
+  writeFileSync(path.join(runDir, 'execution-plan.json'), JSON.stringify(plan), 'utf8');
+  const settled = handlerFor(stub, 'agent_settled');
+  assert.ok(settled !== undefined);
+  await settled({}, makeCtx(cwd).ctx);
+  assert.equal(currentPipeline().status, 'done', 'plan session completed');
+  return runDir;
+}
+
 // ---- plan -----------------------------------------------------------------
 
-test('plan: dispatches CHAIN[plan] phases in order, ends done, run dir is <cwd>/.plan/<date>/<slug>/', async (t) => {
+test('plan: runs prd → design, parks in plan_waiting, completes on a valid execution-plan.json', async (t) => {
   const { tmp, cwd, stub, logFile } = setupRun(t);
   const result = await callTool(stub, 'plan', { user_requirements: 'Fix the login flow' }, cwd);
   assert.ok(!result.details['isError'], 'plan succeeds');
   const text = result.content[0]?.text ?? '';
-  assert.ok(text.includes('plan pipeline complete: phase tasks finished'), 'completion text');
+  assert.ok(text.includes('execution-plan.json'), 'handoff names the execution plan artifact');
+  assert.ok(text.includes('FAILING property-based tests'), 'handoff directs the red-phase PBTs');
   const runDir = result.details['run_dir'];
   assert.equal(typeof runDir, 'string');
   assert.ok(String(runDir).startsWith(path.join(cwd, '.plan')), 'run dir under cwd/.plan');
-  assert.ok(/\.plan[\\/]\d{8}[\\/]fix-the-login-flow/.test(String(runDir)), 'slugified run dir');
+  assert.ok(/\.plan[\/]\d{8}[\/]fix-the-login-flow/.test(String(runDir)), 'slugified run dir');
 
-  // The backend saw exactly the chain's phases, in order, with the right marker.
+  // The backend saw exactly the plan pipeline's child phases, in order.
   const dispatched = readFakeLog(logFile).map((e) => e.phase);
-  assert.deepEqual(dispatched, Object.keys(CHAIN['plan'] ?? {}), 'dispatches CHAIN[plan] in order');
+  assert.deepEqual(dispatched, ['prd', 'design'], 'dispatches prd then design');
   for (const entry of readFakeLog(logFile)) {
     assert.equal(entry.tool, 'plan');
   }
 
-  // Terminal pipeline state.
-  const p = currentPipeline();
+  // Parked pipeline state (the main agent now writes PBTs + the JSON).
+  let p = currentPipeline();
   assert.equal(p.tool, 'plan');
-  assert.equal(p.phase, 'done');
-  assert.equal(p.status, 'done');
+  assert.equal(p.phase, 'plan_waiting');
+  assert.equal(p.status, 'running');
   assert.equal(p.verdict, null);
   assert.equal(p.loop_iteration, 0);
   assert.equal(p.error, null);
   assert.equal(p.user_requirements, 'Fix the login flow');
   assert.equal(p.run_dir, runDir);
   assert.equal(p.plan_path, null);
+
+  // The main agent writes a valid execution plan → agent_settled finishes it.
+  writeFileSync(
+    path.join(String(runDir), 'execution-plan.json'),
+    JSON.stringify({
+      execution_mode: 'batched',
+      batches: [[{ id: 'a', task_prompt: 'task a' }], [{ id: 'b', task_prompt: 'task b' }]],
+    }),
+    'utf8',
+  );
+  const settled = handlerFor(stub, 'agent_settled');
+  assert.ok(settled !== undefined);
+  const { ctx } = makeCtx(cwd);
+  await settled({}, ctx);
+  p = currentPipeline();
+  assert.equal(p.phase, 'done');
+  assert.equal(p.status, 'done');
+  assert.equal(p.error, null);
   void tmp;
 });
 
 test('plan: a mid-chain backend failure fails the pipeline at the failing phase', async (t) => {
   const { cwd, stub } = setupRun(t);
-  process.env.JOVALTUS_FAKE_FAIL_ON = 'research';
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'design';
   const result = await callTool(stub, 'plan', { user_requirements: 'Do a thing' }, cwd);
   assert.equal(result.details['isError'], true, 'plan reports failure');
   const text = result.content[0]?.text ?? '';
-  assert.ok(text.includes('phase research failed (exit 1)'), `names the failing phase: ${text}`);
+  assert.ok(text.includes('phase design failed (exit 1)'), `names the failing phase: ${text}`);
   const p = currentPipeline();
   assert.equal(p.status, 'failed');
-  assert.equal(p.phase, 'research', 'failure parks at the phase that failed');
-  assert.ok(
-    p.error !== null && p.error.includes('phase research failed'),
-    'error message persisted',
-  );
+  assert.equal(p.phase, 'design', 'failure parks at the phase that failed');
+  assert.ok(p.error !== null && p.error.includes('phase design failed'), 'error message persisted');
 });
 
 test('plan: empty user_requirements errors before any pipeline starts', async (t) => {
@@ -172,31 +213,74 @@ test('plan: empty user_requirements errors before any pipeline starts', async (t
   assert.equal(getPipeline(), null, 'no pipeline started');
 });
 
-// ---- execute ---------------------------------------------------------------
+// ---- execute_plan ----------------------------------------------------------
 
-test('execute: run dir is the plan directory, execute → done', async (t) => {
-  const { tmp, cwd, stub, logFile } = setupRun(t);
-  const planPath = path.join(tmp, 'plans', 'tasks.md');
-  mkdirSync(path.dirname(planPath), { recursive: true });
-  writeFileSync(planPath, '# Tasks\n', 'utf8');
-  const result = await callTool(stub, 'execute', { plan: planPath }, cwd);
-  assert.ok(!result.details['isError']);
+test('execute_plan: resolves the plan session, dispatches agents per mode, finishes done', async (t) => {
+  const { cwd, stub, logFile } = setupRun(t);
+  const runDir = await completePlanSession(stub, cwd, 'Execute me', {
+    execution_mode: 'batched',
+    batches: [
+      [
+        { id: 'a', task_prompt: 'task a' },
+        { id: 'b', task_prompt: 'task b' },
+      ],
+      [{ id: 'c', task_prompt: 'task c' }],
+    ],
+  });
+  const result = await callTool(stub, 'execute_plan', { plan_id: runDir }, cwd);
+  assert.ok(!result.details['isError'], `execute_plan succeeds: ${result.content[0]?.text}`);
+  assert.ok(
+    (result.content[0]?.text ?? '').includes('executed 3 agent(s) in 2 step(s), mode batched'),
+    'run summary counts agents and steps',
+  );
   const dispatched = readFakeLog(logFile).map((e) => e.phase);
-  assert.deepEqual(dispatched, ['execute']);
+  // Plan phases run first, in order; the parallel first batch dispatches both
+  // agents (order not guaranteed), and the second batch waits for the first.
+  assert.deepEqual(dispatched.slice(0, 2), ['prd', 'design'], 'plan phases first');
+  const agents = dispatched.slice(2);
+  assert.deepEqual([...agents].sort(), ['a', 'b', 'c'], 'every agent dispatched');
+  assert.equal(agents.at(-1), 'c', 'second batch runs after the first');
+  const agentLogs = readFakeLog(logFile).filter((e) => e.tool === 'execute');
+  assert.deepEqual(agentLogs.map((e) => e.phase).sort(), ['a', 'b', 'c'], 'each agent dispatched');
+  const agentA = agentLogs.find((e) => e.phase === 'a');
+  const agentC = agentLogs.find((e) => e.phase === 'c');
+  assert.ok(agentA?.prompt.includes('task a'), 'task_prompt reaches the child prompt');
+  assert.ok(agentC?.prompt.includes('task c'));
+
   const p = currentPipeline();
   assert.equal(p.tool, 'execute');
   assert.equal(p.phase, 'done');
   assert.equal(p.status, 'done');
-  assert.equal(p.run_dir, path.dirname(planPath));
-  assert.equal(p.plan_path, planPath);
+  assert.equal(p.run_dir, runDir);
+  assert.equal(p.plan_path, path.join(runDir, 'execution-plan.json'));
+  assert.equal(p.user_requirements, 'Execute me', 'inherits the plan session requirements');
 });
 
-test('execute: missing plan path errors before any pipeline starts', async (t) => {
-  const { cwd, stub } = setupRun(t);
-  const result = await callTool(stub, 'execute', { plan: '/nonexistent/tasks.md' }, cwd);
-  assert.equal(result.details['isError'], true);
-  assert.ok((result.content[0]?.text ?? '').includes('plan path does not exist'));
+test('execute_plan: unknown/non-plan/not-done plan ids error before any pipeline starts', async (t) => {
+  const { tmp, cwd, stub } = setupRun(t);
+  // Unknown plan_id.
+  const missing = await callTool(stub, 'execute_plan', { plan_id: 'ghost' }, cwd);
+  assert.equal(missing.details['isError'], true);
+  assert.ok((missing.content[0]?.text ?? '').includes('no plan session found'));
   assert.equal(getPipeline(), null);
+
+  // A plan session still parked in plan_waiting is not completed yet.
+  await callTool(stub, 'plan', { user_requirements: 'Parked plan' }, cwd);
+  const parked = currentPipeline();
+  assert.equal(parked.phase, 'plan_waiting');
+  const running = await callTool(stub, 'execute_plan', { plan_id: parked.id }, cwd);
+  assert.equal(running.details['isError'], true);
+  assert.ok((running.content[0]?.text ?? '').includes('requires a completed plan'));
+  assert.equal(currentPipeline().status, 'running', 'the parked plan pipeline is untouched');
+
+  // A review session is not a plan pipeline.
+  useVerdictPlan(tmp, ['pass']);
+  await callTool(stub, 'review', {}, cwd);
+  const reviewSession = currentPipeline();
+  assert.equal(reviewSession.status, 'done');
+  const notPlan = await callTool(stub, 'execute_plan', { plan_id: reviewSession.id }, cwd);
+  assert.equal(notPlan.details['isError'], true);
+  assert.ok((notPlan.content[0]?.text ?? '').includes('not a plan pipeline'));
 });
 
 // ---- review / simplify + the agent_settled loop ----------------------------
@@ -234,7 +318,7 @@ test('review: fix parks in review_waiting; agent_settled re-dispatches until pas
   assert.equal(stub.sentMessages.length, 0, 'tool call itself does not wake the agent');
 
   // Simulate the main agent fixing, then agent_settled re-dispatches.
-  const settled = stub.handlers.get('agent_settled');
+  const settled = handlerFor(stub, 'agent_settled');
   assert.ok(settled !== undefined, 'factory registered agent_settled');
   const { ctx, notifications } = makeCtx(cwd);
   await settled({}, ctx);
@@ -271,7 +355,7 @@ test('simplify: fix → pass loop parks in simplify_waiting and terminates', asy
   let p = currentPipeline();
   assert.equal(p.phase, 'simplify_waiting');
   assert.equal(p.loop_iteration, 1);
-  const settled = stub.handlers.get('agent_settled');
+  const settled = handlerFor(stub, 'agent_settled');
   assert.ok(settled !== undefined);
   const { ctx } = makeCtx(cwd);
   await settled({}, ctx);
@@ -296,7 +380,7 @@ test('review: missing/invalid verdict.json fails deterministically', async (t) =
 
 test('agent_settled: no-op outside a running *waiting reviewer pipeline', async (t) => {
   const { tmp, cwd, stub } = setupRun(t);
-  const settled = stub.handlers.get('agent_settled');
+  const settled = handlerFor(stub, 'agent_settled');
   assert.ok(settled !== undefined);
   const { ctx } = makeCtx(cwd);
 
@@ -324,7 +408,7 @@ test('agent_settled: no-op outside a running *waiting reviewer pipeline', async 
 
 test('before_agent_start: injects status into every turn; nothing when idle', async (t) => {
   const { cwd, stub } = setupRun(t);
-  const hook = stub.handlers.get('before_agent_start');
+  const hook = handlerFor(stub, 'before_agent_start');
   assert.ok(hook !== undefined);
   const { ctx } = makeCtx(cwd);
 
@@ -344,12 +428,14 @@ test('before_agent_start: injects status into every turn; nothing when idle', as
   assert.ok(injected.systemPrompt.includes('tool=plan phase=prd status=running'));
   assert.ok(injected.systemPrompt.includes('run_dir=/repo/.plan/20260101/feature'));
 
-  // Plan complete: the summary names tasks.md.
+  // Plan complete: the summary names execution-plan.json.
   setPhase(p, 'done');
   finishPipeline(p, true);
   const done = (await hook({ systemPrompt: 'base' }, ctx)) as { systemPrompt?: string };
   assert.ok(done.systemPrompt !== undefined);
-  assert.ok(done.systemPrompt.includes('plan complete: /repo/.plan/20260101/feature/tasks.md'));
+  assert.ok(
+    done.systemPrompt.includes('plan complete: /repo/.plan/20260101/feature/execution-plan.json'),
+  );
 });
 
 test('model-based: random verdict plans reach done with exactly the fix loop semantics', async () => {
@@ -373,7 +459,7 @@ test('model-based: random verdict plans reach done with exactly the fix loop sem
         jovaltusFactory(stub.api);
         const { ctx } = makeCtx(cwd);
         const tool = requireTool(stub, 'review');
-        const settled = stub.handlers.get('agent_settled');
+        const settled = handlerFor(stub, 'agent_settled');
         assert.ok(settled !== undefined);
 
         const round1 = (await tool.execute('id', {}, undefined, undefined, ctx)) as ToolCallResult;
@@ -424,15 +510,32 @@ test('model-based: random verdict plans reach done with exactly the fix loop sem
 
 test('factory registers the six pipeline tools', (t) => {
   const { stub } = setupRun(t);
-  for (const name of ['plan', 'execute', 'simplify', 'review', 'list_sessions', 'resume_session']) {
+  for (const name of [
+    'plan',
+    'execute_plan',
+    'simplify',
+    'review',
+    'list_sessions',
+    'resume_session',
+  ]) {
     assert.ok(stub.tools.has(name), `registers ${name}`);
   }
 });
 
 test('list_sessions: reports every past session with its status, filterable', async (t) => {
   const { tmp, cwd, stub } = setupRun(t);
-  // A done plan.
-  await callTool(stub, 'plan', { user_requirements: 'Feature one' }, cwd);
+  // A done plan: parks in plan_waiting, then finishes via a valid execution plan.
+  const plan = await callTool(stub, 'plan', { user_requirements: 'Feature one' }, cwd);
+  assert.ok(!plan.details['isError']);
+  writeFileSync(
+    path.join(String(plan.details['run_dir']), 'execution-plan.json'),
+    JSON.stringify({ execution_mode: 'serial', batches: [[{ id: 'a', task_prompt: 'x' }]] }),
+    'utf8',
+  );
+  const settled = handlerFor(stub, 'agent_settled');
+  assert.ok(settled !== undefined);
+  await settled({}, makeCtx(cwd).ctx);
+
   // A parked (running) review.
   useVerdictPlan(tmp, ['fix']);
   await callTool(stub, 'review', {}, cwd);
@@ -470,7 +573,7 @@ test('session_shutdown: a parked running pipeline becomes interrupted, not faile
   const parked = currentPipeline();
   assert.equal(parked.status, 'running');
 
-  const shutdown = stub.handlers.get('session_shutdown');
+  const shutdown = handlerFor(stub, 'session_shutdown');
   assert.ok(shutdown !== undefined, 'factory registered session_shutdown');
   const { ctx } = makeCtx(cwd);
   await shutdown({}, ctx);
@@ -491,7 +594,7 @@ test('resume_session: an interrupted review_waiting session falls back to the re
   assert.equal(parked.phase, 'review_waiting');
 
   // The session ends (e.g. app close) while parked → interrupted.
-  const shutdown = stub.handlers.get('session_shutdown');
+  const shutdown = handlerFor(stub, 'session_shutdown');
   assert.ok(shutdown !== undefined);
   const { ctx } = makeCtx(cwd);
   await shutdown({}, ctx);
@@ -515,12 +618,12 @@ test('resume_session: an interrupted review_waiting session falls back to the re
 
 test('resume_session: a failed plan session resumes from the interrupted phase with a resume note', async (t) => {
   const { cwd, stub, logFile } = setupRun(t);
-  process.env.JOVALTUS_FAKE_FAIL_ON = 'research';
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'design';
   const failed = await callTool(stub, 'plan', { user_requirements: 'Build resume' }, cwd);
   assert.equal(failed.details['isError'], true);
   const p = currentPipeline();
   assert.equal(p.status, 'failed');
-  assert.equal(p.phase, 'research');
+  assert.equal(p.phase, 'design');
 
   // Resume dispatches only the remaining plan phases — not prd again — and
   // the resumed phase carries the resume note (artifact-aware continuation).
@@ -528,27 +631,45 @@ test('resume_session: a failed plan session resumes from the interrupted phase w
   const result = await callTool(stub, 'resume_session', { session_id: p.id }, cwd);
   assert.ok(!result.details['isError'], `resume succeeds: ${result.content[0]?.text}`);
   const dispatched = readFakeLog(logFile).map((e) => e.phase);
-  assert.deepEqual(dispatched, ['prd', 'research', 'research', 'acceptance', 'tasks']);
-  const resumedResearch = readFakeLog(logFile).find(
-    (e) => e.phase === 'research' && e.prompt.includes('Resumed run'),
+  assert.deepEqual(dispatched, ['prd', 'design', 'design']);
+  const resumedDesign = readFakeLog(logFile).find(
+    (e) => e.phase === 'design' && e.prompt.includes('Resumed run'),
   );
-  assert.ok(resumedResearch !== undefined, 'the resumed phase prompt carries the resume note');
+  assert.ok(resumedDesign !== undefined, 'the resumed phase prompt carries the resume note');
 
+  // The resumed run parks in plan_waiting; a valid execution plan finishes it.
+  const parked = currentPipeline();
+  assert.equal(parked.status, 'running');
+  assert.equal(parked.phase, 'plan_waiting');
+  writeFileSync(
+    path.join(parked.run_dir, 'execution-plan.json'),
+    JSON.stringify({
+      execution_mode: 'serial',
+      batches: [[{ id: 'a', task_prompt: 'x' }]],
+    }),
+    'utf8',
+  );
+  const settled = handlerFor(stub, 'agent_settled');
+  assert.ok(settled !== undefined);
+  const { ctx } = makeCtx(cwd);
+  await settled({}, ctx);
   const done = currentPipeline();
   assert.equal(done.status, 'done');
   assert.equal(done.phase, 'done');
 });
 
-test('resume_session: a failed execute session resumes and finishes', async (t) => {
-  const { tmp, cwd, stub } = setupRun(t);
-  const planPath = path.join(tmp, 'plans', 'tasks.md');
-  mkdirSync(path.dirname(planPath), { recursive: true });
-  writeFileSync(planPath, '# Tasks\n', 'utf8');
-  process.env.JOVALTUS_FAKE_FAIL_ON = 'execute';
-  const failed = await callTool(stub, 'execute', { plan: planPath }, cwd);
+test('resume_session: a failed execute_plan session resumes and finishes', async (t) => {
+  const { cwd, stub } = setupRun(t);
+  const runDir = await completePlanSession(stub, cwd, 'Resume me', {
+    execution_mode: 'serial',
+    batches: [[{ id: 'a', task_prompt: 'x' }]],
+  });
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'a';
+  const failed = await callTool(stub, 'execute_plan', { plan_id: runDir }, cwd);
   assert.equal(failed.details['isError'], true);
   const p = currentPipeline();
   assert.equal(p.status, 'failed');
+  assert.equal(p.phase, 'execute');
 
   delete process.env.JOVALTUS_FAKE_FAIL_ON;
   const result = await callTool(stub, 'resume_session', { session_id: p.id }, cwd);
@@ -576,7 +697,7 @@ test('resume_session: accepts a run directory and errors on missing/running/done
   assert.ok((running.content[0]?.text ?? '').includes('already running'));
 
   // Done: finish the loop, then resume errors.
-  const settled = stub.handlers.get('agent_settled');
+  const settled = handlerFor(stub, 'agent_settled');
   assert.ok(settled !== undefined);
   const { ctx } = makeCtx(cwd);
   await settled({}, ctx);
@@ -586,7 +707,7 @@ test('resume_session: accepts a run directory and errors on missing/running/done
   assert.ok((doneResume.content[0]?.text ?? '').includes('already completed'));
 
   // A run directory works as the session handle too.
-  process.env.JOVALTUS_FAKE_FAIL_ON = 'acceptance';
+  process.env.JOVALTUS_FAKE_FAIL_ON = 'design';
   const failed = await callTool(stub, 'plan', { user_requirements: 'Dir handle' }, cwd);
   assert.equal(failed.details['isError'], true);
   const failedSession = currentPipeline();

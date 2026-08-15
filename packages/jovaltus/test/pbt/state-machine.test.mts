@@ -430,7 +430,7 @@ test('migration: a legacy jovaltus.json pipeline becomes a session row', () => {
   const legacyPipeline = {
     run_dir: '/repo/.plan/20260101/old',
     tool: 'plan',
-    phase: 'research',
+    phase: 'design',
     user_requirements: 'Old run',
     plan_path: null,
     loop_iteration: 0,
@@ -451,7 +451,7 @@ test('migration: a legacy jovaltus.json pipeline becomes a session row', () => {
     const p = getPipeline();
     assert.ok(p !== null);
     assert.equal(p.status, 'interrupted', 'a running legacy pipeline migrates as interrupted');
-    assert.equal(p.phase, 'research');
+    assert.equal(p.phase, 'design');
     assert.equal(p.run_dir, '/repo/.plan/20260101/old');
     assert.equal(p.tool, 'plan');
     assert.ok(p.ended_at !== null);

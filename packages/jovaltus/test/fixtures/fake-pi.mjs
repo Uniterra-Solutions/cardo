@@ -70,7 +70,9 @@ function readPrompt(file) {
 }
 
 function markerInfo(prompt) {
-  const match = /\[jovaltus-pipeline:([a-z_]+):([a-z_]+)\]/.exec(prompt);
+  // tool: letters/underscore; phase: the plan agent id charset (may contain
+  // digits and hyphens, e.g. execute_plan agents like "db-schema")
+  const match = /\[jovaltus-pipeline:([a-z_]+):([a-z0-9_-]+)\]/.exec(prompt);
   if (!match) {
     return { tool: null, phase: null };
   }

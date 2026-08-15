@@ -96,36 +96,105 @@ export interface CapturedNotification {
   level: 'error' | 'info' | 'warning';
 }
 
+export interface CapturedStatus {
+  key: string;
+  text: string | undefined;
+}
+
+export interface CapturedWidget {
+  key: string;
+  lines: readonly string[] | undefined;
+  options: Record<string, unknown> | undefined;
+}
+
+export type StubHandler = (event: unknown, ctx: ExtensionContext) => unknown;
+
 /** Capture surface returned by `captureApi` (the `api` field is the stub). */
 export interface StubApi {
   api: ExtensionAPI;
   tools: Map<string, CapturedTool>;
-  handlers: Map<string, (event: unknown, ctx: ExtensionContext) => unknown>;
+  /** Event handlers, in registration order (pi supports multiple per event). */
+  handlers: Map<string, StubHandler[]>;
+  commands: Map<string, unknown>;
+  shortcuts: string[];
+  flags: Map<string, { type: string; default: unknown }>;
+  flagValues: Map<string, unknown>;
+  activeTools: string[];
+  entries: Array<{ type: string; customType: string; data: unknown }>;
   sentMessages: string[];
+}
+
+/** Last-registered handler for an event (the usual single-handler case). */
+export function handlerFor(stub: StubApi, event: string): StubHandler | undefined {
+  const list = stub.handlers.get(event);
+  return list?.[list.length - 1];
 }
 
 /** Build an ExtensionAPI stub that records registrations and messages. */
 export function captureApi(): StubApi {
   const tools = new Map<string, CapturedTool>();
-  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
+  const handlers = new Map<string, StubHandler[]>();
+  const commands = new Map<string, unknown>();
+  const shortcuts: string[] = [];
+  const flags = new Map<string, { type: string; default: unknown }>();
+  const flagValues = new Map<string, unknown>();
+  const activeTools: string[] = ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'];
+  const entries: Array<{ type: string; customType: string; data: unknown }> = [];
   const sentMessages: string[] = [];
   const api = {
     registerTool: (tool: CapturedTool): void => {
       tools.set(tool.name, tool);
     },
     on: (event: string, handler: unknown): void => {
-      handlers.set(event, handler as (event: unknown, ctx: ExtensionContext) => unknown);
+      const list = handlers.get(event) ?? [];
+      list.push(handler as StubHandler);
+      handlers.set(event, list);
     },
     sendUserMessage: (content: string | unknown[]): void => {
       sentMessages.push(typeof content === 'string' ? content : JSON.stringify(content));
     },
+    registerCommand: (name: string, definition: unknown): void => {
+      commands.set(name, definition);
+    },
+    registerShortcut: (shortcut: string): void => {
+      shortcuts.push(shortcut);
+    },
+    registerFlag: (name: string, definition: { type: string; default: unknown }): void => {
+      flags.set(name, definition);
+      flagValues.set(name, definition.default);
+    },
+    getFlag: (name: string): unknown => flagValues.get(name),
+    setFlag: (name: string, value: unknown): void => {
+      flagValues.set(name, value);
+    },
+    getActiveTools: (): string[] => [...activeTools],
+    setActiveTools: (names: string[]): void => {
+      activeTools.length = 0;
+      activeTools.push(...names);
+    },
+    appendEntry: (type: string, data: unknown): void => {
+      entries.push({ type: 'custom', customType: type, data });
+    },
   } as unknown as ExtensionAPI;
-  return { api, tools, handlers, sentMessages };
+  return {
+    api,
+    tools,
+    handlers,
+    commands,
+    shortcuts,
+    flags,
+    flagValues,
+    activeTools,
+    entries,
+    sentMessages,
+  };
 }
 
 export interface StubCtx {
   ctx: ExtensionContext;
   notifications: CapturedNotification[];
+  statuses: CapturedStatus[];
+  widgets: CapturedWidget[];
 }
 
 export interface MakeCtxOptions {
@@ -134,21 +203,35 @@ export interface MakeCtxOptions {
   /** thinking level; null → undefined; omitted → 'high' */
   thinking?: string | null;
   signal?: AbortSignal;
+  /** session entries returned by ctx.sessionManager.getEntries() */
+  sessionEntries?: unknown[];
 }
 
 /** Build an ExtensionContext backed by `cwd`, capturing ui.notify calls. */
 export function makeCtx(cwd: string, opts: MakeCtxOptions = {}): StubCtx {
   const notifications: CapturedNotification[] = [];
+  const statuses: CapturedStatus[] = [];
+  const widgets: CapturedWidget[] = [];
   const ctx = {
     ui: {
       notify: (title: string, level: 'error' | 'info' | 'warning'): void => {
         notifications.push({ title, level });
       },
+      setStatus: (key: string, text: string | undefined): void => {
+        statuses.push({ key, text });
+      },
+      setWidget: (
+        key: string,
+        lines: readonly string[] | undefined,
+        options?: Record<string, unknown>,
+      ): void => {
+        widgets.push({ key, lines, options });
+      },
     },
     mode: 'json',
     hasUI: false,
     cwd,
-    sessionManager: {},
+    sessionManager: { getEntries: (): unknown[] => opts.sessionEntries ?? [] },
     modelRegistry: {},
     model: opts.model === null ? undefined : (opts.model ?? { provider: 'test', id: 'model-1' }),
     scopedModels: [],
@@ -164,7 +247,7 @@ export function makeCtx(cwd: string, opts: MakeCtxOptions = {}): StubCtx {
     compact: (): void => {},
     getSystemPrompt: (): string => '',
   } as unknown as ExtensionContext;
-  return { ctx, notifications };
+  return { ctx, notifications, statuses, widgets };
 }
 
 /** Create a fresh temp dir for one test (agent dir / cwd / artifacts). */
