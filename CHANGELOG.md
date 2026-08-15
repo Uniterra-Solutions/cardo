@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-15
+
+### Added
+
+- Jovaltus plan mode — `plan`/`execute_plan` are now gated tools of a per-session mode (toggle with `/planmode`, shift+P in the TUI — the TUI keeps shift+tab for `app.thinking.cycle` — or shift+tab / the mode button in the desktop composer). Mode state persists via `pi.appendEntry` and is restored on session start (also via the new `--plan-mode` flag); while off, a direct call is blocked by a `tool_call` gate with an actionable reason
+- New plan pipeline: `plan` runs prd → design inside the tool call (asking the user to clarify requirements first when the host has a UI), then parks in `plan_waiting` with a handoff instructing the main agent to write failing PBTs (business logic as invariants — the implementation spec) and `execution-plan.json`; `agent_settled` validates the JSON and marks the plan done
+- `execute_plan <plan_id>` replaces `execute`: resolves a completed plan session (id or run dir) and dispatches its subagents — batches serial, agents within a batch parallel — each child getting the role prompt with its task_prompt and the auto-injected PRD/design context. It is plan-mode-exclusive and does not chain into simplify/review; the result carries `execution_mode`, `steps` and the generated mermaid
+- Desktop plan-mode UI (vendored pi-gui, `// Cardo:` marked): mode button + shift+tab in the composer, an execute panel above the input (spinner → green light → 3s auto-fade; click opens a right-side graph popup with batch groups, per-agent states and active-batch highlight) rendered natively from the structured `jovaltus-execute` widget protocol — the graph is derived from the same JSON the plan was parsed from, never from mermaid or free text
+- Execution-plan model + pure derivations (`parseExecutionPlan`, `deriveExecutionSteps`, `planToMermaid`, the progress machine) with property-based coverage in `plan-*.test.mts` (total parser, mermaid output contract + hostile-prompt escaping, strict batch-gated progress, widget protocol incl. no-`|` collisions, integrated `execute_plan` streaming)
+
+### Changed
+
+- Docs: `AGENTS.md` and `docs/` document the plan-mode pipeline, `execute_plan`, the mode layer and the desktop UI; new `docs/modules/plan.md` + `docs/modules/plan-mode.md`
+
 ## [0.3.3] — 2026-08-15
 
 ### Added
