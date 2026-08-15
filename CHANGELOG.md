@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-08-15
+
+### Fixed
+
+- Desktop transcript delivery no longer republishes the full transcript per driver event (the renderer fell irrecoverably behind on long tasks — agent finishes while the UI still replays). Snapshot + delta delivery: the main process ships a full snapshot on session switch/first publish, then only changed items over the new `pi-gui:transcript-delta` channel; the renderer applies ops locally keeping object identity of untouched rows so the timeline memo comparator short-circuits (sameDisplayItemContent replaces the per-row JSON.stringify). Covered by integrated PBT invariants (convergence under arbitrary coalescing, no-loss/no-dup content, id/kind stability, per-delta liveness, delivery decisions)
+
 ## [0.4.0] — 2026-08-15
 
 ### Added
