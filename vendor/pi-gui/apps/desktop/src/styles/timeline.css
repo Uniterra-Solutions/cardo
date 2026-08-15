@@ -592,6 +592,9 @@
   max-width: 100%;
   display: grid;
   gap: 6px;
+  /* Cardo: keep the collapsed chip at content width — grid stretches its
+   * single child to the row width otherwise (demo: align-self start). */
+  justify-items: start;
 }
 
 .timeline-thinking__header {

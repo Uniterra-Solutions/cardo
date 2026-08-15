@@ -453,6 +453,23 @@ function WorkspaceGroupContent(
   const archivedSectionOpen = wsMenu.expandedArchivedByWorkspace[rootWorkspace.id] ?? false;
   const isCollapsed = wsMenu.collapsedWorkspaces[rootWorkspace.id] ?? false;
 
+  // Cardo: time-bucket the regular threads into Today / Earlier (demo sidebar
+  // group labels). Bucketing is display-only — the sort order above is kept.
+  const now = Date.now();
+  const isToday = (iso: string | undefined): boolean => {
+    if (!iso) return false;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return false;
+    const today = new Date(now);
+    return (
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()
+    );
+  };
+  const todayThreads = threads.filter((thread) => isToday(thread.session.updatedAt));
+  const earlierThreads = threads.filter((thread) => !isToday(thread.session.updatedAt));
+
   return (
     <>
       <div className={`workspace-row ${workspaceActive ? "workspace-row--active" : ""}`}>
@@ -579,32 +596,68 @@ function WorkspaceGroupContent(
       ) : null}
       {!isCollapsed ? (
         <>
-          <div className="session-list">
-            {threads.map((thread) => {
-              const active = thread.workspaceId === selectedWorkspace?.id && thread.session.id === selectedSession?.id;
-              return (
-                <ThreadSessionRow
-                  key={`${thread.workspaceId}:${thread.session.id}`}
-                  active={active}
-                  thread={thread}
-                  threadMenu={threadMenu}
-                  onAction={() =>
-                    onArchiveSession({
-                      workspaceId: thread.workspaceId,
-                      sessionId: thread.session.id,
-                    })
-                  }
-                  onSelect={() => onSelectSession({ workspaceId: thread.workspaceId, sessionId: thread.session.id })}
-                  onTogglePinned={() =>
-                    onSetSessionPinned(
-                      { workspaceId: thread.workspaceId, sessionId: thread.session.id },
-                      !thread.session.pinnedAt,
-                    )
-                  }
-                />
-              );
-            })}
-          </div>
+          {todayThreads.length > 0 ? (
+            <>
+              <div className="thread-group__label">Today</div>
+              <div className="session-list">
+                {todayThreads.map((thread) => {
+                  const active = thread.workspaceId === selectedWorkspace?.id && thread.session.id === selectedSession?.id;
+                  return (
+                    <ThreadSessionRow
+                      key={`${thread.workspaceId}:${thread.session.id}`}
+                      active={active}
+                      thread={thread}
+                      threadMenu={threadMenu}
+                      onAction={() =>
+                        onArchiveSession({
+                          workspaceId: thread.workspaceId,
+                          sessionId: thread.session.id,
+                        })
+                      }
+                      onSelect={() => onSelectSession({ workspaceId: thread.workspaceId, sessionId: thread.session.id })}
+                      onTogglePinned={() =>
+                        onSetSessionPinned(
+                          { workspaceId: thread.workspaceId, sessionId: thread.session.id },
+                          !thread.session.pinnedAt,
+                        )
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+          {earlierThreads.length > 0 ? (
+            <>
+              <div className="thread-group__label">Earlier</div>
+              <div className="session-list">
+                {earlierThreads.map((thread) => {
+                  const active = thread.workspaceId === selectedWorkspace?.id && thread.session.id === selectedSession?.id;
+                  return (
+                    <ThreadSessionRow
+                      key={`${thread.workspaceId}:${thread.session.id}`}
+                      active={active}
+                      thread={thread}
+                      threadMenu={threadMenu}
+                      onAction={() =>
+                        onArchiveSession({
+                          workspaceId: thread.workspaceId,
+                          sessionId: thread.session.id,
+                        })
+                      }
+                      onSelect={() => onSelectSession({ workspaceId: thread.workspaceId, sessionId: thread.session.id })}
+                      onTogglePinned={() =>
+                        onSetSessionPinned(
+                          { workspaceId: thread.workspaceId, sessionId: thread.session.id },
+                          !thread.session.pinnedAt,
+                        )
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
           {archivedThreads.length > 0 ? (
             <div className="archived-thread-group">
               <button

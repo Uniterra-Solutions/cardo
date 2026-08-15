@@ -196,6 +196,38 @@ test("pinned sidebar threads can be reordered and repinned threads return to the
   }
 });
 
+test("sidebar renders Today / Earlier time-bucket labels with demo styling", async () => {
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("time-bucket-test");
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+  try {
+    const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
+    await createNamedThread(window, "Fresh thread");
+    await window.waitForTimeout(800);
+
+    // A newly created thread is "today" -> Today label appears with the row
+    // under it; Earlier is absent while everything is from today.
+    const labels = await window.locator(".thread-group__label").allTextContents();
+    expect(labels).toContain("Today");
+
+    const labelStyle = await window.locator(".thread-group__label").first().evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { size: cs.fontSize, weight: cs.fontWeight, transform: cs.textTransform, radius: cs.borderRadius };
+    });
+    console.log("GROUP-LABEL-STYLE: " + JSON.stringify(labelStyle));
+    // Demo label contract: small uppercase bold, sharp (no pill).
+    expect(labelStyle.size).toBe("10.5px");
+    expect(labelStyle.transform).toBe("uppercase");
+    expect(labelStyle.radius).toBe("0px");
+  } finally {
+    await harness.close();
+  }
+});
+
 async function pinThread(window: Page, title: string): Promise<void> {
   const row = window.locator(".session-row", { hasText: title });
   await row.hover();
