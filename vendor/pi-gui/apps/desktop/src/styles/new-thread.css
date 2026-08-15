@@ -164,6 +164,13 @@
 
 .composer__surface--wrapped .composer__editor-row > :nth-child(n + 3) {
   order: 3;
+}
+
+/* Cardo: only the FIRST trailing control (attach is :first-child, textarea is
+ * :nth-child(2)) pushes the bottom row right — a second auto margin on the
+ * plan-mode button (:nth-child(4)) would split the free space and shift the
+ * controls off the right edge. */
+.composer__surface--wrapped .composer__editor-row > :nth-child(3) {
   margin-left: auto;
 }
 
