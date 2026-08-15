@@ -14,7 +14,7 @@ import { formatRelativeTime } from "./string-utils";
 import { ComposerPanel } from "./composer-panel";
 import { DiffPanel } from "./diff-panel";
 import type { DiffPanelFileRequest } from "./diff-panel-types";
-import { buildModelOptions } from "./composer-commands";
+import { buildModelOptions, resolveRuntimeSlashCommand } from "./composer-commands";
 import {
   desktopCommands,
   getDesktopCommandFromShortcut,
@@ -26,6 +26,10 @@ import type { SettingsSection } from "./settings-view";
 import { SecondarySurfaces } from "./app/secondary-surfaces";
 import { NewThreadView } from "./new-thread-view";
 import { buildThreadGroups } from "./thread-groups";
+import {
+  JovaltusGraphPopup,
+  parseJovaltusExecuteWidget,
+} from "./jovaltus-ui";
 import { Sidebar } from "./sidebar";
 import { SidebarToggleButton } from "./sidebar-toggle-button";
 import { Topbar } from "./topbar";
@@ -220,6 +224,29 @@ export default function App() {
     setTakeoverTerminalSessionKey("");
   }, [selectedSessionKey]);
   const selectedExtensionDock = useMemo(() => buildExtensionDockModel(selectedExtensionUi), [selectedExtensionUi]);
+  // Cardo: Jovaltus plan-mode data (mode status + execute panel widget).
+  // The mode button + shift+tab are wired only while the extension is loaded
+  // (its live status exists), so shift+tab stays native otherwise.
+  const jovaltusModeStatus = selectedExtensionUi?.statuses.find((status) => status.key === "jovaltus-mode");
+  const jovaltusAvailable = jovaltusModeStatus !== undefined;
+  const jovaltusMode = jovaltusModeStatus?.text === "plan mode";
+  const jovaltusExecuteWidget = selectedExtensionUi?.widgets.find((widget) => widget.key === "jovaltus-execute");
+  const jovaltusExecute = useMemo(
+    () => (jovaltusExecuteWidget ? parseJovaltusExecuteWidget(jovaltusExecuteWidget.lines) : undefined),
+    [jovaltusExecuteWidget],
+  );
+  const [jovaltusGraphOpen, setJovaltusGraphOpen] = useState(false);
+  // Toggle plan mode by running the extension's /planmode command; guarded so
+  // an unknown command is never sent as a stray user message.
+  const handleToggleJovaltusMode = useCallback(() => {
+    if (!selectedSession || !api) {
+      return;
+    }
+    if (resolveRuntimeSlashCommand("/planmode", selectedRuntime, selectedSessionCommands) === undefined) {
+      return;
+    }
+    void api.submitComposer("/planmode");
+  }, [api, selectedSession, selectedRuntime, selectedSessionCommands]);
   const displayedSessionTitle = selectedExtensionUi?.title ?? selectedSession?.title ?? "";
   const activeExtensionDialog = selectedExtensionUi?.pendingDialogs[0];
   const isSelectedExtensionDockExpanded = dockExpandedBySession[selectedSessionKey] ?? false;
@@ -415,6 +442,7 @@ export default function App() {
     handleSlashKeyDown: slashMenu.handleSlashKeyDown,
     newThreadComposerRef: newThread.composerRef,
     appendNewThreadAttachment: newThread.appendAttachment,
+    onToggleJovaltusMode: jovaltusAvailable ? handleToggleJovaltusMode : undefined,
   });
 
   useEffect(() => {
@@ -984,9 +1012,16 @@ export default function App() {
               extensionDock={selectedExtensionDock}
               extensionDockExpanded={isSelectedExtensionDockExpanded}
               onToggleExtensionDock={handleToggleExtensionDock}
+              jovaltusMode={jovaltusMode}
+              onToggleJovaltusMode={jovaltusAvailable ? handleToggleJovaltusMode : undefined}
+              jovaltusExecute={jovaltusExecute}
+              onOpenJovaltusGraph={() => setJovaltusGraphOpen(true)}
             />
             {activeExtensionDialog ? (
               <ExtensionDialog dialog={activeExtensionDialog} onRespond={handleRespondToExtensionDialog} />
+            ) : null}
+            {jovaltusGraphOpen && jovaltusExecute ? (
+              <JovaltusGraphPopup model={jovaltusExecute} onClose={() => setJovaltusGraphOpen(false)} />
             ) : null}
             {treeModalState.open ? (
               <TreeModal

@@ -10,6 +10,11 @@ import type {
 import { hasFilesInDataTransfer } from "./composer-attachments";
 import { ExtensionDock, type ExtensionDockModel } from "./extension-session-ui";
 import { ExtensionIcon, FileIcon, ModelIcon, ReasoningIcon, SettingsIcon, SkillIcon, SparkIcon, StatusIcon } from "./icons";
+import {
+  JovaltusExecutePanel,
+  JovaltusModeButton,
+  type JovaltusExecuteModel,
+} from "./jovaltus-ui";
 import { QueuedComposerMessages } from "./queued-composer-messages";
 
 type ExtensionMentionOption = Extract<MentionOption, { kind: "extension" }>;
@@ -58,6 +63,11 @@ interface ComposerSurfaceProps {
   readonly onToggleExtensionDock?: () => void;
   readonly leadingControls: ReactNode;
   readonly trailingControls: ReactNode;
+  // Cardo: Jovaltus plan-mode UI (mode toggle + execute panel above the input).
+  readonly jovaltusMode?: boolean;
+  readonly onToggleJovaltusMode?: () => void;
+  readonly jovaltusExecute?: JovaltusExecuteModel;
+  readonly onOpenJovaltusGraph?: () => void;
 }
 
 export function ComposerSurface({
@@ -103,6 +113,10 @@ export function ComposerSurface({
   onToggleExtensionDock,
   leadingControls,
   trailingControls,
+  jovaltusMode = false,
+  onToggleJovaltusMode,
+  jovaltusExecute,
+  onOpenJovaltusGraph,
 }: ComposerSurfaceProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const dragDepthRef = useRef(0);
@@ -222,6 +236,9 @@ export function ComposerSurface({
       {extensionDock && onToggleExtensionDock ? (
         <ExtensionDock dock={extensionDock} expanded={extensionDockExpanded} onToggle={onToggleExtensionDock} />
       ) : null}
+      {jovaltusExecute && onOpenJovaltusGraph ? (
+        <JovaltusExecutePanel model={jovaltusExecute} onOpenGraph={onOpenJovaltusGraph} />
+      ) : null}
       {lastError ? (
         <div className="composer__error error-banner" data-testid="composer-error-banner">
           {lastError}
@@ -334,6 +351,9 @@ export function ComposerSurface({
             placeholder={textareaPlaceholder}
           />
           {trailingControls}
+          {onToggleJovaltusMode ? (
+            <JovaltusModeButton planModeOn={jovaltusMode} onToggle={onToggleJovaltusMode} />
+          ) : null}
         </div>
       </div>
     </div>

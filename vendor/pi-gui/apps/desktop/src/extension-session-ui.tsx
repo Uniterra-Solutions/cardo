@@ -7,6 +7,9 @@ import type { SessionExtensionDialogRecord, SessionExtensionUiStateRecord } from
 const ANSI_ESCAPE_PATTERN = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 const DOCK_SEGMENT_SEPARATOR = "--------------------";
 const GENERIC_ACTIVE_LABEL = "Extension UI active";
+// Cardo: the jovaltus execute panel is rendered by the custom panel above
+// the composer, so it must not double-render inside the generic dock.
+const CUSTOM_RENDERED_WIDGET_KEYS = new Set(["jovaltus-execute"]);
 
 interface ExtensionDockBlock {
   readonly key: string;
@@ -23,7 +26,8 @@ export function hasExtensionDockContent(uiState?: SessionExtensionUiStateRecord)
     return false;
   }
 
-  return uiState.statuses.length > 0 || uiState.widgets.length > 0;
+  const genericWidgets = uiState.widgets.filter((widget) => !CUSTOM_RENDERED_WIDGET_KEYS.has(widget.key));
+  return uiState.statuses.length > 0 || genericWidgets.length > 0;
 }
 
 export function buildExtensionDockModel(uiState?: SessionExtensionUiStateRecord): ExtensionDockModel | undefined {
@@ -37,8 +41,9 @@ export function buildExtensionDockModel(uiState?: SessionExtensionUiStateRecord)
       text: sanitizeDockText(status.text),
     }))
     .filter((status) => status.text.trim().length > 0);
-  const primaryBlocks = buildWidgetBlocks(uiState?.widgets ?? [], "aboveComposer");
-  const secondaryBlocks = buildWidgetBlocks(uiState?.widgets ?? [], "belowComposer");
+  const genericWidgets = (uiState?.widgets ?? []).filter((widget) => !CUSTOM_RENDERED_WIDGET_KEYS.has(widget.key));
+  const primaryBlocks = buildWidgetBlocks(genericWidgets, "aboveComposer");
+  const secondaryBlocks = buildWidgetBlocks(genericWidgets, "belowComposer");
   const summaryText = resolveDockSummaryText(statuses, primaryBlocks, secondaryBlocks);
 
   return {

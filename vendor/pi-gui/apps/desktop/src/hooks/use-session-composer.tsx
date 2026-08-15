@@ -37,6 +37,8 @@ interface UseSessionComposerParams {
   readonly handleSlashKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean;
   readonly newThreadComposerRef: MutableRefObject<HTMLTextAreaElement | null>;
   readonly appendNewThreadAttachment: (attachment: ComposerImageAttachment) => void;
+  // Cardo: Jovaltus plan-mode toggle (shift+tab in the composer).
+  readonly onToggleJovaltusMode?: () => void;
 }
 
 export function useSessionComposer(params: UseSessionComposerParams) {
@@ -55,6 +57,7 @@ export function useSessionComposer(params: UseSessionComposerParams) {
     handleSlashKeyDown,
     newThreadComposerRef,
     appendNewThreadAttachment,
+    onToggleJovaltusMode,
   } = params;
 
   const [attachmentsClearedOnSubmit, setAttachmentsClearedOnSubmit] = useState(false);
@@ -234,6 +237,16 @@ export function useSessionComposer(params: UseSessionComposerParams) {
 
     if (handleSlashKeyDown(event)) {
       return;
+    }
+
+    // Cardo: shift+tab toggles Jovaltus plan mode (only when the extension is
+    // loaded — the availability check lives in the toggle callback).
+    if (event.key === "Tab" && event.shiftKey && !event.nativeEvent.isComposing) {
+      if (onToggleJovaltusMode) {
+        event.preventDefault();
+        onToggleJovaltusMode();
+        return;
+      }
     }
 
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && selectedSession?.status === "running") {
