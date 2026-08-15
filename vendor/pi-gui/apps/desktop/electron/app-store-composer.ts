@@ -374,7 +374,12 @@ export async function submitComposerToSession(
       });
     }
 
-    await sendMessageToSession(store, sessionRef, text, attachments);
+    await sendMessageToSession(store, sessionRef, text, attachments, {
+      // Cardo: runtime slash commands (e.g. /planmode) are executed by the
+      // extension host without landing in the session transcript, so no
+      // optimistic user message may be painted in the timeline.
+      suppressOptimisticMessage: resolvedRuntimeSlashCommand !== undefined,
+    });
     const runtimeCommandOutcome = resolvedRuntimeSlashCommand
       ? store.finishRuntimeCommandExecution(sessionRef)
       : undefined;
@@ -467,22 +472,29 @@ export async function sendMessageToSession(
   attachments: readonly ComposerAttachment[],
   options: {
     readonly rollbackOptimisticMessageOnError?: boolean;
+    // Cardo: suppress the optimistic timeline row when the text is a runtime
+    // slash command — those execute in the extension host without a transcript
+    // message, so an optimistic row would linger as a phantom "sent" message.
+    readonly suppressOptimisticMessage?: boolean;
   } = {},
 ): Promise<void> {
   const key = sessionKey(sessionRef);
   const rollbackOptimisticMessageOnError = options.rollbackOptimisticMessageOnError ?? true;
+  const suppressOptimisticMessage = options.suppressOptimisticMessage ?? false;
   if (!store.sessionState.loadedTranscriptKeys.has(key)) {
     await store.ensureSessionReady(sessionRef);
   }
   if (store.sessionFromState(sessionRef)?.archivedAt) {
     await store.driver.unarchiveSession(sessionRef);
   }
-  const optimisticMessageId = appendUserMessage(
-    store.sessionState.transcriptCache,
-    sessionRef,
-    text,
-    toTranscriptAttachments(attachments),
-  );
+  const optimisticMessageId = suppressOptimisticMessage
+    ? undefined
+    : appendUserMessage(
+        store.sessionState.transcriptCache,
+        sessionRef,
+        text,
+        toTranscriptAttachments(attachments),
+      );
   store.publishSelectedTranscriptFor(sessionRef);
   clearActiveAssistantMessage(store.sessionState.activeAssistantMessageBySession, sessionRef);
   store.sessionState.sessionErrorsBySession.delete(key);
@@ -495,7 +507,7 @@ export async function sendMessageToSession(
       attachments: toSessionAttachments(attachments),
     });
   } catch (error) {
-    if (rollbackOptimisticMessageOnError) {
+    if (rollbackOptimisticMessageOnError && optimisticMessageId !== undefined) {
       const transcript = store.sessionState.transcriptCache.get(key) ?? [];
       store.sessionState.transcriptCache.set(
         key,

@@ -10,6 +10,10 @@ const GENERIC_ACTIVE_LABEL = "Extension UI active";
 // Cardo: the jovaltus execute panel is rendered by the custom panel above
 // the composer, so it must not double-render inside the generic dock.
 const CUSTOM_RENDERED_WIDGET_KEYS = new Set(["jovaltus-execute"]);
+// Cardo: the jovaltus plan-mode statuses (mode state + execute progress) are
+// rendered by the custom mode button and execute panel, so they must not
+// double-render inside the generic dock bar above the composer either.
+const CUSTOM_RENDERED_STATUS_KEYS = new Set(["jovaltus-mode", "jovaltus-execute"]);
 
 interface ExtensionDockBlock {
   readonly key: string;
@@ -26,8 +30,9 @@ export function hasExtensionDockContent(uiState?: SessionExtensionUiStateRecord)
     return false;
   }
 
+  const genericStatuses = uiState.statuses.filter((status) => !CUSTOM_RENDERED_STATUS_KEYS.has(status.key));
   const genericWidgets = uiState.widgets.filter((widget) => !CUSTOM_RENDERED_WIDGET_KEYS.has(widget.key));
-  return uiState.statuses.length > 0 || genericWidgets.length > 0;
+  return genericStatuses.length > 0 || genericWidgets.length > 0;
 }
 
 export function buildExtensionDockModel(uiState?: SessionExtensionUiStateRecord): ExtensionDockModel | undefined {
@@ -36,6 +41,7 @@ export function buildExtensionDockModel(uiState?: SessionExtensionUiStateRecord)
   }
 
   const statuses = (uiState?.statuses ?? [])
+    .filter((status) => !CUSTOM_RENDERED_STATUS_KEYS.has(status.key))
     .map((status) => ({
       key: status.key,
       text: sanitizeDockText(status.text),
