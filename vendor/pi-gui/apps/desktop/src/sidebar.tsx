@@ -218,41 +218,6 @@ export function Sidebar(props: SidebarProps) {
           <PlusIcon />
           <span>New thread</span>
         </button>
-
-        <div className="sidebar__nav">
-          <button
-            className={`sidebar__nav-item ${activeView === "threads" ? "sidebar__nav-item--active" : ""}`}
-            type="button"
-            onClick={() => onSetActiveView("threads")}
-          >
-            <FolderIcon />
-            <span>Threads</span>
-          </button>
-          <button
-            className="sidebar__nav-item"
-            type="button"
-            onClick={() => onOpenSkills(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
-          >
-            <SkillIcon />
-            <span>Skills</span>
-          </button>
-          <button
-            className="sidebar__nav-item"
-            type="button"
-            onClick={() => onOpenExtensions(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
-          >
-            <ExtensionIcon />
-            <span>Extensions</span>
-          </button>
-          <button
-            className="sidebar__nav-item"
-            type="button"
-            onClick={() => onOpenSettings(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
-          >
-            <SettingsIcon />
-            <span>Settings</span>
-          </button>
-        </div>
       </div>
 
       <div className="sidebar__section">
@@ -371,6 +336,45 @@ export function Sidebar(props: SidebarProps) {
             </DragOverlay>
           </DndContext>
         )}
+      </div>
+
+      {/* Cardo: bottom nav — demo sidebar places Skills/Extensions/Settings
+       * (plus the Threads view) at the bottom of the sidebar. */}
+      <div className="sidebar__footer">
+        <div className="sidebar__nav">
+          <button
+            className={`sidebar__nav-item ${activeView === "threads" ? "sidebar__nav-item--active" : ""}`}
+            type="button"
+            onClick={() => onSetActiveView("threads")}
+          >
+            <FolderIcon />
+            <span>Threads</span>
+          </button>
+          <button
+            className="sidebar__nav-item"
+            type="button"
+            onClick={() => onOpenSkills(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
+          >
+            <SkillIcon />
+            <span>Skills</span>
+          </button>
+          <button
+            className="sidebar__nav-item"
+            type="button"
+            onClick={() => onOpenExtensions(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
+          >
+            <ExtensionIcon />
+            <span>Extensions</span>
+          </button>
+          <button
+            className="sidebar__nav-item"
+            type="button"
+            onClick={() => onOpenSettings(selectedWorkspace?.rootWorkspaceId ?? selectedWorkspace?.id)}
+          >
+            <SettingsIcon />
+            <span>Settings</span>
+          </button>
+        </div>
       </div>
     </aside>
   );

@@ -49,7 +49,8 @@
 }
 
 .sidebar__top {
-  padding-top: 52px;
+  /* Cardo: nav moved to footer — only the New thread button remains. */
+  padding-top: 12px;
 }
 
 .sidebar__nav {
@@ -839,6 +840,31 @@
 .sidebar__footer {
   border-top: 1px solid var(--line);
   background: var(--surface-overlay-muted);
+  /* Cardo: bottom nav — demo style, horizontal icon+label grid. */
+  padding: 8px;
+}
+
+.sidebar__footer .sidebar__nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0;
+}
+
+.sidebar__footer .sidebar__nav-item {
+  flex-direction: column;
+  gap: 3px;
+  min-height: 44px;
+  padding: 6px 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.sidebar__footer .sidebar__nav-item svg {
+  width: 15px;
+  height: 15px;
 }
 
 .sidebar__settings {
