@@ -33,9 +33,8 @@ const PLUGIN_NAME = 'jovaltus';
 
 export const PHASES: readonly string[] = [
   'prd',
-  'research',
-  'acceptance',
-  'tasks',
+  'design',
+  'plan_waiting',
   'execute',
   'simplify',
   'simplify_waiting',
@@ -575,8 +574,11 @@ export function resumeSession(idOrRunDir: string): PipelineState {
 /** Single-line pipeline status, e.g. for before_agent_start injection. */
 export function statusText(p: PipelineState): string {
   const base = `[Jovaltus pipeline] id=${p.id} tool=${p.tool} phase=${p.phase} status=${p.status} run_dir=${p.run_dir}`;
+  if (p.tool === 'plan' && p.phase === 'plan_waiting' && p.status === 'running') {
+    return `${base} — waiting for the main agent to write ${p.run_dir}/execution-plan.json`;
+  }
   if (p.tool === 'plan' && p.phase === 'done' && p.status === 'done') {
-    return `${base} — plan complete: ${p.run_dir}/tasks.md`;
+    return `${base} — plan complete: ${p.run_dir}/execution-plan.json`;
   }
   return base;
 }

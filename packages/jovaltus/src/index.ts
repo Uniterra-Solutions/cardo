@@ -27,12 +27,27 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { mkdirSync, statSync } from 'node:fs';
+import { mkdirSync, statSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { Type } from 'typebox';
 import { CHAIN, WAITING_PHASES, readFindings, readVerdict, waitingPhase } from './chain.js';
 import { runPhase } from './dispatch.js';
-import { buildContext, renderPrompt } from './prompts.js';
+import {
+  buildExecuteWidgetLines,
+  JOVALTUS_EXECUTE_STATUS_KEY,
+  JOVALTUS_EXECUTE_WIDGET_KEY,
+  planExecuteWidgetAgentDone,
+  planExecuteWidgetAgentStart,
+  planExecuteWidgetDone,
+  planExecuteWidgetInitial,
+  registerPlanMode,
+} from './plan-mode.js';
+import { CLARIFY_FILENAME, EXECUTION_PLAN_FILENAME, readExecutionPlan } from './plan-json.js';
+import { planToMermaid } from './plan-mermaid.js';
+import { createProgress, markDone, startRunning } from './plan-progress.js';
+import { deriveExecutionSteps } from './plan-steps.js';
+import type { ExecutionPlan, PlanAgent } from './plan.js';
+import { buildContext, renderAgentPrompt, renderPrompt } from './prompts.js';
 import * as jstate from './state.js';
 import type { PipelineState } from './state.js';
 
@@ -106,6 +121,8 @@ interface PhaseDispatchContext {
   onUpdate?: (text: string) => void;
   /** Optional resume instructions appended to the phase prompt. */
   resumeNote?: string;
+  /** Extension UI surface, present in interactive hosts; used to stream the execute panel. */
+  ui?: ExtensionContext['ui'];
 }
 
 /** Run one pipeline phase in a child pi process and return its result. */
@@ -159,6 +176,7 @@ function dispatchCtx(ctx: ExtensionContext): PhaseDispatchContext {
     model: modelPattern(ctx),
     thinkingLevel: ctx.thinkingLevel ?? null,
     signal: ctx.signal,
+    ui: ctx.ui,
   };
 }
 
@@ -186,14 +204,6 @@ function startedResult(p: PipelineState, phase: string, output: string): ToolRes
 
 // Phase chains ---------------------------------------------------------------
 
-const PLAN_PHASES: readonly string[] = ['prd', 'research', 'acceptance', 'tasks'];
-
-/** The plan phases that still need to run for a pipeline at `p.phase`. */
-function remainingPlanPhases(p: PipelineState): readonly string[] {
-  const startIndex = PLAN_PHASES.indexOf(p.phase);
-  return startIndex === -1 ? PLAN_PHASES : PLAN_PHASES.slice(startIndex);
-}
-
 /**
  * Fail a dispatched phase. An aborted tool call (user interrupt) is NOT an
  * error: the pipeline is marked `interrupted` so it can be resumed later.
@@ -208,32 +218,237 @@ function failPipeline(p: PipelineState, ctx: PhaseDispatchContext, message: stri
   return errorResult(message);
 }
 
-/** Run the plan chain from the pipeline's current phase to completion. */
-async function runPlanChain(p: PipelineState, ctx: PhaseDispatchContext): Promise<ToolResult> {
-  for (const phase of remainingPlanPhases(p)) {
-    const result = await dispatchPhase(p, phase, ctx);
-    if (!result.ok) {
-      return failPipeline(p, ctx, result.message);
-    }
-    const next = CHAIN['plan']?.[phase];
-    if (next === undefined) {
-      return failPipeline(p, ctx, `no next phase for plan/${phase}`);
-    }
-    jstate.setPhase(p, next);
+/**
+ * Human-in-loop requirement clarification, once per run (right after the
+ * PRD). Asks the user via a synchronous dialog; their answer is stored as
+ * `clarify.md` and becomes part of the context injected into later phases.
+ * Skipped when headless, when the dialog is unavailable, or when already
+ * answered (a resumed run).
+ */
+async function clarifyRequirements(p: PipelineState, ctx: ExtensionContext): Promise<void> {
+  if (!ctx.hasUI || typeof ctx.ui.input !== 'function') {
+    return;
   }
-  jstate.finishPipeline(p, true);
-  return startedResult(p, 'tasks', '');
+  const clarifyFile = path.join(p.run_dir, CLARIFY_FILENAME);
+  if (fileExists(clarifyFile)) {
+    return;
+  }
+  try {
+    const answer = await ctx.ui.input(
+      'Jovaltus 需求釐清',
+      `PRD 已完成：${p.run_dir}/prd.md。如有補充或調整請輸入；直接按 Enter 表示需求已清晰。`,
+    );
+    if (answer !== undefined && answer.trim()) {
+      writeFileSync(clarifyFile, answer.trim(), 'utf8');
+    }
+  } catch {
+    // Dialog dismissed or unavailable — treat as "requirements are clear".
+  }
 }
 
-/** Run the execute phase to completion. */
-async function runExecutePhase(p: PipelineState, ctx: PhaseDispatchContext): Promise<ToolResult> {
-  const result = await dispatchPhase(p, 'execute', ctx);
-  if (!result.ok) {
-    return failPipeline(p, ctx, result.message);
+/** The execution plan schema example shown in the handoff instructions. */
+const EXECUTION_PLAN_EXAMPLE = {
+  execution_mode: 'batched',
+  batches: [
+    [
+      { id: 'db-schema', task_prompt: '设计 DB schema，完成後更新 PBT' },
+      { id: 'stripe-client', task_prompt: '封装 Stripe client' },
+    ],
+    [{ id: 'webhook-handler', task_prompt: '实现 webhook 处理' }],
+  ],
+};
+
+/**
+ * Hand off to the main agent: write the FAILING property-based tests (the
+ * red phase) and the execution plan JSON. Completion is artifact-driven —
+ * the `agent_settled` hook finishes the pipeline once execution-plan.json
+ * parses.
+ */
+function planHandoffResult(p: PipelineState): ToolResult {
+  return textResult(
+    `[Jovaltus] Plan pipeline ready for the main agent (phase: plan_waiting).\n\n` +
+      `Artifacts already written:\n` +
+      `- PRD: ${p.run_dir}/prd.md\n` +
+      `- Design doc: ${p.run_dir}/design.md\n\n` +
+      `Do the following two things now:\n` +
+      `1. Write the FAILING property-based tests that encode the business logic ` +
+      `as invariants (red phase — they must fail against the current code). ` +
+      `Test location follows project conventions (e.g. <repo>/test/pbt/).\n` +
+      `2. Write the execution plan JSON to ${p.run_dir}/${EXECUTION_PLAN_FILENAME}:\n\n` +
+      `${JSON.stringify(EXECUTION_PLAN_EXAMPLE, null, 2)}\n\n` +
+      `Schema rules:\n` +
+      `- execution_mode: "serial" = N batches × 1 agent (a linear chain); ` +
+      `"batched" = batches run serially, agents within a batch in parallel; ` +
+      `"parallel" = one batch holding every agent.\n` +
+      `- ids must match /^[A-Za-z0-9_-]+$/ and be globally unique; task_prompt non-empty.\n` +
+      `- The PRD + design doc are auto-injected into every dispatched agent's ` +
+      `context, so each task_prompt must be a self-contained instruction.\n` +
+      `The pipeline finishes automatically once execution-plan.json is valid.`,
+    { run_dir: p.run_dir },
+  );
+}
+
+/**
+ * Run the plan pipeline (plan mode): PRD subagent → requirement
+ * clarification (human-in-loop) → design subagent → park in `plan_waiting`
+ * with the PBT + execution-JSON handoff. Resume-aware: a phase that is
+ * already past (or the parked phase itself) is not re-run.
+ */
+async function runPlanPipeline(
+  p: PipelineState,
+  ctx: ExtensionContext,
+  dctx: PhaseDispatchContext,
+): Promise<ToolResult> {
+  if (p.phase === 'prd') {
+    const result = await dispatchPhase(p, 'prd', dctx);
+    if (!result.ok) {
+      return failPipeline(p, dctx, result.message);
+    }
+    jstate.setPhase(p, 'design');
   }
+  if (p.phase === 'design') {
+    await clarifyRequirements(p, ctx);
+    const result = await dispatchPhase(p, 'design', dctx);
+    if (!result.ok) {
+      return failPipeline(p, dctx, result.message);
+    }
+    jstate.setPhase(p, 'plan_waiting');
+  }
+  return planHandoffResult(p);
+}
+
+/**
+ * Dispatch ONE execute-plan subagent: the child gets the role prompt
+ * (execute-agent.md) with the PRD + design doc auto-injected, and the
+ * agent's task_prompt as the task.
+ */
+async function dispatchAgent(
+  p: PipelineState,
+  agent: PlanAgent,
+  ctx: PhaseDispatchContext,
+): Promise<{ ok: boolean; message: string; output: string }> {
+  const prompt = renderAgentPrompt(p, agent.id, agent.task_prompt, ctx.cwd);
+  const context = buildContext(p, ctx.cwd);
+  const task = `${context}\n\nTask: ${agent.task_prompt}`;
+  try {
+    const result = await runPhase({
+      cwd: ctx.cwd,
+      prompt,
+      task,
+      model: ctx.model,
+      thinkingLevel: ctx.thinkingLevel,
+      signal: ctx.signal,
+      onText: ctx.onUpdate,
+    });
+    if (result.exitCode !== 0) {
+      return {
+        ok: false,
+        message: `agent ${agent.id} failed (exit ${String(result.exitCode)}): ${result.error || result.output || 'no output'}`,
+        output: result.output,
+      };
+    }
+    return { ok: true, message: '', output: result.output };
+  } catch (err) {
+    return { ok: false, message: `agent ${agent.id} dispatch error: ${String(err)}`, output: '' };
+  }
+}
+
+/** Push the execute panel state to the host (no-op in headless contexts). */
+function pushExecuteWidget(ctx: PhaseDispatchContext, lines: string[]): void {
+  if (ctx.ui === undefined) {
+    return;
+  }
+  ctx.ui.setWidget(JOVALTUS_EXECUTE_WIDGET_KEY, lines);
+  ctx.ui.setStatus(JOVALTUS_EXECUTE_STATUS_KEY, 'executing plan');
+}
+
+/** Clear the execute panel (used on dispatch failure). */
+function clearExecuteWidget(ctx: PhaseDispatchContext): void {
+  if (ctx.ui === undefined) {
+    return;
+  }
+  ctx.ui.setWidget(JOVALTUS_EXECUTE_WIDGET_KEY, undefined);
+  ctx.ui.setStatus(JOVALTUS_EXECUTE_STATUS_KEY, undefined);
+}
+
+/**
+ * Execute a parsed plan: batch-major steps (serial between batches, agents
+ * within a batch dispatched in parallel), gated by the progress machine.
+ */
+async function runPlanExecution(
+  p: PipelineState,
+  plan: ExecutionPlan,
+  ctx: PhaseDispatchContext,
+): Promise<ToolResult> {
+  const agentsById = new Map(plan.batches.flat().map((a) => [a.id, a]));
+  const steps = deriveExecutionSteps(plan);
+  let progress = createProgress(plan);
+  const summaries: string[] = [];
+  // Live execute-panel state streamed to the desktop host.
+  let widget = planExecuteWidgetInitial(plan);
+  pushExecuteWidget(ctx, buildExecuteWidgetLines(widget));
+  for (const [stepIndex, step] of steps.entries()) {
+    progress = startRunning(progress, step);
+    for (const id of step) {
+      widget = planExecuteWidgetAgentStart(widget, id);
+    }
+    pushExecuteWidget(ctx, buildExecuteWidgetLines(widget));
+    const dispatched = await Promise.all(
+      step.map(async (id) => {
+        const agent = agentsById.get(id);
+        if (agent === undefined) {
+          return { ok: false, message: `agent ${id} missing from the plan`, output: '' };
+        }
+        return await dispatchAgent(p, agent, ctx);
+      }),
+    );
+    for (const [i, result] of dispatched.entries()) {
+      if (!result.ok) {
+        clearExecuteWidget(ctx);
+        return failPipeline(p, ctx, result.message);
+      }
+      const id = step[i];
+      if (id !== undefined) {
+        progress = markDone(progress, id);
+        widget = planExecuteWidgetAgentDone(widget, id, stepIndex);
+        const firstLine = result.output.trim().split('\n')[0] ?? '';
+        summaries.push(`- ${id}: ${firstLine}`);
+      }
+    }
+    pushExecuteWidget(ctx, buildExecuteWidgetLines(widget));
+  }
+  widget = planExecuteWidgetDone(widget);
+  pushExecuteWidget(ctx, buildExecuteWidgetLines(widget));
   jstate.setPhase(p, 'done');
   jstate.finishPipeline(p, true);
-  return startedResult(p, 'execute', result.output);
+  const summary = `executed ${String(summaries.length)} agent(s) in ${String(steps.length)} step(s), mode ${plan.execution_mode}:\n${summaries.join('\n')}`;
+  const result = startedResult(p, 'execute', summary);
+  return { ...result, details: { ...result.details, plan: executionSummaryDetails(plan) } };
+}
+
+/** Resolve a plan session and parse its execution plan for dispatch. */
+function resolveExecutionPlan(planId: string): { p: PipelineState; plan: ExecutionPlan } | null {
+  const session = jstate.getSession(planId);
+  if (session === null || session.tool !== 'plan' || session.status !== 'done') {
+    return null;
+  }
+  const plan = readExecutionPlan(session.run_dir);
+  if (plan === null) {
+    return null;
+  }
+  return { p: session, plan };
+}
+
+/**
+ * The mermaid graph + agent count shown in the execute_plan result, so the
+ * run report doubles as the frontend's execution graph source.
+ */
+function executionSummaryDetails(plan: ExecutionPlan): Record<string, unknown> {
+  return {
+    execution_mode: plan.execution_mode,
+    steps: deriveExecutionSteps(plan),
+    mermaid: planToMermaid(plan),
+  };
 }
 
 /**
@@ -295,24 +510,41 @@ async function planHandler(
     return errorResult(`cannot create run directory: ${String(err)}`);
   }
   const p = jstate.startPipeline('plan', runDir, requirements, null);
-  return await runPlanChain(p, dispatchCtx(ctx));
+  return await runPlanPipeline(p, ctx, dispatchCtx(ctx));
 }
 
-async function executeHandler(
-  params: { plan: string },
+async function executePlanHandler(
+  params: { plan_id: string },
   ctx: ExtensionContext,
 ): Promise<ToolResult> {
-  const planPath = optionalPlan(params);
-  if (planPath === null) {
-    return errorResult('execute requires a plan path');
+  const planId = params.plan_id.trim();
+  if (!planId) {
+    return errorResult('execute_plan requires a plan_id');
   }
-  if (!fileExists(planPath)) {
-    return errorResult(`plan path does not exist: ${planPath}`);
+  const resolved = resolveExecutionPlan(planId);
+  if (resolved === null) {
+    const session = jstate.getSession(planId);
+    if (session === null) {
+      return errorResult(`no plan session found: ${planId}`);
+    }
+    if (session.tool !== 'plan') {
+      return errorResult(`session ${session.id} is not a plan pipeline (tool=${session.tool})`);
+    }
+    if (session.status !== 'done') {
+      return errorResult(
+        `plan session ${session.id} is ${session.status} — execute_plan requires a completed plan`,
+      );
+    }
+    return errorResult(`execution-plan.json missing or invalid in ${session.run_dir}`);
   }
-  const resolved = path.resolve(planPath);
-  const runDir = path.dirname(resolved);
-  const p = jstate.startPipeline('execute', runDir, '', resolved);
-  return await runExecutePhase(p, dispatchCtx(ctx));
+  const { p, plan } = resolved;
+  const execution = jstate.startPipeline(
+    'execute',
+    p.run_dir,
+    p.user_requirements,
+    path.join(p.run_dir, EXECUTION_PLAN_FILENAME),
+  );
+  return await runPlanExecution(execution, plan, dispatchCtx(ctx));
 }
 
 async function reviewToolHandler(
@@ -363,7 +595,7 @@ function buildResumeNote(p: PipelineState): string {
     'progress instead of restarting from scratch:\n' +
     '- Inspect the artifacts already written in the run directory and the working tree ' +
     '(git status / git diff) before acting.\n' +
-    '- Reuse completed artifacts (prd.md, research.md, acceptance.md, tasks.md, ...) as-is when valid.\n' +
+    '- Reuse completed artifacts (prd.md, design.md, execution-plan.json, ...) as-is when valid.\n' +
     '- For the execute phase, infer which tasks are already done from the working tree ' +
     'and implement only what remains.\n' +
     '- If this is a reviewer round, re-run your verdict against the current diff.'
@@ -395,9 +627,15 @@ async function resumeHandler(
   }
   let result: ToolResult;
   if (p.tool === 'plan') {
-    result = await runPlanChain(p, dctx);
+    result = await runPlanPipeline(p, ctx, dctx);
   } else if (p.tool === 'execute') {
-    result = await runExecutePhase(p, dctx);
+    const plan = readExecutionPlan(p.run_dir);
+    if (plan === null) {
+      return errorResult(
+        `cannot resume session ${p.id}: execution-plan.json missing or invalid in ${p.run_dir}`,
+      );
+    }
+    result = await runPlanExecution(p, plan, dctx);
   } else if (p.tool === 'simplify' || p.tool === 'review') {
     result = await runReviewRound(p, p.tool, dctx);
   } else {
@@ -450,14 +688,19 @@ function formatSessionList(sessions: PipelineState[]): string {
 // Extension factory -----------------------------------------------------------
 
 export default function (pi: ExtensionAPI): void {
+  // Plan mode: /planmode command, shift+P (TUI) + shift+tab/mode button
+  // (desktop), tool gating for plan / execute_plan, mode persistence.
+  registerPlanMode(pi);
+
   pi.registerTool({
     name: 'plan',
     label: 'Plan',
     description:
-      'Draw up a thorough software-engineering implementation plan. ' +
-      'Runs the Jovaltus planning pipeline in sequence (PRD → research → ' +
-      'acceptance → task DAG), each phase as an isolated subagent, and ' +
-      'writes the artifacts into <cwd>/.plan/<date>/<name>/. Requires user_requirements.',
+      'Draw up a software-engineering implementation plan (plan mode). ' +
+      'Runs the Jovaltus plan pipeline: PRD subagent → requirement ' +
+      'clarification (human-in-loop) → design subagent → the main agent ' +
+      'writes failing property-based tests and the execution plan JSON. ' +
+      'Artifacts land in <cwd>/.plan/<date>/<name>/. Requires user_requirements.',
     promptSnippet: 'Plan a feature or refactor via the Jovaltus pipeline',
     promptGuidelines: [
       'Use plan when the user hands over a complex software-engineering request that needs planning (cross-module refactor, new feature, greenfield project).',
@@ -473,22 +716,26 @@ export default function (pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
-    name: 'execute',
-    label: 'Execute',
+    name: 'execute_plan',
+    label: 'Execute Plan',
     description:
-      'Implement a user-approved plan. Runs the Jovaltus execute phase as ' +
-      "an isolated subagent that drives the plan's task DAG level by level, " +
-      'leaving the changes uncommitted in the working tree for simplify/review. ' +
-      'Requires a plan path.',
+      'Execute a plan-mode plan by dispatching its subagents. Takes a plan_id ' +
+      '(a completed plan session id or its run directory); resolves the ' +
+      'session, parses <run_dir>/execution-plan.json, and dispatches the ' +
+      'agents per execution_mode (serial / batched / parallel), auto-injecting ' +
+      'the PRD + design doc into every agent. Changes stay uncommitted for ' +
+      'simplify/review. Plan mode only.',
     promptSnippet: 'Execute a user-approved plan via the Jovaltus pipeline',
-    promptGuidelines: ['Use execute only after the user has explicitly approved a specific plan.'],
+    promptGuidelines: [
+      'Use execute_plan only after the user has explicitly approved a specific plan.',
+    ],
     parameters: Type.Object({
-      plan: Type.String({ description: 'Path to the plan manifest (tasks.md)' }),
+      plan_id: Type.String({ description: 'Plan session id or run directory' }),
     }),
     async execute(_id, params, signal, onUpdate, ctx) {
       void signal;
       void onUpdate;
-      return await executeHandler(params, ctx);
+      return await executePlanHandler(params, ctx);
     },
   });
 
@@ -619,6 +866,27 @@ export default function (pi: ExtensionAPI): void {
   pi.on('agent_settled', async (_event, ctx) => {
     const p = jstate.getPipeline();
     if (p === null || p.status !== 'running') {
+      return;
+    }
+    // Plan waiting: artifact-driven completion — the main agent finishes
+    // writing execution-plan.json; advance to done once it parses. A
+    // malformed artifact is nudged back; a missing one means the main agent
+    // is still writing it (the handoff text already said what to do).
+    if (p.tool === 'plan' && p.phase === 'plan_waiting') {
+      if (readExecutionPlan(p.run_dir) !== null) {
+        jstate.setPhase(p, 'done');
+        jstate.finishPipeline(p, true);
+        ctx.ui.notify('Jovaltus plan complete', 'info');
+        return;
+      }
+      if (fileExists(path.join(p.run_dir, EXECUTION_PLAN_FILENAME))) {
+        pi.sendUserMessage(
+          `[Jovaltus] execution-plan.json in ${p.run_dir} does not parse. ` +
+            `Fix it to match the schema ` +
+            `({ execution_mode: serial|batched|parallel, batches: [[{id, task_prompt}]] }) ` +
+            `and the plan pipeline will finish automatically.`,
+        );
+      }
       return;
     }
     if (!WAITING_PHASES.includes(p.phase)) {

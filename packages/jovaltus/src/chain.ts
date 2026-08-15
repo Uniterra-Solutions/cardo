@@ -19,18 +19,24 @@ import type { PipelineState } from './state.js';
  */
 export const CHAIN: Record<string, Record<string, string>> = {
   plan: {
-    prd: 'research',
-    research: 'acceptance',
-    acceptance: 'tasks',
-    tasks: 'done',
+    prd: 'design',
+    design: 'plan_waiting',
   },
   execute: { execute: 'done' },
   simplify: { simplify: 'simplify_waiting', simplify_waiting: 'simplify' },
   review: { review: 'review_waiting', review_waiting: 'review' },
 };
 
-/** Phases where the reviewer found defects and the MAIN agent fixes them. */
-export const WAITING_PHASES: readonly string[] = ['simplify_waiting', 'review_waiting'];
+/**
+ * Phases where the pipeline waits for OUT-OF-BAND work: the main agent
+ * writes the execution plan JSON (plan_waiting — advanced by `agent_settled`
+ * once the artifact parses), or applies reviewer fixes (simplify/review).
+ */
+export const WAITING_PHASES: readonly string[] = [
+  'plan_waiting',
+  'simplify_waiting',
+  'review_waiting',
+];
 
 /** The parking phase for a reviewer's "fix" verdict (no subagent runs). */
 export function waitingPhase(tool: string): string {

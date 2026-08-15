@@ -10,14 +10,13 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPlanContext } from './plan-json.js';
 import type { PipelineState } from './state.js';
 
 export const PROMPT_NAMES: readonly string[] = [
   'prd',
-  'research',
-  'acceptance',
-  'tasks',
-  'execute',
+  'design',
+  'execute-agent',
   'simplify-review',
   'review',
 ] as const;
@@ -35,10 +34,8 @@ export function loadPrompt(name: string): string {
 /** Prompt name per pipeline phase. */
 const PHASE_PROMPTS: Record<string, string> = {
   prd: 'prd',
-  research: 'research',
-  acceptance: 'acceptance',
-  tasks: 'tasks',
-  execute: 'execute',
+  design: 'design',
+  execute: 'execute-agent',
   simplify: 'simplify-review',
   review: 'review',
 };
@@ -105,4 +102,24 @@ export function buildContext(p: PipelineState, cwd: string): string {
     `## Pipeline phase\n${p.phase}\n` +
     `## Plan path\n${p.plan_path ?? ''}\n`
   );
+}
+
+/**
+ * Render the system prompt for ONE execute-plan subagent: the role prompt
+ * (execute-agent.md) with its task_prompt, the auto-injected PRD + design
+ * doc, and the pipeline marker naming the agent.
+ */
+export function renderAgentPrompt(
+  p: PipelineState,
+  agentId: string,
+  taskPrompt: string,
+  cwd: string,
+): string {
+  let text = loadPrompt('execute-agent');
+  text = text.replaceAll('[[run_dir]]', () => p.run_dir);
+  text = text.replaceAll('[[repo_root]]', () => repoRoot(cwd));
+  text = text.replaceAll('[[task_prompt]]', () => taskPrompt);
+  text = text.replaceAll('[[plan_context]]', () => readPlanContext(p.run_dir));
+  text = text.replaceAll(MARKER_PLACEHOLDER, () => `[jovaltus-pipeline:execute:${agentId}]`);
+  return text;
 }
