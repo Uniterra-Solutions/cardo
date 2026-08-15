@@ -6,40 +6,40 @@ Source: `packages/jovaltus/src/state.ts` (582 LOC). Ported from the Hermes plugi
 
 ## Public API
 
-| Export            | Signature                                                       | Description                                                                                     |
-| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `PHASES`          | `readonly string[]`                                             | `prd, research, acceptance, tasks, execute, simplify, simplify_waiting, review, review_waiting` |
-| `STATUSES`        | `readonly string[]`                                             | `idle, running, done, failed, interrupted`                                                      |
-| `PipelineState`   | `interface`                                                     | See data model below                                                                            |
-| `getPipeline`     | `() => PipelineState \| null`                                   | Sweep orphans, then the newest session (any status); drops corrupt rows; null when none         |
-| `startPipeline`   | `(tool, runDir, userRequirements?, planPath?) => PipelineState` | Insert a new running session; any other running session is superseded → `interrupted`           |
-| `setPhase`        | `(p, phase) => void`                                            | Record a phase transition; rejects finished pipelines                                           |
-| `setVerdict`      | `(p, verdict) => void`                                          | Record `pass`/`fix`; rejects invalid                                                            |
-| `finishPipeline`  | `(p, ok, error?) => void`                                       | Terminal `done`/`failed`; idempotent; no-op on `interrupted`                                    |
-| `markInterrupted` | `(p) => void`                                                   | Terminal `interrupted` (stopped without an error); idempotent                                   |
-| `listSessions`    | `() => PipelineState[]`                                         | Every session, newest first (insertion order)                                                   |
-| `getSession`      | `(idOrRunDir) => PipelineState \| null`                         | Find by session id, or by run_dir (newest match)                                                |
-| `resumeSession`   | `(idOrRunDir) => PipelineState`                                 | Re-activate an `interrupted`/`failed` session; throws on missing/running/done                   |
-| `statusText`      | `(p) => string`                                                 | One-line `[Jovaltus pipeline] ...` for injection                                                |
+| Export            | Signature                                                       | Description                                                                              |
+| ----------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `PHASES`          | `readonly string[]`                                             | `prd, design, plan_waiting, execute, simplify, simplify_waiting, review, review_waiting` |
+| `STATUSES`        | `readonly string[]`                                             | `idle, running, done, failed, interrupted`                                               |
+| `PipelineState`   | `interface`                                                     | See data model below                                                                     |
+| `getPipeline`     | `() => PipelineState \| null`                                   | Sweep orphans, then the newest session (any status); drops corrupt rows; null when none  |
+| `startPipeline`   | `(tool, runDir, userRequirements?, planPath?) => PipelineState` | Insert a new running session; any other running session is superseded → `interrupted`    |
+| `setPhase`        | `(p, phase) => void`                                            | Record a phase transition; rejects finished pipelines                                    |
+| `setVerdict`      | `(p, verdict) => void`                                          | Record `pass`/`fix`; rejects invalid                                                     |
+| `finishPipeline`  | `(p, ok, error?) => void`                                       | Terminal `done`/`failed`; idempotent; no-op on `interrupted`                             |
+| `markInterrupted` | `(p) => void`                                                   | Terminal `interrupted` (stopped without an error); idempotent                            |
+| `listSessions`    | `() => PipelineState[]`                                         | Every session, newest first (insertion order)                                            |
+| `getSession`      | `(idOrRunDir) => PipelineState \| null`                         | Find by session id, or by run_dir (newest match)                                         |
+| `resumeSession`   | `(idOrRunDir) => PipelineState`                                 | Re-activate an `interrupted`/`failed` session; throws on missing/running/done            |
+| `statusText`      | `(p) => string`                                                 | One-line `[Jovaltus pipeline] ...` for injection                                         |
 
 ## Data Model — PipelineState
 
-| Field               | Type             | Description                                   |
-| ------------------- | ---------------- | --------------------------------------------- |
-| `id`                | `string`         | unique session id (`randomUUID`)              |
-| `run_dir`           | `string`         | abs path `<repo>/.plan/<YYYYmmdd>/<name>/`    |
-| `tool`              | `string`         | `plan` \| `execute` \| `simplify` \| `review` |
-| `phase`             | `string`         | one of PHASES (or `done`)                     |
-| `status`            | `string`         | one of STATUSES                               |
-| `user_requirements` | `string`         | plan input text                               |
-| `plan_path`         | `string \| null` | required for execute; optional otherwise      |
-| `loop_iteration`    | `number`         | simplify/review loop counter (no cap)         |
-| `verdict`           | `string \| null` | `pass` \| `fix` \| null                       |
-| `updated_at`        | `string`         | ISO timestamp                                 |
-| `error`             | `string \| null` | failure message (always null for interrupted) |
-| `pid`               | `number`         | OS pid of the owning process (orphan sweep)   |
-| `created_at`        | `string`         | ISO timestamp                                 |
-| `ended_at`          | `string \| null` | set when the run leaves `running`             |
+| Field               | Type             | Description                                                          |
+| ------------------- | ---------------- | -------------------------------------------------------------------- |
+| `id`                | `string`         | unique session id (`randomUUID`)                                     |
+| `run_dir`           | `string`         | abs path `<repo>/.plan/<YYYYmmdd>/<name>/`                           |
+| `tool`              | `string`         | `plan` \| `execute` \| `simplify` \| `review`                        |
+| `phase`             | `string`         | one of PHASES (or `done`)                                            |
+| `status`            | `string`         | one of STATUSES                                                      |
+| `user_requirements` | `string`         | plan input text                                                      |
+| `plan_path`         | `string \| null` | required for execute (the resolved plan run dir); optional otherwise |
+| `loop_iteration`    | `number`         | simplify/review loop counter (no cap)                                |
+| `verdict`           | `string \| null` | `pass` \| `fix` \| null                                              |
+| `updated_at`        | `string`         | ISO timestamp                                                        |
+| `error`             | `string \| null` | failure message (always null for interrupted)                        |
+| `pid`               | `number`         | OS pid of the owning process (orphan sweep)                          |
+| `created_at`        | `string`         | ISO timestamp                                                        |
+| `ended_at`          | `string \| null` | set when the run leaves `running`                                    |
 
 ## Persistence & statuses
 

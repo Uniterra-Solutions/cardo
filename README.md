@@ -6,11 +6,11 @@
 
 ## Packages
 
-| Package             | 說明                                                                                                                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/jovaltus` | Jovaltus pipeline（plan/execute/simplify/review）作為 pi-agent extension。CLI 安裝：`pi install ./packages/jovaltus` 或 `pi -e packages/jovaltus/src/index.ts`；桌面 app 以內建 extension 載入（經 `packages/runtime`） |
-| `packages/runtime`  | 桌面 runtime：內建 extension registry（`builtinExtensionFactories` + `builtinExtensionMetadata`），被 vendored desktop app 消費                                                                                         |
-| `vendor/pi-gui`     | git-subtree 管理的桌面 app（MIT，pi-gui v0.1.0-beta.33）：Electron shell + `@pi-gui/*` driver 套件；pi-coding-agent 對齊 0.84.1                                                                                         |
+| Package             | 說明                                                                                                                                                                                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/jovaltus` | Jovaltus plan-mode pipeline（plan → clarify → design → 失敗 PBT spec → execution-plan.json → execute_plan）作為 pi-agent extension。CLI 安裝：`pi install ./packages/jovaltus` 或 `pi -e packages/jovaltus/src/index.ts`；桌面 app 以內建 extension 載入（經 `packages/runtime`） |
+| `packages/runtime`  | 桌面 runtime：內建 extension registry（`builtinExtensionFactories` + `builtinExtensionMetadata`），被 vendored desktop app 消費                                                                                                                                                   |
+| `vendor/pi-gui`     | git-subtree 管理的桌面 app（MIT，pi-gui v0.1.0-beta.33）：Electron shell + `@pi-gui/*` driver 套件；pi-coding-agent 對齊 0.84.1                                                                                                                                                   |
 
 ## 開發
 

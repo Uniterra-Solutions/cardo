@@ -27,7 +27,9 @@ graph TD
     Chain["chain.ts<br/>CHAIN tables + verdict readers"]
     Dispatch["dispatch.ts<br/>child process runner"]
     Prompts["prompts.ts<br/>prompt loader + token renderer"]
-    PromptFiles["prompts/*.md<br/>7 phase goal docs"]
+    PromptFiles["prompts/*.md<br/>5 phase goal docs"]
+    PlanModel["plan.ts / plan-json.ts / plan-mermaid.ts / plan-progress.ts<br/>execution-plan model + artifacts"]
+    Mode["plan-mode.ts<br/>tool gating + /planmode + shift+p"]
   end
   subgraph Desktop app (vendor/pi-gui)
     Main["Electron main<br/>main.ts + app-store.ts"]
@@ -36,8 +38,12 @@ graph TD
     Runtime["@cardo/runtime<br/>built-in extension registry"]
   end
   Pi["pi CLI host"]
-  Index -->|"pi.registerTool ×4<br/>plan/execute/simplify/review"| Pi
-  Index -->|"pi.on('before_agent_start')<br/>pi.on('agent_settled')"| Pi
+  Index -->|"pi.registerTool ×6<br/>plan/execute_plan/simplify/review/list_sessions/resume_session"| Pi
+  Index -->|"pi.on('before_agent_start')<br/>pi.on('agent_settled')<br/>pi.on('session_start')"| Pi
+  Mode -->|"pi.setActiveTools / setStatus / setWidget<br/>registerCommand/Shortcut/Flag"| Pi
+  Index --> Mode
+  Index --> PlanModel
+  PlanModel -->|"reads execution-plan.json"| PlanDir
   Main -->|"extensionFactories spread<br/>@cardo/runtime"| Driver
   Runtime -->|"imports jovaltus factory"| Index
   Driver -->|"createAgentSessionRuntime<br/>ModelRuntime (pi 0.84.1)"| PiCore["pi-coding-agent SDK"]
@@ -53,15 +59,13 @@ graph TD
 
 ## Data Flow — one tool invocation
 
-1. User calls a tool (`plan` / `execute` / `simplify` / `review`) in the pi session (CLI) or via the desktop app's agent.
+1. User calls a tool (`plan` / `execute_plan` / `simplify` / `review` — plus `list_sessions` / `resume_session`) in the pi session (CLI) or via the desktop app's agent. `plan` and `execute_plan` are only active in plan mode.
 2. `index.ts` handler validates args, computes the run directory (`<cwd>/.plan/<date>/<slug>/`), and calls `startPipeline` (`state.ts`) — persisted as a session row in `~/.pi/agent/jovaltus.sqlite`.
 3. For each phase in the chain (`chain.ts` CHAIN table), `dispatchPhase` renders the phase prompt (`prompts.ts` → `prompts/<phase>.md` with `[[token]]` substitution) and spawns an isolated child `pi --mode json -p --no-session --no-extensions` process (`dispatch.ts`).
 4. In the desktop app the child is launched through `PI_CLI_PATH` (resolved to the bundled `pi-coding-agent/dist/cli.js`) under `ELECTRON_RUN_AS_NODE`; in the CLI it uses the running pi binary.
 5. The child runs with coding built-ins only (`read,bash,edit,write,grep,find,ls`), inheriting the parent's model/thinking level; its stdout JSONL is parsed for the final assistant text.
-6. On child success the phase advances; `plan` runs prd→research→acceptance→tasks synchronously inside one tool call; `simplify`/`review` read the child-written `verdict.json`:
-   - `pass` → finish pipeline, `done`.
-   - `fix` → park in `*_waiting`, surface findings to the main agent.
-7. `agent_settled` fires after the main agent's fixing turn: re-dispatches the reviewer; on another `fix` it wakes the main agent with `pi.sendUserMessage(findings)`. Loop continues until `pass` (no cap).
+6. `plan` runs prd → design inside the tool call (asking the user to clarify requirements first when the host has a UI), then parks in `plan_waiting` with a handoff instructing the main agent to write failing PBTs + `execution-plan.json`. `agent_settled` validates the JSON: valid → `done`, missing/invalid → `failed` (the run can be resumed after the artifact is written). `execute_plan` resolves a done plan session, parses its `execution-plan.json`, and dispatches the plan's subagents (batches serial, agents within a batch parallel) — leaving changes uncommitted.
+7. `simplify`/`review` read the child-written `verdict.json`: `pass` → finish pipeline, `done`; `fix` → park in `*_waiting`, surface findings to the main agent. `agent_settled` re-dispatches the reviewer after the fixing turn; on another `fix` it wakes the main agent with `pi.sendUserMessage(findings)`. Loop continues until `pass` (no cap).
 
 ## Desktop app integration (cardo → pi-gui)
 
@@ -69,6 +73,18 @@ graph TD
 - `packages/runtime` (`@cardo/runtime`) exports `builtinExtensionFactories` (general + jovaltus factories) + `builtinExtensionMetadata` (display names); `vendor/pi-gui/apps/desktop/electron/main.ts` spreads both into the driver's `extensionFactories` / `inlineExtensionMetadata` seams. `General` runs first in the chain, so its working rules precede Jovaltus's pipeline status in the assembled system prompt.
 - `@cardo/*` exports point at built `dist` (Node 22 `require(ESM)`); pi-coding-agent stays external (its exports are ESM-only — do not bundle it into the CJS main bundle).
 - The vendored `@pi-gui/pi-sdk-driver` was ported from pi 0.80.6 to 0.84.1: `AuthStorage`/`ModelRegistry` replaced by `ModelRuntime`, constructors async, login via `AuthInteraction`.
+
+## Jovaltus plan mode
+
+Plan mode is a per-session toggle that gates the plan-mode pipeline tools (`plan`, `execute_plan`) and redefines what `plan` produces:
+
+1. **prd** child writes `prd.md`; the main agent clarifies requirements with the user (`ctx.ui.input` — only when the host has a UI; skipped if `clarify.md` exists or the user declines) — the clarification note lands in `clarify.md`.
+2. **design** child researches the design + external libraries (goal: minimize development complexity) and writes `design.md`.
+3. The pipeline parks in **plan_waiting**: the handoff text instructs the main agent to write failing PBTs (business logic as invariants — the implementation spec, expected red) and `execution-plan.json` (batch-major JSON; see `docs/modules/plan.md`). `agent_settled` validates the JSON — valid → `done` (executable), invalid → `failed` with the parse reason.
+4. **execute_plan `<plan_id>`** (plan-mode-exclusive) resolves the done plan session and dispatches its subagents: batches serial, agents within a batch parallel, each child = `execute-agent.md` role prompt + `[[task_prompt]]` + auto-injected PRD/design context. `simplify`/`review` are intentionally not chained after execute.
+5. The desktop surfaces execution live: `ctx.ui.setWidget("jovaltus-execute", …)` streams `STATUS|MODE|STEP|BATCH|AGENT` lines that the execute panel (spinner → green light → 3s auto-fade) and the right-side graph popup render natively — same JSON the plan was parsed from, never mermaid/free text.
+
+Mode toggle: `/planmode` command, `shift+p` shortcut (TUI — bare shift+p since shift+tab is taken by `app.thinking.cycle`), and the desktop composer's shift+tab + mode button (submits `/planmode`). Mode state persists via `pi.appendEntry` and restores on `session_start` (also via the `--plan-mode` flag).
 
 ## Desktop timeline — reasoning streaming and tool-batch collapsing
 
@@ -81,18 +97,21 @@ Two cardo patches shape the vendored conversation timeline (all marked `// Cardo
 
 ## Key Architectural Decisions
 
-| Decision                                                                                   | Rationale                                                                                                                                                                               | Status |
-| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| Child pi process per phase (not in-process SDK session)                                    | Official subagent example pattern; isolates context windows; `--no-extensions` prevents recursive extension load                                                                        | Active |
-| Default-exported entry factory                                                             | pi loader contract: `jiti.import(path, { default: true })` then `typeof factory === "function"` — the single exception to the repo's named-exports rule                                 | Active |
-| Sessions persisted to `~/.pi/agent/jovaltus.sqlite` (one row per run)                      | Cross-session resume; every run is listed (`list_sessions`) and resumable (`resume_session`); crashes sweep to `interrupted` (pid ownership)                                            | Active |
-| No delegation tool in children                                                             | pi children have no `delegate_task`; execute phase completes the DAG itself instead of dispatching workers `[INFERRED — ported behavior, see packages/jovaltus/src/prompts/execute.md]` | Active |
-| `agent_settled` + `pi.sendUserMessage()` replace Hermes `post_llm_call` + completion queue | pi's event model: settled fires after the agent's run ends; sendUserMessage wakes a new turn                                                                                            | Active |
-| Vendor pi-gui via git subtree, not copy/fork                                               | Code lives in-repo while `git subtree pull` keeps upstream merges semi-automated; MIT with attribution                                                                                  | Active |
-| Built-in extensions via `extensionFactories` seam                                          | `@cardo/runtime` supplies factories + metadata; app packages extensions inside the installer instead of external install                                                                | Active |
-| Port vendored driver to pi 0.84.1 instead of downgrading cardo                             | Cardo standard is 0.84.1; one pi version everywhere (dual versions would split typebox/ExtensionAPI)                                                                                    | Active |
-| `@cardo/*` exports point to dist; pi-coding-agent stays external                           | Node cannot load TS source as externalized dep; pi 0.84.1 exports are ESM-only so bundling it into the CJS main bundle is avoided                                                       | Active |
-| Child dispatch via `PI_CLI_PATH` + `ELECTRON_RUN_AS_NODE` in the app                       | Electron main's `process.execPath` is the app binary, not node; bundled `cli.js` + node mode keeps the child-process isolation model                                                    | Active |
+| Decision                                                                                   | Rationale                                                                                                                                                                                                         | Status |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Child pi process per phase (not in-process SDK session)                                    | Official subagent example pattern; isolates context windows; `--no-extensions` prevents recursive extension load                                                                                                  | Active |
+| Default-exported entry factory                                                             | pi loader contract: `jiti.import(path, { default: true })` then `typeof factory === "function"` — the single exception to the repo's named-exports rule                                                           | Active |
+| Sessions persisted to `~/.pi/agent/jovaltus.sqlite` (one row per run)                      | Cross-session resume; every run is listed (`list_sessions`) and resumable (`resume_session`); crashes sweep to `interrupted` (pid ownership)                                                                      | Active |
+| No delegation tool in children                                                             | pi children have no `delegate_task`; execute-plan agents complete their own task_prompt instead of dispatching workers (see `src/prompts/execute-agent.md`)                                                       | Active |
+| Execution plan is batch-major JSON; mermaid generated, never parsed                        | `execution_mode` constrains batch shape so the whole graph derives from the JSON; `planToMermaid` synthesizes the mermaid (frontend renders the graph natively from the widget instead of parsing mermaid source) | Active |
+| Plan mode = per-session tool gating                                                        | `setActiveTools` hides plan-mode tools when off + a `tool_call` gate blocks direct calls with an actionable reason; mode persisted via `pi.appendEntry`                                                           | Active |
+| `execute_plan` replaces `execute` and does not chain into simplify/review                  | The new pipeline stops at a done plan; execute dispatch is a separate user-approved step; simplify/review still run on the uncommitted diff at the user's request                                                 | Active |
+| `agent_settled` + `pi.sendUserMessage()` replace Hermes `post_llm_call` + completion queue | pi's event model: settled fires after the agent's run ends; sendUserMessage wakes a new turn                                                                                                                      | Active |
+| Vendor pi-gui via git subtree, not copy/fork                                               | Code lives in-repo while `git subtree pull` keeps upstream merges semi-automated; MIT with attribution                                                                                                            | Active |
+| Built-in extensions via `extensionFactories` seam                                          | `@cardo/runtime` supplies factories + metadata; app packages extensions inside the installer instead of external install                                                                                          | Active |
+| Port vendored driver to pi 0.84.1 instead of downgrading cardo                             | Cardo standard is 0.84.1; one pi version everywhere (dual versions would split typebox/ExtensionAPI)                                                                                                              | Active |
+| `@cardo/*` exports point to dist; pi-coding-agent stays external                           | Node cannot load TS source as externalized dep; pi 0.84.1 exports are ESM-only so bundling it into the CJS main bundle is avoided                                                                                 | Active |
+| Child dispatch via `PI_CLI_PATH` + `ELECTRON_RUN_AS_NODE` in the app                       | Electron main's `process.execPath` is the app binary, not node; bundled `cli.js` + node mode keeps the child-process isolation model                                                                              | Active |
 
 ## Deployment Topology
 

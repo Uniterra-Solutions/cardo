@@ -25,10 +25,17 @@ Task recipes for agents working in this repo.
 ## Run a Plan Pipeline End-to-End
 
 1. `pi -e packages/jovaltus/src/index.ts` (or install the package).
-2. In the session: `plan` with `user_requirements`.
-3. Watch `.plan/<date>/<name>/` fill with `prd.md` → `design.md` → `acceptance.md` → `tasks.md`.
-4. `execute` with the `tasks.md` path (after user approval).
-5. `review` / `simplify` on the uncommitted diff; on `fix` the main agent applies findings and the reviewer re-runs until `pass`.
+2. Turn plan mode on: `/planmode` (TUI: shift+P; desktop: shift+tab or the mode button in the composer). `plan` and `execute_plan` appear in the tool list.
+3. `plan` with `user_requirements`. Inside the tool call the pipeline runs `prd` → `design` (clarifying requirements first when the host has a UI), then parks in `plan_waiting`. Watch `.plan/<date>/<name>/` fill with `prd.md` → `clarify.md` (optional) → `design.md`.
+4. The main agent writes the implementation spec: failing PBTs with business logic as invariants (see `docs/testing.md`) plus `execution-plan.json` (batch-major JSON — see `docs/modules/plan.md`). `agent_settled` validates the JSON; on success the plan is marked `done` and is ready to execute.
+5. `execute_plan <plan_id>` (id or run directory; plan-mode-only) dispatches the plan's subagents — batches serial, agents within a batch parallel — streaming the execute panel to the desktop (spinner → green light, graph popup). Changes are left uncommitted.
+6. `review` / `simplify` on the uncommitted diff; on `fix` the main agent applies findings and the reviewer re-runs until `pass`.
+
+## Toggle Plan Mode
+
+1. Toggle with `/planmode` (any host), shift+P (TUI — bare shift+p, since shift+tab is taken by `app.thinking.cycle`), or shift+tab / the mode button (desktop composer).
+2. Mode ON adds `plan` + `execute_plan` to the active tools and a `[JOVALTUS PLAN MODE]` system note to every agent turn; OFF removes them and the `tool_call` gate blocks direct calls with an actionable reason.
+3. The mode is persisted via `pi.appendEntry` and restored on `session_start`/resume, so it survives restarts. The desktop button reads the live `jovaltus-mode` status.
 
 ## Debug a Failed Phase
 

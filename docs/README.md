@@ -1,6 +1,6 @@
 # Cardo Documentation
 
-Cardo is a pnpm monorepo whose first package, `packages/jovaltus`, ports the Jovaltus subagent-driven pipeline (plan/execute/simplify/review) to a pi-agent extension. `packages/general` appends app-wide working rules to every turn's system prompt. Built on the pi-agent core; plugins live as separate workspace packages. The desktop shell is pi-gui (vendored under `vendor/pi-gui`), consuming cardo extensions as built-ins via `packages/runtime`.
+Cardo is a pnpm monorepo whose first package, `packages/jovaltus`, implements the Jovaltus plan-mode pipeline (plan → clarify → design → failing-PBT spec → execution-plan.json → execute_plan) plus the standalone simplify/review verdict loops on a pi-agent extension. `packages/general` appends app-wide working rules to every turn's system prompt. Built on the pi-agent core; plugins live as separate workspace packages. The desktop shell is pi-gui (vendored under `vendor/pi-gui`), consuming cardo extensions as built-ins via `packages/runtime`.
 
 Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack](tech-stack.md) · [Root README](../README.md)
 
@@ -17,6 +17,8 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 | Understand the extension entry / 6 tools | [modules/extension.md](modules/extension.md) |
 | Understand the pipeline state machine    | [modules/state.md](modules/state.md)         |
 | Understand phase chains + verdicts       | [modules/chain.md](modules/chain.md)         |
+| Understand the execution-plan model      | [modules/plan.md](modules/plan.md)           |
+| Understand plan mode + execute widget    | [modules/plan-mode.md](modules/plan-mode.md) |
 | Understand child process dispatch        | [modules/dispatch.md](modules/dispatch.md)   |
 | Understand prompt loading/rendering      | [modules/prompts.md](modules/prompts.md)     |
 | Run the tests / verification             | [testing.md](testing.md)                     |
@@ -29,9 +31,11 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 - [architecture.md](architecture.md) — C4 diagrams, data flow, decisions
 - [conventions.md](conventions.md) — code style, testing, commit, security rules
 - [design-system.md](design-system.md) — 03b Warm Paper Sharp tokens, palette, radii, theming
-- [modules/extension.md](modules/extension.md) — entry factory, 6 tools, 3 events
+- [modules/extension.md](modules/extension.md) — entry factory, 6 tools, 5 events, plan-mode layer
 - [modules/state.md](modules/state.md) — PipelineState + SQLite session store
-- [modules/chain.md](modules/chain.md) — CHAIN tables, verdict readers
+- [modules/chain.md](modules/chain.md) — CHAIN tables, verdict readers, plan_waiting settlement
+- [modules/plan.md](modules/plan.md) — execution-plan schema/parser, steps, mermaid, progress
+- [modules/plan-mode.md](modules/plan-mode.md) — mode gating, toggle surfaces, execute widget protocol
 - [modules/dispatch.md](modules/dispatch.md) — child pi process runner
 - [modules/prompts.md](modules/prompts.md) — prompt files, token substitution
 - [setup.md](setup.md) — prerequisites, install, run, verify

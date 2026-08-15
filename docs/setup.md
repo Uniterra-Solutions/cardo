@@ -52,13 +52,13 @@ pnpm --filter @pi-gui/desktop dev          # dev (Electron + watch)
 pnpm --filter @pi-gui/desktop build        # production build (out/)
 ```
 
-After install, `/reload` (or restart pi). The six tools (`plan`/`execute`/`simplify`/`review`/`list_sessions`/`resume_session`) appear in the tool list. In the desktop app they are available without any install step — open a thread and the agent can call them.
+After install, `/reload` (or restart pi). The six tools (`plan`/`execute_plan`/`simplify`/`review`/`list_sessions`/`resume_session`) are registered — `plan` and `execute_plan` appear in the tool list once plan mode is on (`/planmode`, TUI shift+P, or desktop shift+tab / mode button). In the desktop app they are available without any install step — open a thread, toggle plan mode in the composer, and the agent can call them.
 
 ## Verify
 
 1. `pi -e packages/jovaltus/src/index.ts` starts without a "factory function" error.
 2. `pi install ./packages/jovaltus` then `pi list` shows the package.
-3. In a session, the tool list includes `plan`/`execute`/`simplify`/`review`/`list_sessions`/`resume_session`.
+3. In a session, the tool list includes `plan`/`execute_plan`/`simplify`/`review`/`list_sessions`/`resume_session`.
 4. Optional smoke: run `plan` with a small requirement; confirm `.plan/<date>/<name>/prd.md` appears and `list_sessions` shows the run (or inspect `~/.pi/agent/jovaltus.sqlite`).
 5. Desktop: `pnpm --filter @pi-gui/desktop dev` opens the app; Settings → Extensions lists two built-ins ("Thread orchestration" + "Jovaltus"); a thread can run the `plan` tool end-to-end.
 
