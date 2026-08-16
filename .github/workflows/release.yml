@@ -57,11 +57,15 @@ jobs:
             exit 1
           fi
 
-      - name: Lint
-        run: pnpm run lint
-
+      # Build BEFORE lint: workspace packages (@cardo/cardo-updater etc.) are
+      # consumed via their dist/ outputs, which are gitignored build products.
+      # Linting before building leaves their types unresolved and type-aware
+      # rules (no-unsafe-*) fail on the fresh checkout.
       - name: Build
         run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
 
       - name: Typecheck
         run: pnpm run typecheck
