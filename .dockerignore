@@ -1,0 +1,14 @@
+# Docker build context for this repo (used by scripts/verify-cli-container).
+# The CLI-flow harness starts from a pristine source archive — no git
+# metadata, no installed deps, no build artifacts, no local runtime trees.
+.git
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+vendor/dsh-runtime
+.plan
+.hermes
+.env
+.env.*
+*.log
