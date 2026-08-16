@@ -22,6 +22,7 @@ import { PassThrough } from 'node:stream';
 import {
   BUILTIN_NPM_PLUGINS,
   BUILTIN_VENDOR_PLUGINS,
+  BUILTIN_WORKSPACE_PLUGINS,
   builtinPackageName,
   expectedBuiltinBundles,
   hasAllBuiltins,
@@ -89,6 +90,7 @@ const bundleWordArb = fc.constantFrom(
   '@dsh-external/dsh-client-ui-skin-maid-atelier',
   '@leetoners/dsh-ui-subagent-monitor',
   'dsh-thinking-effort',
+  '@cardo/cardo-provider',
   'user-installed-plugin',
   'totally-unrelated',
 );
@@ -100,6 +102,7 @@ function modelExpected() {
     '@deepseek-ai/dsh-web-app',
     ...BUILTIN_NPM_PLUGINS.map((spec) => spec.slice(0, spec.lastIndexOf('@'))),
     ...Object.values(BUILTIN_VENDOR_PLUGINS),
+    ...Object.values(BUILTIN_WORKSPACE_PLUGINS),
   ];
 }
 
