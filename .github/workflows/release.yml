@@ -123,6 +123,9 @@ jobs:
       - name: Package unsigned macOS app
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # pnpm 11 runs a deps-status check inside electron-builder's
+          # `pnpm install --production`; disable it (runtime is pre-built).
+          PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
         run: |
           cd packages/cardo-desktop
           pnpm exec electron-builder --mac --publish never \

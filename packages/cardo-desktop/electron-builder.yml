@@ -6,13 +6,25 @@ directories:
 files:
   - dist/**/*
   - package.json
+  - node_modules/@cardo/cardo-updater/**/*
 extraResources:
   - from: ../../vendor/dsh-plugins
     to: vendor/dsh-plugins
+  - from: ../../vendor/dsh-runtime
+    to: dsh-runtime
+    filter:
+      - node_modules/**/*
+      - package.json
 mac:
   target:
     - zip
   category: public.app-category.developer-tools
   hardenedRuntime: false
   identity: null
-npmRebuild: true
+# The dsh runtime (native deps included) is pre-built by prepare-runtime.mjs
+# into resources/dsh-runtime; electron-builder must not try to reinstall the
+# workspace (which would run the root husky prepare and fail). beforeBuild
+# returning false marks node_modules as handled externally.
+npmRebuild: false
+nodeGypRebuild: false
+beforeBuild: ./scripts/electron-before-build.cjs

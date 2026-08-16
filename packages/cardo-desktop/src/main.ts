@@ -12,7 +12,6 @@
  */
 
 import { app, BrowserWindow, dialog, shell } from 'electron';
-import { createRequire } from 'node:module';
 import { statSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,14 +19,8 @@ import { ensureCardoProfile } from './profile.js';
 import { startDsh, stopDsh, type DshRuntimeHandle } from './dsh-process.js';
 import { resolveCardoUpdateStatus, shouldPromptForUpdate } from '@cardo/cardo-updater';
 
-const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
-
-/** Resolve the bundled dsh CLI entry. In dev this is the workspace copy; in
- * the packaged app it is the asar-bundled dependency. */
-function dshCliPath(): string {
-  return require.resolve('@deepseek-ai/dsh/lib/bin.js');
-}
+const root = path.resolve(here, '..', '..', '..');
 
 function pathExists(p: string): boolean {
   try {
@@ -38,6 +31,22 @@ function pathExists(p: string): boolean {
   }
 }
 
+/** Where the self-contained dsh runtime lives (flat node_modules). */
+function dshRuntimeRoot(): string {
+  // Packaged: resources/dsh-runtime. Dev: vendor/dsh-runtime (prepared by
+  // scripts/prepare-runtime.mjs — run `pnpm --filter @cardo/cardo-desktop run prepare`).
+  const packaged = path.join(process.resourcesPath, 'dsh-runtime');
+  if (pathExists(path.join(packaged, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) {
+    return packaged;
+  }
+  return path.resolve(root, 'vendor', 'dsh-runtime');
+}
+
+/** Resolve the bundled dsh CLI entry from the self-contained runtime. */
+function dshCliPath(): string {
+  return path.join(dshRuntimeRoot(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+}
+
 /** Where the vendored community plugins live at runtime. */
 function vendorPluginsRoot(): string {
   // Packaged: resources/vendor/dsh-plugins. Dev: the monorepo checkout.
@@ -45,7 +54,7 @@ function vendorPluginsRoot(): string {
   if (pathExists(packaged)) {
     return packaged;
   }
-  return path.resolve(here, '..', '..', '..', 'vendor', 'dsh-plugins');
+  return path.resolve(root, 'vendor', 'dsh-plugins');
 }
 
 let mainWindow: BrowserWindow | null = null;

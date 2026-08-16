@@ -12,22 +12,15 @@
     "dev": "electron .",
     "start": "electron .",
     "test": "pnpm run build && node --test test/*.test.mjs",
-    "package": "pnpm run build && electron-builder --mac --publish never"
+    "prepare": "node scripts/prepare-runtime.mjs",
+    "package": "pnpm run prepare && pnpm run build && electron-builder --mac --publish never"
   },
   "dependencies": {
-    "@cardo/cardo-updater": "workspace:*",
-    "@deepseek-ai/dsh": "0.1.0-rc.6",
-    "dshmarket": "1.9.0",
-    "dsh-notifier": "0.6.2",
-    "dsh-better-sidebar": "0.12.2",
-    "dsh-file-upload": "0.4.2",
-    "dsh-lan-gateway": "0.2.1",
-    "dsh-find-plugin": "0.3.6",
-    "dsh-subagent-model-picker": "0.1.1"
+    "@cardo/cardo-updater": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "electron": "^33.0.0",
+    "electron": "^37.10.3",
     "electron-builder": "^25.1.8"
   }
 }
