@@ -7,36 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Desktop titlebar strip: the sidebar toggle sits flush at the window's top-left
-  corner (`12px 11px`), the macOS traffic lights are positioned right of it
-  (`trafficLightPosition {x:56, y:18}`, spanning ≈56–110px) so they never cover
-  it in windowed mode, and the sidebar's New thread button moved below the 48px
-  strip — clear of the traffic lights and the toggle in every window mode.
-  Locked by geometry assertions in `tests/core/sidebar-toggle.spec.ts`
+## [0.5.4] — 2026-08-17
 
 ### Fixed
 
-- Toggling Jovaltus plan mode no longer paints a phantom "message sent to the
-  agent" row: `/planmode` is a runtime slash command that executes in the
-  extension host without a transcript message, so the composer submit path
-  suppresses the optimistic timeline row for runtime commands (regression spec
-  `tests/live/jovaltus-mode-toggle.spec.ts`)
-- The generic extension dock no longer renders the jovaltus statuses
-  (`jovaltus-mode` / `jovaltus-execute`) — the mode button and the execute panel
-  already render them above the composer
-- The extension dock now collapses when the extension UI is rebuilt during
-  /reload or extension refresh: the store bumps a per-session extension-UI
-  `revision` on every clear and the renderer resets dock expansion on a
-  revision change — deterministic even though the cleared snapshot is coalesced
-  away during a fast reload (`tests/live/extension-dock-reload.spec.ts`)
+- The built-in whale skin now actually loads. The vendored `deep-whale-day-night-theme` distribution patched the `ui-skin-maid-atelier` roster row that only `@deepseek-ai/dsh-client-ui-theme-plugins` provides (absent in the pinned rc.6 family), so the patch was silently skipped and the plugin never mounted — it also depended on the missing `themeCatalog` service and shipped without the `preview/` assets its host reads at import. The built-in now vendors the standalone `dsh-deep-whale#maid-atelier` distribution (same package name `@dsh-external/dsh-client-ui-skin-maid-atelier`, self-inserting patch, no-op host, art embedded as data URIs, preview assets included). `ensureBuiltinPlugins` gained a version-drift guard (`vendoredPluginsStale`): a vendored copy is re-provisioned when its installed `version` no longer matches the vendored source, so profiles that already carry the old bundle row heal on their next launch. Locked by new VENDOR/STALE property-based invariants in `builtin-pbt.test.mjs`
+- Built-in skill provisioning now ships every company skill: `SKILL_NAMES` still listed the retired `agentic-debugging` and omitted `cardo-pbt-debugging` and `cardo-planmode`, so provisioning reported a phantom missing-skill failure every run and never copied two of the seven bundled skills (locked by the existing provisioning tests)
 
 ### Changed
 
-- Docs: `AGENTS.md`, `docs/design-system.md` and `docs/testing.md` document the
-  titlebar strip contract, the silent plan-mode toggle, and the dock rebuild
-  reset (plus the new `tests/live/` behavior specs)
+- Docs: `AGENTS.md` documents the vendored-plugin staleness guard; `vendor/dsh-plugins/VENDOR.md` updates the pin ledger (`dsh-deep-whale`, commit `873f5c6…`) with the retirement rationale
+
+## [0.5.3] — 2026-08-17
+
+### Added
+
+- Desktop built-in provisioning + PBT (`packages/cardo-desktop/src/builtin.ts`): at startup the profile the run uses gets the 6 npm plugins via `dsh plugin add`, the vendored plugins copied under their package names, and the bundled skills via `DSH_BUNDLED_SKILL_DIR`; dsh CLI resolution and readiness fixes
+- CLI source-archive install flow: `cardo setup` downloads the release's auto-generated source tarball → `pnpm install --frozen-lockfile` → build → electron-builder package → install to `~/Applications`; no-TTY pnpm install fix; install-logic PBT
+- Docker container harness (`scripts/verify-cli-container`) replaying the `cardo setup` flow in a clean container
+
+### Changed
+
+- Desktop packaging: source-embed — the profile module is manifest constants only; `release.yml` publishes the CLI only (the release source archive is the desktop artifact); root tolerates a missing `.git` for husky
+
+## [0.5.2] — 2026-08-16
+
+### Fixed
+
+- Release artifacts are named with the tag version (`Cardo-<tag>-arm64-mac.zip`), matching the name the updater resolves — `cardo update` works again
+
+## [0.5.1] — 2026-08-16
+
+### Fixed
+
+- CLI release-asset selection is platform-aware (arm64 vs x64) — restores `cardo update` after the publish-package rename
+
+## [0.5.0] — 2026-08-16
+
+### Changed
+
+- Desktop rebuilt on the DeepSeek Harness (dsh) runtime: the Electron shell boots a self-contained bundled `@deepseek-ai/dsh` runtime (`prepare-runtime.mjs` → `resources/dsh-runtime`); the vendored pi-gui desktop and `packages/runtime` extension registry are removed — the pi-gui-era titlebar-strip / silent plan-mode toggle / extension-dock reset UI never shipped, superseded by the dsh shell
+- Startup update check extracted into `@cardo/cardo-updater` and wired into the desktop shell
+- Plan/debug session modes dropped as a pi extension; the planmode pipeline moved to a bundled skill (cardo-planmode), and agentic-debugging replaced by cardo-pbt-debugging
+- Added the cardo dsh profile spec and vendored community dsh plugins (`vendor/dsh-plugins`: dsh-subagent-monitor, dsh-thinking-effort, a day/night whale skin), provisioned into the profile at startup
+- CLI renamed to `@uniterra-solutions/cardo`; `release.yml` publishes the CLI via npm trusted publishing (OIDC); the release source archive is the desktop artifact
 
 ## [0.4.1] — 2026-08-15
 
