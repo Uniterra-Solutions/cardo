@@ -1,5 +1,8 @@
 import { access, realpath, stat, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
+// Cardo: brings the `ctx.ui.askQuestions` wizard augmentation into the
+// program (the desktop's paths-alias pulls this source file directly).
+import "./extension-ui-augment.js";
 import {
   type ModelRuntime,
   SessionManager,
@@ -1391,6 +1394,24 @@ export class SessionSupervisor {
             ...(opts?.timeout ? { timeoutMs: opts.timeout } : {}),
           }),
           (response) => ("cancelled" in response && response.cancelled ? undefined : "value" in response ? response.value : undefined),
+        ),
+      // Cardo: structured multi-question clarification wizard (Jovaltus plan
+      // pipeline). The whole list travels in ONE request; the renderer pages
+      // through it (options + Other + Next/Submit + total count) and answers
+      // come back as one array.
+      askQuestions: (title, questions, opts) =>
+        createDialogPromise(
+          opts,
+          undefined,
+          (requestId) => ({
+            kind: "questions",
+            requestId,
+            title,
+            questions,
+            ...(opts?.timeout ? { timeoutMs: opts.timeout } : {}),
+          }),
+          (response) =>
+            "cancelled" in response && response.cancelled ? undefined : "answers" in response ? [...response.answers] : undefined,
         ),
       notify: (message, level) => {
         this.emitHostUiRequest(record, {

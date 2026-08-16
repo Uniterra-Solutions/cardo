@@ -163,6 +163,111 @@ export function JovaltusExecutePanel({
   );
 }
 
+/**
+ * Plan pipeline progress panel above the composer: pulsing light + phase
+ * chips while planning (PRD → clarify → design → plan), green light when the
+ * plan is parked at `plan_waiting`, then auto-fades after 3s. Mirrors the
+ * execute panel so both pipeline stages read the same way.
+ */
+export type JovaltusPlanPhaseState = "pending" | "running" | "done";
+
+export interface JovaltusPlanPhase {
+  readonly name: string;
+  readonly label: string;
+  readonly state: JovaltusPlanPhaseState;
+}
+
+export interface JovaltusPlanModel {
+  readonly status: "running" | "done";
+  readonly phases: readonly JovaltusPlanPhase[];
+}
+
+const PLAN_PHASE_LABELS: Readonly<Record<string, string>> = {
+  prd: "PRD",
+  clarify: "clarify",
+  design: "design",
+  plan: "plan",
+};
+
+export function parseJovaltusPlanWidget(lines: readonly string[]): JovaltusPlanModel | undefined {
+  let status: "running" | "done" | undefined;
+  const phases: JovaltusPlanPhase[] = [];
+  for (const line of lines) {
+    const separatorIndex = line.indexOf("|");
+    if (separatorIndex === -1) {
+      continue;
+    }
+    const tag = line.slice(0, separatorIndex);
+    const rest = line.slice(separatorIndex + 1).split("|");
+    if (tag === "STATUS") {
+      status = rest[0] === "done" ? "done" : "running";
+    } else if (tag === "PHASE") {
+      const name = rest[0];
+      const state = rest[1];
+      if (name !== undefined && (state === "pending" || state === "running" || state === "done")) {
+        phases.push({ name, label: PLAN_PHASE_LABELS[name] ?? name, state });
+      }
+    }
+  }
+  if (status === undefined) {
+    return undefined;
+  }
+  return { status, phases };
+}
+
+export function JovaltusPlanPanel({ model }: { readonly model: JovaltusPlanModel }) {
+  const [faded, setFaded] = useState(false);
+  const previousStatusRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (model.status === previousStatusRef.current) {
+      return;
+    }
+    previousStatusRef.current = model.status;
+    if (model.status === "done") {
+      const timer = window.setTimeout(() => setFaded(true), 3000);
+      return () => window.clearTimeout(timer);
+    }
+    setFaded(false);
+    return undefined;
+  }, [model.status]);
+
+  if (faded) {
+    return null;
+  }
+
+  const running = model.status === "running";
+  const runningPhase = model.phases.find((phase) => phase.state === "running");
+  const doneCount = model.phases.filter((phase) => phase.state === "done").length;
+
+  return (
+    <div className="jovaltus-plan" data-testid="jovaltus-plan-panel">
+      <span
+        aria-hidden="true"
+        className={`jovaltus-plan__light ${running ? "jovaltus-plan__light--running" : "jovaltus-plan__light--done"}`}
+      >
+        <span className="jovaltus-execute__spinner" />
+      </span>
+      <span className="jovaltus-plan__text">
+        {running
+          ? `planning · ${String(doneCount)}/${String(model.phases.length)} phases${runningPhase ? ` · ${runningPhase.label}` : ""}`
+          : `plan ready · ${String(doneCount)}/${String(model.phases.length)} phases`}
+      </span>
+      <span className="jovaltus-plan__phases" aria-hidden="true">
+        {model.phases.map((phase) => (
+          <span
+            className={`jovaltus-plan__phase jovaltus-plan__phase--${phase.state}`}
+            data-testid={`jovaltus-plan-phase-${phase.name}`}
+            key={phase.name}
+          >
+            {phase.state === "done" ? "✓" : phase.state === "running" ? "●" : "○"} {phase.label}
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 /** Right-side graph popup: batches → agent nodes colored by live state. */
 export function JovaltusGraphPopup({
   model,

@@ -150,6 +150,16 @@ if (phase === 'simplify' || phase === 'review') {
   }
 }
 
+// PRD author behavior: write questions.json like the real PRD subagent would
+// (the env holds the exact JSON file content), so the clarify wizard path can
+// be exercised end-to-end.
+if (phase === 'prd' && runDir) {
+  const questions = process.env.JOVALTUS_FAKE_QUESTIONS;
+  if (questions !== undefined) {
+    writeFileSync(path.join(runDir, 'questions.json'), questions, 'utf8');
+  }
+}
+
 const output =
   process.env.JOVALTUS_FAKE_OUTPUT ?? `phase ${tool ?? '?'}/${phase ?? '?'} executed (fake pi)`;
 const slowMs = Number(process.env.JOVALTUS_FAKE_SLOW_MS ?? 0);

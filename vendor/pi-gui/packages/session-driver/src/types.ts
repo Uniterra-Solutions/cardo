@@ -237,7 +237,17 @@ export type HostUiResponse =
   | {
       readonly requestId: string;
       readonly cancelled: true;
+    }
+  | {
+      readonly requestId: string;
+      readonly answers: readonly string[];
     };
+
+/** One clarification question in the `questions` dialog: prompt + suggested options. */
+export interface HostUiQuestion {
+  readonly question: string;
+  readonly options: readonly string[];
+}
 
 export type HostUiRequest =
   | {
@@ -269,6 +279,13 @@ export type HostUiRequest =
       readonly requestId: string;
       readonly title: string;
       readonly initialValue?: string;
+    }
+  | {
+      readonly kind: "questions";
+      readonly requestId: string;
+      readonly title: string;
+      readonly questions: readonly HostUiQuestion[];
+      readonly timeoutMs?: number;
     }
   | {
       readonly kind: "notify";

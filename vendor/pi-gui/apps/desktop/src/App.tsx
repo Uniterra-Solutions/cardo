@@ -29,6 +29,7 @@ import { buildThreadGroups } from "./thread-groups";
 import {
   JovaltusGraphPopup,
   parseJovaltusExecuteWidget,
+  parseJovaltusPlanWidget,
 } from "./jovaltus-ui";
 import { Sidebar } from "./sidebar";
 import { SidebarToggleButton } from "./sidebar-toggle-button";
@@ -234,6 +235,13 @@ export default function App() {
   const jovaltusExecute = useMemo(
     () => (jovaltusExecuteWidget ? parseJovaltusExecuteWidget(jovaltusExecuteWidget.lines) : undefined),
     [jovaltusExecuteWidget],
+  );
+  // Cardo: Jovaltus plan pipeline progress strip (PRD → clarify → design →
+  // plan), pushed by the extension under the same widget protocol as execute.
+  const jovaltusPlanWidget = selectedExtensionUi?.widgets.find((widget) => widget.key === "jovaltus-plan");
+  const jovaltusPlan = useMemo(
+    () => (jovaltusPlanWidget ? parseJovaltusPlanWidget(jovaltusPlanWidget.lines) : undefined),
+    [jovaltusPlanWidget],
   );
   const [jovaltusGraphOpen, setJovaltusGraphOpen] = useState(false);
   // Toggle plan mode by running the extension's /planmode command; guarded so
@@ -757,7 +765,8 @@ export default function App() {
     response:
       | { readonly requestId: string; readonly value: string }
       | { readonly requestId: string; readonly confirmed: boolean }
-      | { readonly requestId: string; readonly cancelled: true },
+      | { readonly requestId: string; readonly cancelled: true }
+      | { readonly requestId: string; readonly answers: readonly string[] },
   ) => {
     if (!selectedWorkspace || !selectedSession) {
       return;
@@ -1047,6 +1056,7 @@ export default function App() {
               onToggleJovaltusMode={jovaltusAvailable ? handleToggleJovaltusMode : undefined}
               jovaltusExecute={jovaltusExecute}
               onOpenJovaltusGraph={() => setJovaltusGraphOpen(true)}
+              jovaltusPlan={jovaltusPlan}
             />
             {activeExtensionDialog ? (
               <ExtensionDialog dialog={activeExtensionDialog} onRespond={handleRespondToExtensionDialog} />

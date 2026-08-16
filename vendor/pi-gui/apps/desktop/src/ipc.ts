@@ -296,6 +296,14 @@ export interface PiDesktopApi {
   // Cardo: incremental transcript delivery — the renderer applies these ops to
   // its local transcript instead of receiving the full array on every push.
   onTranscriptDelta(listener: (payload: TranscriptDeltaPayload) => void): () => void;
+  // Cardo: incremental state delivery — the renderer applies changed slices
+  // locally (revision-guarded) instead of receiving the full state per push.
+  onStateDelta(listener: (payload: StateDeltaPayload) => void): () => void;
+  // Cardo: orchestrationChildren arrives on its own channel (never rides the
+  // per-push state payload).
+  onOrchestrationChanged(
+    listener: (payload: { readonly orchestrationChildren: readonly OrchestrationChildThread[] }) => void,
+  ): () => void;
   onCommand(listener: (command: PiDesktopCommand) => void): () => void;
   onWorkspacePicked(listener: (workspaceId: string) => void): () => void;
   onClipboardImagePasted(listener: (attachment: ComposerImageAttachment) => void): () => void;
@@ -362,7 +370,8 @@ export interface PiDesktopApi {
     response:
       | { readonly requestId: string; readonly value: string }
       | { readonly requestId: string; readonly confirmed: boolean }
-      | { readonly requestId: string; readonly cancelled: true },
+      | { readonly requestId: string; readonly cancelled: true }
+      | { readonly requestId: string; readonly answers: readonly string[] },
   ): Promise<DesktopAppState>;
   setNotificationPreferences(preferences: Partial<NotificationPreferences>): Promise<DesktopAppState>;
   setIntegratedTerminalShell(shell: string): Promise<DesktopAppState>;

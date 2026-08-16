@@ -2303,6 +2303,31 @@
   background: var(--overlay-hover);
 }
 
+/* Cardo: questions wizard (Jovaltus requirement clarification) — progress
+   header, selected-option highlight, free-text "Other" input. */
+.extension-dialog__progress {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.extension-dialog__option--selected {
+  border-color: var(--accent-tint-border);
+  background: var(--accent-tint-bg);
+  color: var(--accent);
+}
+
+.extension-dialog__questions {
+  display: grid;
+  gap: 12px;
+}
+
+.extension-dialog__questions .skills-search {
+  width: 100%;
+}
+
 .extension-dialog__editor {
   min-height: 180px;
   padding: 12px 14px;

@@ -13,7 +13,9 @@ import { ExtensionIcon, FileIcon, ModelIcon, ReasoningIcon, SettingsIcon, SkillI
 import {
   JovaltusExecutePanel,
   JovaltusModeButton,
+  JovaltusPlanPanel,
   type JovaltusExecuteModel,
+  type JovaltusPlanModel,
 } from "./jovaltus-ui";
 import { QueuedComposerMessages } from "./queued-composer-messages";
 
@@ -68,6 +70,7 @@ interface ComposerSurfaceProps {
   readonly onToggleJovaltusMode?: () => void;
   readonly jovaltusExecute?: JovaltusExecuteModel;
   readonly onOpenJovaltusGraph?: () => void;
+  readonly jovaltusPlan?: JovaltusPlanModel;
 }
 
 export function ComposerSurface({
@@ -117,6 +120,7 @@ export function ComposerSurface({
   onToggleJovaltusMode,
   jovaltusExecute,
   onOpenJovaltusGraph,
+  jovaltusPlan,
 }: ComposerSurfaceProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   // Cardo: two-state composer — wrapped when the draft exceeds one line
@@ -256,6 +260,7 @@ export function ComposerSurface({
       {jovaltusExecute && onOpenJovaltusGraph ? (
         <JovaltusExecutePanel model={jovaltusExecute} onOpenGraph={onOpenJovaltusGraph} />
       ) : null}
+      {jovaltusPlan ? <JovaltusPlanPanel model={jovaltusPlan} /> : null}
       {lastError ? (
         <div className="composer__error error-banner" data-testid="composer-error-banner">
           {lastError}

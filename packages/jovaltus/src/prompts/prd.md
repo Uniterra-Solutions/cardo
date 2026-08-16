@@ -50,6 +50,31 @@ following sections, in order:
 6. **Out of Scope** — features explicitly excluded from this iteration.
 7. **Open Questions** — anything that still needs user confirmation.
 
+Then write the clarification questions to `[[run_dir]]/questions.json` — a
+single JSON file of the shape:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Should the feature live in its own package?",
+      "options": ["New package (packages/<name>)", "Inside an existing package (packages/general)"]
+    }
+  ]
+}
+```
+
+Rules for `questions.json`:
+
+- One entry per Open Question that genuinely needs user confirmation. At
+  most 5 — merge or drop anything the user can reasonably be assumed to
+  agree with.
+- Every question MUST carry 2–4 concrete, self-contained suggested options.
+  The FIRST option should be your recommended default. Options are shown as
+  buttons with a free-text "Other" path, so never write "other" as an
+  option yourself.
+- If there are no open questions, write `{ "questions": [] }`.
+
 ## Rules
 
 - Be concrete and precise; avoid marketing language and filler.
@@ -57,7 +82,8 @@ following sections, in order:
   input.
 - Do NOT write code, design documents, or task breakdowns — those are the
   jobs of later subagents in this pipeline.
-- Do NOT modify any file other than `[[run_dir]]/prd.md`.
+- Do NOT modify any file other than `[[run_dir]]/prd.md` and
+  `[[run_dir]]/questions.json`.
 
 ## Pipeline marker
 

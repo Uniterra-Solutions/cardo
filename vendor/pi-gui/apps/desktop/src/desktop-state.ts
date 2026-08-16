@@ -216,7 +216,7 @@ export interface SessionExtensionWidgetRecord {
 
 export type SessionExtensionDialogRecord = Extract<
   HostUiRequest,
-  { readonly kind: "confirm" | "select" | "input" | "editor" }
+  { readonly kind: "confirm" | "select" | "input" | "editor" | "questions" }
 >;
 
 export interface SessionExtensionUiStateRecord {

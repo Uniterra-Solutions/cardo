@@ -10,7 +10,7 @@ import type {
   ComposerSlashOptionEmptyState,
 } from "./composer-commands";
 import { ComposerSurface } from "./composer-surface";
-import type { JovaltusExecuteModel } from "./jovaltus-ui";
+import type { JovaltusExecuteModel, JovaltusPlanModel } from "./jovaltus-ui";
 import { ModelOnboardingNoticeBanner } from "./model-onboarding-notice";
 import type { ModelOnboardingState, ModelOnboardingSettingsSection } from "./model-onboarding";
 import { ModelSelector } from "./model-selector";
@@ -68,6 +68,7 @@ interface ComposerPanelProps {
   readonly onToggleJovaltusMode?: () => void;
   readonly jovaltusExecute?: JovaltusExecuteModel;
   readonly onOpenJovaltusGraph?: () => void;
+  readonly jovaltusPlan?: JovaltusPlanModel;
 }
 
 export function ComposerPanel({
@@ -121,6 +122,7 @@ export function ComposerPanel({
   onToggleJovaltusMode,
   jovaltusExecute,
   onOpenJovaltusGraph,
+  jovaltusPlan,
 }: ComposerPanelProps) {
   const hasComposerInput = composerDraft.trim().length > 0 || attachments.length > 0;
   const primaryActionIsStop = selectedSession.status === "running" && !hasComposerInput;
@@ -174,6 +176,7 @@ export function ComposerPanel({
           onToggleJovaltusMode={onToggleJovaltusMode}
           jovaltusExecute={jovaltusExecute}
           onOpenJovaltusGraph={onOpenJovaltusGraph}
+          jovaltusPlan={jovaltusPlan}
           leadingControls={(
             <button
               aria-label="Attach files"

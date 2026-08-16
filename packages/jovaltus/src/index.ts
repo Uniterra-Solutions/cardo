@@ -27,10 +27,11 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { Type } from 'typebox';
 import { CHAIN, WAITING_PHASES, readFindings, readVerdict, waitingPhase } from './chain.js';
+import { clarifyRequirements } from './clarify.js';
 import { runPhase } from './dispatch.js';
 import {
   buildExecuteWidgetLines,
@@ -42,7 +43,17 @@ import {
   planExecuteWidgetInitial,
   registerPlanMode,
 } from './plan-mode.js';
-import { CLARIFY_FILENAME, EXECUTION_PLAN_FILENAME, readExecutionPlan } from './plan-json.js';
+import {
+  buildPlanProgressLines,
+  JOVALTUS_PLAN_STATUS_KEY,
+  JOVALTUS_PLAN_WIDGET_KEY,
+  planProgressCompletePhase,
+  planProgressDone,
+  planProgressInitial,
+  planProgressStartPhase,
+  type PlanProgressState,
+} from './plan-pipeline-progress.js';
+import { EXECUTION_PLAN_FILENAME, readExecutionPlan } from './plan-json.js';
 import { planToMermaid } from './plan-mermaid.js';
 import { createProgress, markDone, startRunning } from './plan-progress.js';
 import { deriveExecutionSteps } from './plan-steps.js';
@@ -218,34 +229,6 @@ function failPipeline(p: PipelineState, ctx: PhaseDispatchContext, message: stri
   return errorResult(message);
 }
 
-/**
- * Human-in-loop requirement clarification, once per run (right after the
- * PRD). Asks the user via a synchronous dialog; their answer is stored as
- * `clarify.md` and becomes part of the context injected into later phases.
- * Skipped when headless, when the dialog is unavailable, or when already
- * answered (a resumed run).
- */
-async function clarifyRequirements(p: PipelineState, ctx: ExtensionContext): Promise<void> {
-  if (!ctx.hasUI || typeof ctx.ui.input !== 'function') {
-    return;
-  }
-  const clarifyFile = path.join(p.run_dir, CLARIFY_FILENAME);
-  if (fileExists(clarifyFile)) {
-    return;
-  }
-  try {
-    const answer = await ctx.ui.input(
-      'Jovaltus 需求釐清',
-      `PRD 已完成：${p.run_dir}/prd.md。如有補充或調整請輸入；直接按 Enter 表示需求已清晰。`,
-    );
-    if (answer !== undefined && answer.trim()) {
-      writeFileSync(clarifyFile, answer.trim(), 'utf8');
-    }
-  } catch {
-    // Dialog dismissed or unavailable — treat as "requirements are clear".
-  }
-}
-
 /** The execution plan schema example shown in the handoff instructions. */
 const EXECUTION_PLAN_EXAMPLE = {
   execution_mode: 'batched',
@@ -299,21 +282,40 @@ async function runPlanPipeline(
   ctx: ExtensionContext,
   dctx: PhaseDispatchContext,
 ): Promise<ToolResult> {
+  let progress = planProgressInitial();
+  pushPlanProgress(dctx, progress);
   if (p.phase === 'prd') {
+    progress = planProgressStartPhase(progress, 'prd');
+    pushPlanProgress(dctx, progress);
     const result = await dispatchPhase(p, 'prd', dctx);
     if (!result.ok) {
+      clearPlanProgress(dctx);
       return failPipeline(p, dctx, result.message);
     }
     jstate.setPhase(p, 'design');
+    progress = planProgressCompletePhase(progress, 'prd');
+    pushPlanProgress(dctx, progress);
   }
   if (p.phase === 'design') {
+    progress = planProgressStartPhase(progress, 'clarify');
+    pushPlanProgress(dctx, progress);
     await clarifyRequirements(p, ctx);
+    progress = planProgressCompletePhase(progress, 'clarify');
+    pushPlanProgress(dctx, progress);
+    progress = planProgressStartPhase(progress, 'design');
+    pushPlanProgress(dctx, progress);
     const result = await dispatchPhase(p, 'design', dctx);
     if (!result.ok) {
+      clearPlanProgress(dctx);
       return failPipeline(p, dctx, result.message);
     }
     jstate.setPhase(p, 'plan_waiting');
+    progress = planProgressCompletePhase(progress, 'design');
+    pushPlanProgress(dctx, progress);
   }
+  progress = planProgressCompletePhase(progress, 'plan');
+  progress = planProgressDone(progress);
+  pushPlanProgress(dctx, progress);
   return planHandoffResult(p);
 }
 
@@ -360,6 +362,32 @@ function pushExecuteWidget(ctx: PhaseDispatchContext, lines: string[]): void {
   }
   ctx.ui.setWidget(JOVALTUS_EXECUTE_WIDGET_KEY, lines);
   ctx.ui.setStatus(JOVALTUS_EXECUTE_STATUS_KEY, 'executing plan');
+}
+
+/** Push the plan pipeline progress strip to the host (no-op headless). */
+function pushPlanProgress(ctx: PhaseDispatchContext, state: PlanProgressState): void {
+  if (ctx.ui === undefined) {
+    return;
+  }
+  ctx.ui.setWidget(JOVALTUS_PLAN_WIDGET_KEY, buildPlanProgressLines(state));
+  const runningPhase = state.phases.find((phase) => phase.state === 'running');
+  ctx.ui.setStatus(
+    JOVALTUS_PLAN_STATUS_KEY,
+    state.status === 'done'
+      ? 'plan ready'
+      : runningPhase
+        ? `planning: ${runningPhase.name}`
+        : 'planning',
+  );
+}
+
+/** Clear the plan pipeline progress strip (used on dispatch failure). */
+function clearPlanProgress(ctx: PhaseDispatchContext): void {
+  if (ctx.ui === undefined) {
+    return;
+  }
+  ctx.ui.setWidget(JOVALTUS_PLAN_WIDGET_KEY, undefined);
+  ctx.ui.setStatus(JOVALTUS_PLAN_STATUS_KEY, undefined);
 }
 
 /** Clear the execute panel (used on dispatch failure). */

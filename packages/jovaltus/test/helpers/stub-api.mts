@@ -28,6 +28,7 @@ export const FAKE_ENV_KEYS: readonly string[] = [
   'JOVALTUS_FAKE_SLOW_MS',
   'JOVALTUS_FAKE_VERDICT_FILE',
   'JOVALTUS_FAKE_FINDINGS',
+  'JOVALTUS_FAKE_QUESTIONS',
 ];
 
 /** Point the fake backend at a fresh log file; return the log path. */
@@ -105,6 +106,12 @@ export interface CapturedWidget {
   key: string;
   lines: readonly string[] | undefined;
   options: Record<string, unknown> | undefined;
+}
+
+/** One captured `ctx.ui.askQuestions` wizard call (Jovaltus clarification). */
+export interface CapturedAskQuestions {
+  title: string;
+  questions: readonly { readonly question: string; readonly options: readonly string[] }[];
 }
 
 export type StubHandler = (event: unknown, ctx: ExtensionContext) => unknown;
@@ -195,6 +202,7 @@ export interface StubCtx {
   notifications: CapturedNotification[];
   statuses: CapturedStatus[];
   widgets: CapturedWidget[];
+  askQuestionsCalls: CapturedAskQuestions[];
 }
 
 export interface MakeCtxOptions {
@@ -205,6 +213,16 @@ export interface MakeCtxOptions {
   signal?: AbortSignal;
   /** session entries returned by ctx.sessionManager.getEntries() */
   sessionEntries?: unknown[];
+  /** whether ctx.hasUI is true (interactive host) */
+  hasUI?: boolean;
+  /** answers returned by the `askQuestions` wizard; undefined → cancelled */
+  askAnswers?: readonly string[];
+  /** false → omit `askQuestions` from the ui surface (legacy host) */
+  askQuestionsAvailable?: boolean;
+  /** value returned by the legacy `ui.select` fallback (undefined → cancel) */
+  selectAnswer?: string;
+  /** value returned by the legacy `ui.input` fallback (undefined → cancel) */
+  inputAnswer?: string;
 }
 
 /** Build an ExtensionContext backed by `cwd`, capturing ui.notify calls. */
@@ -212,6 +230,25 @@ export function makeCtx(cwd: string, opts: MakeCtxOptions = {}): StubCtx {
   const notifications: CapturedNotification[] = [];
   const statuses: CapturedStatus[] = [];
   const widgets: CapturedWidget[] = [];
+  const askQuestionsCalls: CapturedAskQuestions[] = [];
+  const wizardSurface =
+    opts.askQuestionsAvailable === false
+      ? {}
+      : {
+          askQuestions: async (
+            title: string,
+            questions: readonly {
+              readonly question: string;
+              readonly options: readonly string[];
+            }[],
+          ): Promise<readonly string[] | undefined> => {
+            askQuestionsCalls.push({
+              title,
+              questions: questions.map((q) => ({ question: q.question, options: [...q.options] })),
+            });
+            return opts.askAnswers === undefined ? undefined : [...opts.askAnswers];
+          },
+        };
   const ctx = {
     ui: {
       notify: (title: string, level: 'error' | 'info' | 'warning'): void => {
@@ -227,9 +264,13 @@ export function makeCtx(cwd: string, opts: MakeCtxOptions = {}): StubCtx {
       ): void => {
         widgets.push({ key, lines, options });
       },
+      select: async (_title: string, _options: readonly string[]): Promise<string | undefined> =>
+        opts.selectAnswer,
+      input: async (_title: string): Promise<string | undefined> => opts.inputAnswer,
+      ...wizardSurface,
     },
     mode: 'json',
-    hasUI: false,
+    hasUI: opts.hasUI ?? false,
     cwd,
     sessionManager: { getEntries: (): unknown[] => opts.sessionEntries ?? [] },
     modelRegistry: {},
@@ -247,7 +288,7 @@ export function makeCtx(cwd: string, opts: MakeCtxOptions = {}): StubCtx {
     compact: (): void => {},
     getSystemPrompt: (): string => '',
   } as unknown as ExtensionContext;
-  return { ctx, notifications, statuses, widgets };
+  return { ctx, notifications, statuses, widgets, askQuestionsCalls };
 }
 
 /** Create a fresh temp dir for one test (agent dir / cwd / artifacts). */

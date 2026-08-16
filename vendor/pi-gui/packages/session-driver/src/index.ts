@@ -11,6 +11,7 @@ export type {
   NavigateSessionTreeResult,
   HostUiRequest,
   HostUiRequestEvent,
+  HostUiQuestion,
   RunCompletedEvent,
   RunFailedEvent,
   RunId,

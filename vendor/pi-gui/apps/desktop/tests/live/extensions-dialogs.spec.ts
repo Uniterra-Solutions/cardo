@@ -44,6 +44,31 @@ export default function dialogExtension(pi) {
     },
   });
 
+  pi.registerCommand("dialog-questions", {
+    description: "Open a multi-question wizard",
+    handler: async (_args, ctx) => {
+      const answers = await ctx.ui.askQuestions("Answer these", [
+        { question: "First question", options: ["Alpha", "Beta"] },
+        { question: "Second question", options: ["Gamma", "Delta"] },
+      ]);
+      ctx.ui.notify(answers ? "Answers " + answers.join(" / ") : "Questions cancelled", "info");
+    },
+  });
+
+  pi.registerCommand("plan-panel", {
+    description: "Push a plan pipeline progress widget",
+    handler: async (_args, ctx) => {
+      ctx.ui.setWidget("jovaltus-plan", [
+        "STATUS|running",
+        "PHASE|prd|done",
+        "PHASE|clarify|running",
+        "PHASE|design|pending",
+        "PHASE|plan|pending",
+      ]);
+      ctx.ui.setStatus("jovaltus-plan", "planning: clarify");
+    },
+  });
+
   pi.registerCommand("dialog-editor", {
     description: "Open an editor dialog",
     handler: async (_args, ctx) => {
@@ -192,6 +217,88 @@ test("renders extension dialogs in the Electron surface and routes responses bac
     await dialog.getByRole("button", { name: "Submit", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(window.locator(".timeline")).toContainText("Editor lines 2");
+  } finally {
+    await harness.close();
+  }
+});
+
+test("renders the multi-question wizard: one question at a time, options + Other, Next/Submit paging, total count", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("questions-wizard-workspace");
+  await writeProjectExtension(workspacePath, "dialog-extension.ts", extensionSource);
+
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await createNamedThread(window, "Questions session");
+
+    const composer = window.getByTestId("composer");
+    await composer.fill("/dialog-questions ");
+    await composer.press("Enter");
+    const dialog = window.getByTestId("extension-dialog");
+    await expect(dialog).toBeVisible();
+
+    // Progress header shows the total count; only the first question is shown.
+    await expect(dialog.getByTestId("extension-dialog-progress")).toHaveText("Question 1 of 2");
+    await expect(dialog).toContainText("First question");
+    await expect(dialog).not.toContainText("Second question");
+
+    // Next stays disabled until an answer is chosen.
+    const next = dialog.getByTestId("extension-dialog-next");
+    await expect(next).toBeDisabled();
+    await dialog.getByRole("button", { name: "Alpha", exact: true }).click();
+    await expect(next).toBeEnabled();
+    await next.click();
+
+    // Second (last) question: the free-text "Other" path, then Submit.
+    await expect(dialog.getByTestId("extension-dialog-progress")).toHaveText("Question 2 of 2");
+    await expect(dialog).toContainText("Second question");
+    await dialog.getByTestId("extension-dialog-other").click();
+    const otherInput = dialog.getByTestId("extension-dialog-other-input");
+    await expect(otherInput).toBeVisible();
+    await otherInput.fill("my custom answer");
+    const submit = dialog.getByTestId("extension-dialog-submit");
+    await expect(submit).toBeEnabled();
+    await submit.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(window.locator(".timeline")).toContainText("Answers Alpha / my custom answer");
+  } finally {
+    await harness.close();
+  }
+});
+
+test("renders the jovaltus plan pipeline progress panel from the widget protocol", async () => {
+  test.setTimeout(60_000);
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("plan-panel-workspace");
+  await writeProjectExtension(workspacePath, "dialog-extension.ts", extensionSource);
+
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await createNamedThread(window, "Plan panel session");
+
+    const composer = window.getByTestId("composer");
+    await composer.fill("/plan-panel ");
+    await composer.press("Enter");
+
+    const panel = window.getByTestId("jovaltus-plan-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("planning · 1/4 phases");
+    await expect(window.getByTestId("jovaltus-plan-phase-prd")).toHaveText(/✓ PRD/);
+    await expect(window.getByTestId("jovaltus-plan-phase-clarify")).toBeVisible();
+    // The jovaltus-plan widget/status are custom-rendered, so the generic
+    // extension dock must stay hidden.
+    await expect(window.getByTestId("extension-dock")).toHaveCount(0);
   } finally {
     await harness.close();
   }

@@ -9,11 +9,11 @@ const DOCK_SEGMENT_SEPARATOR = "--------------------";
 const GENERIC_ACTIVE_LABEL = "Extension UI active";
 // Cardo: the jovaltus execute panel is rendered by the custom panel above
 // the composer, so it must not double-render inside the generic dock.
-const CUSTOM_RENDERED_WIDGET_KEYS = new Set(["jovaltus-execute"]);
-// Cardo: the jovaltus plan-mode statuses (mode state + execute progress) are
-// rendered by the custom mode button and execute panel, so they must not
-// double-render inside the generic dock bar above the composer either.
-const CUSTOM_RENDERED_STATUS_KEYS = new Set(["jovaltus-mode", "jovaltus-execute"]);
+const CUSTOM_RENDERED_WIDGET_KEYS = new Set(["jovaltus-execute", "jovaltus-plan"]);
+// Cardo: the jovaltus plan-mode statuses (mode state + execute/plan progress)
+// are rendered by the custom mode button and progress panels, so they must
+// not double-render inside the generic dock bar above the composer either.
+const CUSTOM_RENDERED_STATUS_KEYS = new Set(["jovaltus-mode", "jovaltus-execute", "jovaltus-plan"]);
 
 interface ExtensionDockBlock {
   readonly key: string;
@@ -102,11 +102,21 @@ export function ExtensionDialog({
   readonly onRespond: (response: HostUiResponse) => void;
 }) {
   const [draft, setDraft] = useState("");
+  // Cardo: wizard paging state for the `questions` dialog kind (Jovaltus
+  // requirement clarification). One question at a time; suggested options
+  // plus an "Other" free-text path; Next pages forward, Submit only appears
+  // on the last question; the header shows the total count.
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<readonly string[]>([]);
+  const [pendingOption, setPendingOption] = useState("");
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [otherDraft, setOtherDraft] = useState("");
   const titleId = useId();
   const bodyId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const firstOptionButtonRef = useRef<HTMLButtonElement | null>(null);
+  const otherInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (dialog.kind === "input") {
@@ -121,14 +131,34 @@ export function ExtensionDialog({
   }, [dialog]);
 
   useEffect(() => {
+    if (dialog.kind === "questions") {
+      setQuestionIndex(0);
+      setAnswers([]);
+      setPendingOption("");
+      setOtherOpen(false);
+      setOtherDraft("");
+    }
+  }, [dialog]);
+
+  useEffect(() => {
     if (dialog.kind === "confirm") {
       cancelButtonRef.current?.focus();
       return;
     }
     if (dialog.kind === "select") {
       firstOptionButtonRef.current?.focus();
+      return;
     }
-  }, [dialog]);
+    if (dialog.kind === "questions") {
+      firstOptionButtonRef.current?.focus();
+    }
+  }, [dialog, questionIndex]);
+
+  useEffect(() => {
+    if (dialog.kind === "questions" && otherOpen) {
+      otherInputRef.current?.focus();
+    }
+  }, [dialog, otherOpen]);
 
   const respondWithCancel = () => onRespond({ requestId: dialog.requestId, cancelled: true });
   const respondWithSubmit = () => {
@@ -139,6 +169,25 @@ export function ExtensionDialog({
     if (dialog.kind === "input" || dialog.kind === "editor") {
       onRespond({ requestId: dialog.requestId, value: draft });
     }
+  };
+  const wizardAnswer = otherOpen ? otherDraft : pendingOption;
+  const hasWizardAnswer = wizardAnswer.trim().length > 0;
+  const isLastQuestion = dialog.kind === "questions" && questionIndex >= dialog.questions.length - 1;
+  const handleWizardNext = () => {
+    if (dialog.kind !== "questions" || !hasWizardAnswer) {
+      return;
+    }
+    setAnswers([...answers, wizardAnswer]);
+    setQuestionIndex(questionIndex + 1);
+    setPendingOption("");
+    setOtherOpen(false);
+    setOtherDraft("");
+  };
+  const handleWizardSubmit = () => {
+    if (dialog.kind !== "questions" || !hasWizardAnswer) {
+      return;
+    }
+    onRespond({ requestId: dialog.requestId, answers: [...answers, wizardAnswer] });
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Tab") {
@@ -154,9 +203,16 @@ export function ExtensionDialog({
       if (dialog.kind === "confirm" || dialog.kind === "input" || dialog.kind === "editor") {
         event.preventDefault();
         respondWithSubmit();
+        return;
+      }
+      if (dialog.kind === "questions" && isLastQuestion && hasWizardAnswer) {
+        event.preventDefault();
+        handleWizardSubmit();
       }
     }
   };
+
+  const question = dialog.kind === "questions" ? dialog.questions[questionIndex] : undefined;
 
   return (
     <div className="extension-dialog-backdrop">
@@ -192,6 +248,54 @@ export function ExtensionDialog({
                 {option}
               </button>
             ))}
+          </div>
+        ) : null}
+
+        {dialog.kind === "questions" && question ? (
+          <div className="extension-dialog__questions">
+            <div className="extension-dialog__progress" data-testid="extension-dialog-progress">
+              Question {String(questionIndex + 1)} of {String(dialog.questions.length)}
+            </div>
+            <p className="extension-dialog__body" id={bodyId}>
+              {question.question}
+            </p>
+            <div className="extension-dialog__options">
+              {question.options.map((option, index) => (
+                <button
+                  className={`extension-dialog__option ${pendingOption === option && !otherOpen ? "extension-dialog__option--selected" : ""}`}
+                  key={option}
+                  ref={index === 0 ? firstOptionButtonRef : undefined}
+                  type="button"
+                  onClick={() => {
+                    setPendingOption(option);
+                    setOtherOpen(false);
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
+              <button
+                className={`extension-dialog__option extension-dialog__option--other ${otherOpen ? "extension-dialog__option--selected" : ""}`}
+                data-testid="extension-dialog-other"
+                type="button"
+                onClick={() => {
+                  setPendingOption("");
+                  setOtherOpen(true);
+                }}
+              >
+                Other
+              </button>
+            </div>
+            {otherOpen ? (
+              <input
+                ref={otherInputRef}
+                className="skills-search"
+                data-testid="extension-dialog-other-input"
+                placeholder="Type your own answer"
+                value={otherDraft}
+                onChange={(event) => setOtherDraft(event.target.value)}
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -243,6 +347,29 @@ export function ExtensionDialog({
             >
               Submit
             </button>
+          ) : null}
+          {dialog.kind === "questions" ? (
+            isLastQuestion ? (
+              <button
+                className="button button--primary"
+                data-testid="extension-dialog-submit"
+                disabled={!hasWizardAnswer}
+                type="button"
+                onClick={handleWizardSubmit}
+              >
+                Submit
+              </button>
+            ) : (
+              <button
+                className="button button--primary"
+                data-testid="extension-dialog-next"
+                disabled={!hasWizardAnswer}
+                type="button"
+                onClick={handleWizardNext}
+              >
+                Next
+              </button>
+            )
           ) : null}
         </div>
       </div>
