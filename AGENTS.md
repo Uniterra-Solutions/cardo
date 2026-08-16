@@ -12,8 +12,10 @@
 - `packages/cardo-cli`:
   - `pnpm --filter @uniterra-solutions/cardo run build` — compile the installer CLI (tsc -b)
   - `pnpm --filter @uniterra-solutions/cardo run lint` / `typecheck` — lint/type-check the CLI source
-  - `pnpm --filter @uniterra-solutions/cardo test` — CLI unit tests (node:test on compiled `dist/`; the stop-app sequence is tested with injected process ops)
-- Desktop app (migration in progress): the cardo desktop shell is being rebuilt as a DeepSeek Harness (dsh) profile — Web UI + thin shell, no longer the vendored pi-gui Electron app
+  - `pnpm --filter @uniterra-solutions/cardo test` — CLI unit tests + install-logic PBT (node:test + fast-check on compiled `dist/`; the stop-app sequence is tested with injected process ops)
+- `packages/cardo-desktop`:
+  - `pnpm --filter @cardo/cardo-desktop test` — builds, then node:test: profile-bootstrap unit tests + built-ins/readiness PBT (fast-check on compiled `dist/`)
+- `scripts/verify-cli-container/run.sh` — reproduces the `cardo setup` CLI flow inside a clean container (pristine source archive → `pnpm install --frozen-lockfile` → `pnpm run build` → dsh CLI / bundled-skills resolution assertions). Requires Docker; the regression net for the installer flow without a macOS runner.
 
 # Project Business Goals
 
