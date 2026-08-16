@@ -4,6 +4,5 @@
     "composite": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
-  "include": ["src"],
-  "references": [{ "path": "../cardo-systemprompt" }]
+  "include": ["src"]
 }

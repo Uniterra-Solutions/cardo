@@ -11,3 +11,14 @@ allowBuilds:
   koffi: true
   node-pty: true
   sharp: true
+  '@deepseek-ai/dsh-subprocess-local': true
+  fsevents: true
+  tesseract.js: true
+minimumReleaseAgeExclude:
+  - dsh-better-sidebar@0.12.2
+  - dsh-file-upload@0.4.2
+  - dsh-lan-gateway@0.2.1
+  - dsh-notifier@0.6.2
+  - dshmarket@1.9.0
+  - dsh-find-plugin@0.3.6
+  - dsh-subagent-model-picker@0.1.1
