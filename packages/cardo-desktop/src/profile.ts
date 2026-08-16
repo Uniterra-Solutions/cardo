@@ -21,6 +21,8 @@ export const VENDOR_PLUGIN_DIRS: readonly string[] = [
   'dsh-deep-whale',
   'dsh-subagent-monitor',
   'dsh-thinking-effort',
+  'dsh-shortcuts',
+  'dsh-git-graph',
 ] as const;
 
 /** The official dsh bundles every profile stacks (resolved from the dsh CLI). */

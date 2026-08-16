@@ -321,11 +321,19 @@ async function boot(): Promise<void> {
   }
 
   // Ensure the company built-ins are present in the profile this run uses.
-  // Both the vendored plugins and the bundled skills come from the source
-  // tree the app was built from (dev: the monorepo; packaged: Resources/src).
+  // The vendored plugins, the workspace built-ins, and the bundled skills all
+  // come from the source tree the app was built from (dev: the monorepo;
+  // packaged: Resources/src).
   const profile = 'web';
   const effectiveHome = dshHome ?? realDshHome();
-  ensureBuiltinPlugins(effectiveHome, profile, dshCliPath(), process.execPath, vendorPluginsRoot());
+  ensureBuiltinPlugins(
+    effectiveHome,
+    profile,
+    dshCliPath(),
+    process.execPath,
+    vendorPluginsRoot(),
+    bundledSrcRoot(),
+  );
 
   // Bundled skills ride the DSH_BUNDLED_SKILL_DIR provider.
   const skills = skillsDir();

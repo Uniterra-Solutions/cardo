@@ -19,6 +19,10 @@ export const BUILTIN_NPM_PLUGINS: readonly string[] = [
   'dsh-file-upload@0.4.2',
   'dsh-find-plugin@0.3.6',
   'dsh-subagent-model-picker@0.1.1',
+  'dsh-hotkeys@0.1.1',
+  'dsh-tool-git@0.1.3',
+  'dsh-browser-playwright@0.1.1',
+  'dsh-computer-use@0.1.0',
 ] as const;
 
 /** Vendored (non-npm) built-ins: source dir → package name. The loader
@@ -38,6 +42,22 @@ export const BUILTIN_VENDOR_PLUGINS: Readonly<Record<string, string>> = {
   'dsh-deep-whale': '@dsh-external/dsh-client-ui-skin-maid-atelier',
   'dsh-subagent-monitor': '@leetoners/dsh-ui-subagent-monitor',
   'dsh-thinking-effort': 'dsh-thinking-effort',
+  'dsh-shortcuts': 'dsh-shortcuts',
+  'dsh-git-graph': 'dsh-git-graph',
+};
+
+/** In-house (this repo's own) built-ins: source dir (relative to the source
+ * root — dev → the monorepo root, packaged → `Contents/Resources/src`) →
+ * package name, matching {@link BUILTIN_VENDOR_PLUGINS}'s direction. They
+ * ship built — the workspace build must have run before provisioning — and
+ * their host bundles are self-contained (runtime deps inlined), so copying
+ * the package dir is enough: the profile gets `package.json` + `lib/` +
+ * `cordis.patch.yml` with no pnpm install. Unlike the vendored plugins
+ * (third-party, pinned commits), these live in this repo under `packages/`,
+ * which is why they resolve from the source root instead of
+ * `vendor/dsh-plugins`. */
+export const BUILTIN_WORKSPACE_PLUGINS: Readonly<Record<string, string>> = {
+  'packages/cardo-provider': '@cardo/cardo-provider',
 };
 
 /** The pnpm settings every profile needs for plugin installs. */
@@ -77,12 +97,14 @@ export function builtinPackageName(spec: string): string {
 export function expectedBuiltinBundles(
   npmPlugins: readonly string[],
   vendorPlugins: Readonly<Record<string, string>>,
+  workspacePlugins: Readonly<Record<string, string>> = BUILTIN_WORKSPACE_PLUGINS,
 ): string[] {
   return [
     '@deepseek-ai/dsh-base',
     '@deepseek-ai/dsh-web-app',
     ...npmPlugins.map(builtinPackageName),
     ...Object.values(vendorPlugins),
+    ...Object.values(workspacePlugins),
   ];
 }
 
@@ -129,6 +151,34 @@ export function vendoredPluginsStale(profileDirPath: string, vendorRoot: string)
   return false;
 }
 
+/** Whether any in-house (workspace) built-in's installed copy has drifted
+ * from the current source. Same content-identity check as
+ * {@link vendoredPluginsStale}, but the source lives inside the source root
+ * (`packages/*`) rather than `vendor/dsh-plugins`. A missing or illegible
+ * installed copy is stale. Returns false only when every installed copy
+ * matches the current source. */
+export function workspacePluginsStale(profileDirPath: string, sourceRoot: string): boolean {
+  for (const [relDir, pkgName] of Object.entries(BUILTIN_WORKSPACE_PLUGINS)) {
+    const sourcePkg = path.join(sourceRoot, relDir, 'package.json');
+    const installedPkg = path.join(
+      profileDirPath,
+      'node_modules',
+      ...pkgName.split('/'),
+      'package.json',
+    );
+    try {
+      const sourceVersion = (readJson(sourcePkg) as { version?: string }).version;
+      const installedVersion = (readJson(installedPkg) as { version?: string }).version;
+      if (sourceVersion !== installedVersion) {
+        return true;
+      }
+    } catch {
+      return true; // cannot read either copy → assume stale, re-provision
+    }
+  }
+  return false;
+}
+
 /**
  * Ensure the built-in plugins are installed into `dshHome`'s profile.
  *
@@ -137,6 +187,8 @@ export function vendoredPluginsStale(profileDirPath: string, vendorRoot: string)
  * @param dshCli absolute path to the bundled dsh CLI (lib/bin.js).
  * @param nodeExec the node executable to run the CLI with.
  * @param vendorRoot the vendored plugin sources (app resources or monorepo).
+ * @param sourceRoot the source root the workspace built-ins live under
+ *   (dev → the monorepo root, packaged → `Contents/Resources/src`).
  */
 export function ensureBuiltinPlugins(
   dshHome: string,
@@ -144,12 +196,17 @@ export function ensureBuiltinPlugins(
   dshCli: string,
   nodeExec: string,
   vendorRoot: string,
+  sourceRoot: string,
 ): void {
   const dir = profileDir(dshHome, profile);
   if (!existsSync(dir)) {
     return; // no profile yet — nothing to ensure
   }
-  if (hasAllBuiltins(dir) && !vendoredPluginsStale(dir, vendorRoot)) {
+  if (
+    hasAllBuiltins(dir) &&
+    !vendoredPluginsStale(dir, vendorRoot) &&
+    !workspacePluginsStale(dir, sourceRoot)
+  ) {
     return;
   }
 
@@ -179,15 +236,31 @@ export function ensureBuiltinPlugins(
   manifest.dsh.profile.bundles ??= [];
   const bundles = manifest.dsh.profile.bundles;
 
-  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
+  // Copy one built-in package dir into the profile's node_modules and make
+  // sure its Loader bundle row is present in the manifest.
+  const copyBuiltin = (sourceDir: string, pkgName: string): void => {
     if (!bundles.includes(pkgName)) {
       bundles.push(pkgName);
     }
-    const src = path.join(vendorRoot, dirName);
     const dest = path.join(dir, 'node_modules', ...pkgName.split('/'));
     rmSync(dest, { recursive: true, force: true });
     mkdirSync(path.dirname(dest), { recursive: true });
-    cpSync(src, dest, { recursive: true });
+    cpSync(sourceDir, dest, { recursive: true });
+  };
+
+  // Vendored plugins: copy under their package name and append the bundle rows
+  // to the profile manifest (dsh plugin add can't be used — the vendored
+  // packages declare peers that are not on npm).
+  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
+    copyBuiltin(path.join(vendorRoot, dirName), pkgName);
+  }
+
+  // In-house workspace built-ins: same copy semantics, but the source lives in
+  // the source root (`packages/*`). The workspace build must have produced the
+  // package's lib/ before this runs — the copy carries the built bundle, the
+  // package.json, and cordis.patch.yml, so the profile needs no pnpm install.
+  for (const [relDir, pkgName] of Object.entries(BUILTIN_WORKSPACE_PLUGINS)) {
+    copyBuiltin(path.join(sourceRoot, relDir), pkgName);
   }
   writeJson(manifestPath, manifest);
 }

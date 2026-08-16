@@ -5,6 +5,7 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/',
+      '**/lib/',
       '**/node_modules/',
       'vendor/**',
       'eslint.config.mjs',
