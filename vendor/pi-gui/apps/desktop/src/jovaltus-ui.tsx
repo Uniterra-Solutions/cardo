@@ -80,25 +80,46 @@ export function parseJovaltusExecuteWidget(lines: readonly string[]): JovaltusEx
   return { status, mode, stepIndex, batches: compactBatches, agents };
 }
 
+/** The three per-session modes reported by the jovaltus extension under the
+ * live 'jovaltus-mode' status ('standard' | 'plan mode' | 'debug mode'). */
+export type JovaltusMode = "standard" | "plan" | "debug";
+
+/** Fixed composer toggle cycle: standard → plan → debug → standard. */
+export const JOVALTUS_MODE_CYCLE: readonly JovaltusMode[] = ["standard", "plan", "debug"];
+
+/** Cycle successor for the composer mode button (total). */
+export function nextJovaltusMode(mode: JovaltusMode): JovaltusMode {
+  // The input type is the closed 3-value domain, so indexOf is never -1 and
+  // the indexed element is always defined (noUncheckedIndexedAccess).
+  return JOVALTUS_MODE_CYCLE[(JOVALTUS_MODE_CYCLE.indexOf(mode) + 1) % JOVALTUS_MODE_CYCLE.length]!;
+}
+
+const JOVALTUS_MODE_TITLES: Readonly<Record<JovaltusMode, string>> = {
+  standard: "Mode: standard — shift+tab cycles to plan mode",
+  plan: "Plan mode on — shift+tab cycles to debug mode",
+  debug: "Debug mode on — shift+tab cycles to standard mode",
+};
+
 /** Mode toggle button for the composer (reads live extension status). */
 export function JovaltusModeButton({
-  planModeOn,
+  mode,
   onToggle,
 }: {
-  readonly planModeOn: boolean;
+  readonly mode: JovaltusMode;
   readonly onToggle: () => void;
 }) {
+  const on = mode !== "standard";
   return (
     <button
-      aria-pressed={planModeOn}
-      className={`jovaltus-mode ${planModeOn ? "jovaltus-mode--on" : ""}`}
+      aria-pressed={on}
+      className={`jovaltus-mode ${on ? "jovaltus-mode--on" : ""}`}
       data-testid="jovaltus-mode-button"
-      title={planModeOn ? "Plan mode on — shift+tab to turn off" : "Plan mode off — shift+tab to turn on"}
+      title={JOVALTUS_MODE_TITLES[mode]}
       type="button"
       onClick={onToggle}
     >
       <span className="jovaltus-mode__dot" aria-hidden="true" />
-      <span className="jovaltus-mode__label">plan</span>
+      <span className="jovaltus-mode__label">{mode}</span>
     </button>
   );
 }

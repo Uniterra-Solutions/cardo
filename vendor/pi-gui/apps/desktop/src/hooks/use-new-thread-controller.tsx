@@ -28,6 +28,8 @@ import {
 import { buildModelOptions, parseTreeComposerCommand } from "../composer-commands";
 import type { PiDesktopApi } from "../ipc";
 import { deriveModelOnboardingState } from "../model-onboarding";
+// Cardo: Jovaltus mode selection on the new-thread page.
+import type { JovaltusMode } from "../jovaltus-ui";
 import { getEffectiveModelRuntime } from "../model-settings";
 import type { SettingsSection } from "../settings-view";
 import { useMentionMenu } from "./use-mention-menu";
@@ -69,7 +71,7 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
   const [thinkingLevel, setThinkingLevel] = useState<string | undefined>();
   // Cardo: Jovaltus plan mode for the new thread (plan vs standard), chosen
   // on the new-thread page before the conversation exists.
-  const [jovaltusMode, setJovaltusMode] = useState(false);
+  const [mode, setMode] = useState<JovaltusMode>("standard");
   const [composerError, setComposerError] = useState<string | undefined>();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const previousActiveViewRef = useRef<AppView | null>(null);
@@ -135,7 +137,7 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       setThinkingLevel(undefined);
       // Cardo: new threads start in standard mode; the picker resets with the
       // rest of the surface.
-      setJovaltusMode(false);
+      setMode("standard");
       setComposerError(undefined);
     },
     [rootWorkspace?.id, rootWorkspaceOptions, snapshot, visibleWorkspaces],
@@ -160,7 +162,7 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
     setModelId(undefined);
     setThinkingLevel(undefined);
     // Cardo: keep the mode picker in sync with the other surface resets.
-    setJovaltusMode(false);
+    setMode("standard");
     setComposerError(undefined);
   }, []);
 
@@ -250,8 +252,10 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       provider: resolvedProvider,
       modelId: resolvedModelId,
       thinkingLevel: resolvedThinkingLevel,
-      // Cardo: start the new conversation in the selected Jovaltus mode.
-      jovaltusMode,
+      // Cardo: start the new conversation in the selected Jovaltus mode
+      // (absent = standard; the mode command runs silently before the first
+      // message).
+      mode: mode === "standard" ? undefined : mode,
     };
     expandWorkspace(rootWorkspaceId);
     void updateSnapshot(api, setSnapshot, () => api.startThread(input)).then(() => {
@@ -267,7 +271,7 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
     attachments,
     environment,
     expandWorkspace,
-    jovaltusMode,
+    mode,
     modelOnboarding.requiresModelSelection,
     prompt,
     resolvedModelId,
@@ -384,8 +388,8 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       resolvedModelId,
       resolvedThinkingLevel,
       modelOnboarding,
-      jovaltusMode,
-      setJovaltusMode,
+      mode,
+      setMode,
       slashMenu,
       mentionMenu,
       setPrompt,
@@ -417,8 +421,8 @@ export function useNewThreadController(params: UseNewThreadControllerParams) {
       resolvedModelId,
       resolvedThinkingLevel,
       modelOnboarding,
-      jovaltusMode,
-      setJovaltusMode,
+      mode,
+      setMode,
       slashMenu,
       mentionMenu,
       selectWorkspace,
