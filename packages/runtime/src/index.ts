@@ -7,13 +7,18 @@
  * installed externally. `builtinExtensionMetadata` mirrors the same order and
  * feeds the inline-extension display names. Add new extensions here as they
  * join the monorepo.
+ *
+ * NOTE (dsh migration 2026-08): the Jovaltus/cardo-planmode pipeline no
+ * longer ships as a pi extension — it is a bundled skill
+ * (`packages/skills/src/skills/cardo-planmode`) whose workflow scripts run
+ * through the harness's native `workflow` tool. Only the working-rules
+ * extension remains.
  */
 
 import generalFactory from '@cardo/general';
-import jovaltusFactory from '@cardo/jovaltus';
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
-export const builtinExtensionFactories: ExtensionFactory[] = [generalFactory, jovaltusFactory];
+export const builtinExtensionFactories: ExtensionFactory[] = [generalFactory];
 
 export interface BuiltinExtensionMetadata {
   readonly displayName: string;
@@ -25,9 +30,5 @@ export const builtinExtensionMetadata: BuiltinExtensionMetadata[] = [
   {
     displayName: 'General',
     description: 'App-wide working rules injected into the system prompt',
-  },
-  {
-    displayName: 'Jovaltus',
-    description: 'Jovaltus pipeline: plan/execute/simplify/review',
   },
 ];

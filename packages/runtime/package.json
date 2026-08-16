@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@cardo/general": "workspace:*",
-    "@cardo/jovaltus": "workspace:*",
     "@earendil-works/pi-coding-agent": "^0.84.1"
   },
   "devDependencies": {
