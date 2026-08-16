@@ -46,19 +46,28 @@ function run(file: string, args: readonly string[]): Promise<RunResult> {
   });
 }
 
-function assertMacOS(): void {
-  if (process.platform !== 'darwin') {
-    throw new Error('cardo currently only supports macOS');
+/**
+ * The release-asset suffix for one platform/arch pair. The desktop build
+ * (electron-builder) names macOS artifacts `<name>-<version>-<arch>-mac.zip`
+ * and Windows artifacts `<name>-<version>-<arch>-win.zip` (planned). Keeping
+ * this platform-driven instead of a hard-coded macOS suffix is what lets the
+ * CLI install Windows builds later.
+ */
+export function assetSuffixFor(platform: NodeJS.Platform, arch: string): string {
+  if (platform === 'darwin') {
+    return `-${arch}-mac.zip`;
   }
+  if (platform === 'win32') {
+    return `-${arch}-win.zip`;
+  }
+  throw new Error(`cardo does not yet support ${platform} (only darwin/win32)`);
 }
 
 function currentArch(): string {
   if (process.arch === 'arm64' || process.arch === 'x64') {
     return process.arch;
   }
-  throw new Error(
-    `Unsupported CPU architecture: ${process.arch} (only arm64/x64 macOS is supported)`,
-  );
+  throw new Error(`Unsupported CPU architecture: ${process.arch} (only arm64/x64 is supported)`);
 }
 
 async function fetchLatestRelease(): Promise<LatestRelease> {
@@ -94,8 +103,17 @@ async function fetchLatestRelease(): Promise<LatestRelease> {
   );
 }
 
-function findZipAsset(release: LatestRelease, arch: string): ReleaseAsset {
-  const suffix = `-${arch}.zip`;
+/**
+ * Select the release asset for the current platform/arch. Uses the
+ * platform-driven suffix (macOS `-<arch>-mac.zip`, Windows `-<arch>-win.zip`)
+ * so a Windows release can install the Windows build when it exists.
+ */
+export function findZipAsset(
+  release: LatestRelease,
+  arch: string,
+  platform: NodeJS.Platform = process.platform,
+): ReleaseAsset {
+  const suffix = assetSuffixFor(platform, arch);
   const asset = release.assets.find((candidate) => candidate.name.endsWith(suffix));
   if (asset === undefined) {
     throw new Error(
@@ -117,8 +135,23 @@ async function downloadFile(url: string, dest: string): Promise<void> {
   await pipeline(Readable.fromWeb(response.body), createWriteStream(dest));
 }
 
-async function extractZip(zipPath: string, destDir: string): Promise<void> {
-  await run('/usr/bin/ditto', ['-x', '-k', zipPath, destDir]);
+async function extractZip(
+  zipPath: string,
+  destDir: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<void> {
+  if (platform === 'darwin') {
+    // ditto is the macOS-native zip extractor; it also preserves the .app
+    // bundle's symlinks and permissions.
+    await run('/usr/bin/ditto', ['-x', '-k', zipPath, destDir]);
+    return;
+  }
+  if (platform === 'win32') {
+    throw new Error(
+      'Windows installation is not implemented yet — the Windows release asset exists, but extraction is not wired up.',
+    );
+  }
+  throw new Error(`cardo does not yet support ${platform} (only darwin/win32)`);
 }
 
 async function findAppBundle(dir: string): Promise<string> {
@@ -152,7 +185,6 @@ interface InstallOptions {
 }
 
 async function installDesktopApp(options: InstallOptions): Promise<void> {
-  assertMacOS();
   const release = await fetchLatestRelease();
   const asset = findZipAsset(release, currentArch());
 
@@ -249,7 +281,7 @@ function printHelp(): void {
       'cardo — Cardo desktop app installer',
       '',
       'Usage:',
-      '  cardo setup [--no-open] [--dry-run]   Download and install the latest Cardo macOS app',
+      '  cardo setup [--no-open] [--dry-run]   Download and install the latest Cardo desktop app',
       '  cardo update [--no-open] [--dry-run]  Update the CLI and reinstall the latest app',
       '  cardo --version                        Print the CLI version',
       '  cardo --help                           Print this help',
