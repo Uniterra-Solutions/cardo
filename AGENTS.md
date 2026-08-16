@@ -26,10 +26,10 @@
 - `packages/*` — pnpm workspace packages
 - `packages/cardo-systemprompt/` — pi-agent extension: app-wide working rules (no emoji, concise replies, no over-engineering, minimal code, verify external APIs, tests per business logic, reply in the user's language) appended to every agent turn's system prompt via a `before_agent_start` handler. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — see below)
 - `packages/cardo-skills/` — built-in skill registry: bundles the company-standard skills (cardo-planmode pipeline, cardo-pbt-debugging, qa, project-documentation, create-skill, manage-agents-md, manage-git-repo) in `src/skills/*` and copies them to `dist/skills/` via `scripts/copy-skills.mjs` during build. `provisionBuiltinSkills()` provisions them into an agent skills directory at startup; idempotent — existing skills are never clobbered. In the dsh runtime these ship as the rank-600 bundled provider via `DSH_BUNDLED_SKILL_DIR`
-- `packages/runtime/` — desktop runtime: built-in extension registry (`builtinExtensionFactories` + `builtinExtensionMetadata`) plus the dsh profile spec (`src/dsh-profile.ts`: official bundles, cardo bundles, pinned community plugins, profile env)
-- `packages/cardo-cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
-- `vendor/pi-gui/` — legacy vendored Electron desktop app (git-subtree-managed). Being replaced by the dsh profile + shell; keep cardo patches minimal and `// Cardo:` marked until removal
+- `packages/cardo-desktop/` — Electron shell over the bundled dsh CLI. Resolves `@deepseek-ai/dsh` from `packages/cardo-desktop/node_modules` (pnpm links the desktop devDependency there — never the workspace root; see `dshCliPath()` in `src/main.ts`). Built-ins are ensured at startup into the profile the run uses (`src/builtin.ts`: 6 npm plugins via `dsh plugin add`, 3 vendored plugins copied under their package names, bundled skills via `DSH_BUNDLED_SKILL_DIR`). Packaged: resolves everything from the source tree embedded as `Contents/Resources/src`; dev: from the monorepo
+- `packages/cardo-cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. `cardo setup` downloads the release's auto-generated source tarball, `pnpm install --frozen-lockfile` (with `CI=true` — the app launches `cardo update` detached with no TTY, and pnpm 11 aborts otherwise), `pnpm run build`, electron-builder `--mac`, embeds the whole source tree under `Contents/Resources/src`, installs to `~/Applications`. No Apple signing needed (no quarantine). Root `prepare: "husky || true"` — GitHub source tarballs have no `.git`, so husky must tolerate absence. Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes — CI publishes the CLI only; the source archive IS the desktop artifact
 - `vendor/dsh-plugins/` — pinned community dsh plugins not published to npm (vendored at fixed commits; see `VENDOR.md` pin ledger)
+- `scripts/verify-cli-container/` — Docker harness that replays the `cardo setup` flow in a clean container (`run.sh`; the CLI-flow regression net)
 - Root holds shared tooling only: eslint, prettier, husky, tsconfig.base.json
 - Every package extends `tsconfig.base.json` with `rootDir: src`, `outDir: dist`
 
@@ -49,10 +49,11 @@
 
 **Always:**
 
-- Run `pnpm run lint` and `pnpm run typecheck` before committing
+- Run `pnpm run lint` and `pnpm run typecheck` before committing (build first — `tsc -b --noEmit` fails with TS6310 when referenced projects are stale)
 - Add tests for new behaviour
-- After changing `packages/cardo-systemprompt`, `packages/runtime`, or `packages/cardo-skills` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
+- After changing `packages/cardo-systemprompt`, `packages/cardo-skills`, or `packages/cardo-updater` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
 - After changing `packages/cardo-skills/src/skills/*`, run `pnpm run build` so `copy-skills.mjs` refreshes `dist/skills/` (stale entries are removed, so a deleted skill stops shipping)
+- After changing the `cardo setup` install flow or root package scripts, run `scripts/verify-cli-container/run.sh` — it replays the installer flow in a clean container and fails on any regression (no-TTY pnpm install, dsh resolution, bundled skills)
 
 **Ask first:**
 
