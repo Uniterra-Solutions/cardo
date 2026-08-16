@@ -6,6 +6,11 @@ node_modules
 **/node_modules
 **/dist
 **/*.tsbuildinfo
+# The provider's esbuild bundle (lib/index.js) is a build artifact; the
+# harness must start from a pristine tree that has NOT been built locally,
+# otherwise the very regression it exists to catch (setup build missing the
+# bundle) is masked by stale local outputs.
+packages/cardo-provider/lib
 vendor/dsh-runtime
 .plan
 .hermes
