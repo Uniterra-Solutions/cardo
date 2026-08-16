@@ -20,7 +20,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SKILL_NAMES = [
-  'agentic-debugging',
+  'cardo-pbt-debugging',
+  'cardo-planmode',
   'manage-agents-md',
   'manage-git-repo',
   'project-documentation',
