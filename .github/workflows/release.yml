@@ -126,6 +126,8 @@ jobs:
           # pnpm 11 runs a deps-status check inside electron-builder's
           # `pnpm install --production`; disable it (runtime is pre-built).
           PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+          # Name the artifact with the tag version (Cardo-<version>-arm64-mac.zip).
+          CARDO_BUILD_VERSION: ${{ steps.version.outputs.version }}
         run: |
           pnpm --filter @cardo/cardo-desktop run package
 

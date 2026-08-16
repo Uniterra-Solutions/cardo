@@ -13,7 +13,7 @@
     "start": "electron .",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "prepare": "node scripts/prepare-runtime.mjs",
-    "package": "pnpm run prepare && pnpm run build && electron-builder --mac --publish never"
+    "package": "pnpm run prepare && pnpm run build && electron-builder --mac --publish never ${CARDO_BUILD_VERSION:+-c.extraMetadata.version=$CARDO_BUILD_VERSION}"
   },
   "dependencies": {
     "@cardo/cardo-updater": "workspace:*"
