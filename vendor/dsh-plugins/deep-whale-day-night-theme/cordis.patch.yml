@@ -1,6 +1,0 @@
-# Deep Whale is an official Theme Plugins builtin row. A separately installed
-# profile bundle augments that row instead of inserting a duplicate Loader id,
-# so users upgrading from the standalone distribution keep a bootable profile.
-- id: ui-skin-maid-atelier
-  name: '@dsh-external/dsh-client-ui-skin-maid-atelier'
-  inject: [themeCatalog]

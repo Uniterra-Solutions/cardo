@@ -18,7 +18,7 @@ export const PROFILE_PLUGINS: readonly string[] = [
 /** Vendored (non-npm) community plugins, installed from the monorepo checkout
  * at build time. The `vendor/dsh-plugins` pin ledger records their commits. */
 export const VENDOR_PLUGIN_DIRS: readonly string[] = [
-  'deep-whale-day-night-theme',
+  'dsh-deep-whale',
   'dsh-subagent-monitor',
   'dsh-thinking-effort',
 ] as const;

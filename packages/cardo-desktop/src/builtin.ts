@@ -26,9 +26,16 @@ export const BUILTIN_NPM_PLUGINS: readonly string[] = [
  * the repo dir (e.g. the subagent-monitor dir's package is
  * `@leetoners/dsh-ui-subagent-monitor`). They are copied into the profile's
  * node_modules (not pnpm-installed) because some declare peers that only
- * exist in the dsh source workspace and pnpm would fail fetching them. */
+ * exist in the dsh source workspace and pnpm would fail fetching them.
+ *
+ * The skin is the `dsh-deep-whale` standalone distribution (`maid-atelier`
+ * package) — self-inserting, host is a no-op, art embedded. The earlier
+ * `deep-whale-day-night-theme` builtin-row distribution was retired: it
+ * augmented a base row only shipped by `dsh-client-ui-theme-plugins` (absent
+ * on the pinned rc.6 family), so its patch silently no-oped and the skin
+ * never loaded. See `vendor/dsh-plugins/VENDOR.md`. */
 export const BUILTIN_VENDOR_PLUGINS: Readonly<Record<string, string>> = {
-  'deep-whale-day-night-theme': '@dsh-external/dsh-client-ui-skin-maid-atelier',
+  'dsh-deep-whale': '@dsh-external/dsh-client-ui-skin-maid-atelier',
   'dsh-subagent-monitor': '@leetoners/dsh-ui-subagent-monitor',
   'dsh-thinking-effort': 'dsh-thinking-effort',
 };
@@ -94,6 +101,34 @@ export function hasAllBuiltins(profileDirPath: string): boolean {
   }
 }
 
+/** Whether any built-in vendored plugin's installed copy in the profile has
+ * drifted from the current source. The bundle list alone cannot tell — a
+ * plugin can ship a fixed distribution under the SAME package name (the skin
+ * swap), so a stale node_modules copy must be detected by content identity
+ * (package.json `version`). A missing or illegible installed copy is stale.
+ * Returns false only when every installed copy matches the current source. */
+export function vendoredPluginsStale(profileDirPath: string, vendorRoot: string): boolean {
+  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
+    const sourcePkg = path.join(vendorRoot, dirName, 'package.json');
+    const installedPkg = path.join(
+      profileDirPath,
+      'node_modules',
+      ...pkgName.split('/'),
+      'package.json',
+    );
+    try {
+      const sourceVersion = (readJson(sourcePkg) as { version?: string }).version;
+      const installedVersion = (readJson(installedPkg) as { version?: string }).version;
+      if (sourceVersion !== installedVersion) {
+        return true;
+      }
+    } catch {
+      return true; // cannot read either copy → assume stale, re-provision
+    }
+  }
+  return false;
+}
+
 /**
  * Ensure the built-in plugins are installed into `dshHome`'s profile.
  *
@@ -114,7 +149,7 @@ export function ensureBuiltinPlugins(
   if (!existsSync(dir)) {
     return; // no profile yet — nothing to ensure
   }
-  if (hasAllBuiltins(dir)) {
+  if (hasAllBuiltins(dir) && !vendoredPluginsStale(dir, vendorRoot)) {
     return;
   }
 

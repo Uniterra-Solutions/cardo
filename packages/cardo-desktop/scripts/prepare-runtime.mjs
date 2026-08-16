@@ -45,7 +45,7 @@ function runtimeDeps() {
     // Vendored (non-npm) plugins: file: refs pull them into the hoisted
     // tree so the dsh loader can resolve the profile bundles from the
     // runtime alone (no pnpm install at app runtime).
-    'deep-whale-day-night-theme': `file:${path.join(root, 'vendor', 'dsh-plugins', 'deep-whale-day-night-theme')}`,
+    'dsh-deep-whale': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-deep-whale')}`,
     'dsh-subagent-monitor': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-subagent-monitor')}`,
     'dsh-thinking-effort': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-thinking-effort')}`,
   };
