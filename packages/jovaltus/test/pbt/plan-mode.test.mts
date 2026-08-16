@@ -57,7 +57,7 @@ test('planmode command toggles plan mode: tools, status, persistence', () => {
   assert.deepEqual(stub.entries.at(-1), {
     type: 'custom',
     customType: 'jovaltus-mode',
-    data: { enabled: true },
+    data: { mode: 'plan' },
   });
 
   // Mode OFF: plan-mode tools removed, status standard.
@@ -105,12 +105,14 @@ test('tool_call gate blocks plan-mode tools while off, allows them while on', ()
 
 // ---- session start / system prompt ----------------------------------------
 
-test('session_start restores the persisted mode and re-applies tools', () => {
+test('session_start restores the persisted mode and re-applies tools (legacy { enabled } entry)', () => {
   const stub = setupStub();
   const start = handlerFor(stub, 'session_start');
   assert.ok(start !== undefined, 'session_start handler registered');
 
   const cwd = makeTmpDir();
+  // Legacy write format: `{ enabled: true }` restores plan mode via the
+  // modeEntryRead fallback (D4 read-compat).
   start(
     {},
     makeCtx(cwd, {
@@ -119,6 +121,21 @@ test('session_start restores the persisted mode and re-applies tools', () => {
   );
   for (const tool of PLAN_MODE_TOOLS) {
     assert.ok(stub.activeTools.includes(tool), `restored mode exposes ${tool}`);
+  }
+});
+
+test('session_start restores a { mode: "debug" } entry to debug mode', () => {
+  const stub = setupStub();
+  const start = handlerFor(stub, 'session_start');
+  assert.ok(start !== undefined);
+  const cwd = makeTmpDir();
+  const ctx = makeCtx(cwd, {
+    sessionEntries: [{ type: 'custom', customType: 'jovaltus-mode', data: { mode: 'debug' } }],
+  });
+  start({}, ctx.ctx);
+  assert.equal(ctx.statuses.at(-1)?.text, 'debug mode');
+  for (const tool of PLAN_MODE_TOOLS) {
+    assert.ok(!stub.activeTools.includes(tool), 'debug mode hides plan tools');
   }
 });
 

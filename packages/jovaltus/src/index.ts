@@ -37,10 +37,12 @@ import {
   buildExecuteWidgetLines,
   JOVALTUS_EXECUTE_STATUS_KEY,
   JOVALTUS_EXECUTE_WIDGET_KEY,
+  ModeController,
   planExecuteWidgetAgentDone,
   planExecuteWidgetAgentStart,
   planExecuteWidgetDone,
   planExecuteWidgetInitial,
+  registerDebugMode,
   registerPlanMode,
 } from './plan-mode.js';
 import {
@@ -716,9 +718,12 @@ function formatSessionList(sessions: PipelineState[]): string {
 // Extension factory -----------------------------------------------------------
 
 export default function (pi: ExtensionAPI): void {
-  // Plan mode: /planmode command, shift+P (TUI) + shift+tab/mode button
-  // (desktop), tool gating for plan / execute_plan, mode persistence.
-  registerPlanMode(pi);
+  // Shared per-session mode registry (standard | plan | debug): plan mode
+  // (/planmode command, shift+P shortcut, tool gating for plan /
+  // execute_plan, plan note) + debug mode (/debugmode command, debug note).
+  const modeController = new ModeController(pi);
+  registerPlanMode(pi, modeController);
+  registerDebugMode(pi, modeController);
 
   pi.registerTool({
     name: 'plan',
