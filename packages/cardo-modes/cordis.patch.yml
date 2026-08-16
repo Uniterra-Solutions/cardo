@@ -1,0 +1,11 @@
+# @cardo/cardo-modes bundle layer.
+#
+# Inserts the cardo debug-mode controller beside the plan-mode controller
+# (which ships in dsh-base). A profile listing this bundle composes BOTH
+# modes; the desktop mode button cycles standard → plan → debug.
+#
+# The default `section` is DEBUG_MODE_NOTE (see src/mode-core.ts); override
+# it by patching this row's config from a later layer.
+- insert:
+    - id: cardo-debug-mode
+      name: '@cardo/cardo-modes'
