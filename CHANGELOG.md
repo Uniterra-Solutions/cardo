@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-17
+
+### Added
+
+- In-house dual-protocol LLM provider plugin `@cardo/cardo-provider` (`packages/cardo-provider/`): OpenAI chat completions **and** Responses API over any OpenAI-compatible gateway (protocol per-model overridable via `api: 'chat-completions' | 'responses'`), with models.dev context-window / output-token / reasoning-effort auto-detection and a Web settings page (gateway + per-model management, models.dev fetch, proxy support). Ships as a **workspace built-in**: `ensureBuiltinPlugins` gained `BUILTIN_WORKSPACE_PLUGINS` (`workspacePluginsStale()` guard), copying the built package into the profile like a vendored plugin — the host bundle is self-contained (runtime deps inlined, only `@deepseek-ai/*` peers external), so no pnpm install is needed
+- Built-in npm plugins extended to 10 (adds `dsh-hotkeys`, `dsh-tool-git`, `dsh-browser-playwright`, `dsh-computer-use`); vendored built-ins extended to 5 (adds `dsh-shortcuts`, `dsh-git-graph` — see `vendor/dsh-plugins/VENDOR.md` pin ledger)
+- `AGENTS.md` / `README.md` updated to the dsh/cardo architecture (cardo-provider, workspace built-in provisioning, per-package test commands); root `eslint.config.mjs` ignores `**/lib/` alongside `**/dist/` (cardo-provider's build output)
+
 ## [0.5.4] — 2026-08-17
 
 ### Fixed
