@@ -1,0 +1,10 @@
+# dsh bundle layer: mount the git-graph plugin (server half: index.js;
+# client half: client.js served by dsh-client-modules under /plugins).
+# config.repo / config.repos: allowlist of repository paths the graph panel
+# may open. Only paths listed here are accepted by the git API.
+# 注意：下方为示例路径，请改为你自己的仓库路径。
+- insert:
+    - id: git-graph
+      name: dsh-git-graph
+      config:
+        repo: "C:/path/to/your/repo"

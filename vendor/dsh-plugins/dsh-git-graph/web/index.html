@@ -1,0 +1,3182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Git 图谱</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #12171f;
+    --bg3: #1a212b;
+    --bg4: #222b37;
+    --border: #2a3542;
+    --text: #e8edf2;
+    --text2: #9aa7b4;
+    --text3: #6d7a88;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --orange: #f0883e;
+  }
+  html.gg-light {
+    --bg: #ffffff;
+    --bg2: #f7f9fb;
+    --bg3: #eef1f5;
+    --bg4: #e3e8ee;
+    --border: #d5dce3;
+    --text: #1c2430;
+    --text2: #55606e;
+    --text3: #8a94a0;
+    --accent: #0969da;
+    --green: #1a7f37;
+    --yellow: #9a6700;
+    --red: #cf222e;
+    --orange: #bc4c00;
+  }
+  /* ---- style presets (8 styles, ported from 拾光记) ---- */
+  html.gg-theme-sakura {
+    --bg: linear-gradient(135deg,#fff5f7,#fef0f5); --bg2: #fff8fa; --bg3: #fdeef3; --bg4: #f9e2ea;
+    --border: #f0cddb; --text: #4a2b36; --text2: #8a6474; --text3: #b395a2;
+    --accent: #ff6b9d; --green: #2e9e5b; --yellow: #b07d00; --red: #e5484d; --orange: #d2691e;
+  }
+  html.gg-theme-ocean {
+    --bg: linear-gradient(135deg,#e8f4fd,#f0f8ff); --bg2: #f4fafe; --bg3: #e8f3fb; --bg4: #d9eaf7;
+    --border: #c4ddec; --text: #1e3a52; --text2: #4f7189; --text3: #8aa5b8;
+    --accent: #1a6fa3; --green: #2e9e5b; --yellow: #b07d00; --red: #e5484d; --orange: #d2691e;
+  }
+  html.gg-theme-forest {
+    --bg: linear-gradient(135deg,#f0f7ee,#e8f5e9); --bg2: #f5faf4; --bg3: #e9f4e8; --bg4: #daecd8;
+    --border: #c5dfc3; --text: #2c3a2c; --text2: #5c7a5e; --text3: #8aa58c;
+    --accent: #2e7d32; --green: #1f7a34; --yellow: #9a8a1f; --red: #d64550; --orange: #c26a1d;
+  }
+  html.gg-theme-night {
+    --bg: linear-gradient(135deg,#1a1a2e,#16213e); --bg2: #20203a; --bg3: #28284a; --bg4: #30305c;
+    --border: #3c3c66; --text: #e9e6f7; --text2: #a9a5cf; --text3: #7d79a8;
+    --accent: #b39ddb; --green: #7ac98a; --yellow: #d8b64f; --red: #f07878; --orange: #e08b4d;
+  }
+  html.gg-theme-candy {
+    --bg: linear-gradient(135deg,#fff8e1,#fff3e0); --bg2: #fffaf0; --bg3: #fff3dc; --bg4: #ffebc8;
+    --border: #f2dcae; --text: #4a3820; --text2: #8a7448; --text3: #b0a080;
+    --accent: #a85b00; --green: #2e9e5b; --yellow: #a07d00; --red: #e5484d; --orange: #c26a1d;
+  }
+  html.gg-theme-business {
+    --bg: linear-gradient(135deg,#eceff1,#f5f5f5); --bg2: #f4f6f7; --bg3: #e9edef; --bg4: #dde2e5;
+    --border: #cfd6da; --text: #263238; --text2: #5f6c74; --text3: #92a0a9;
+    --accent: #00695c; --green: #1f7a34; --yellow: #9a8a1f; --red: #d64550; --orange: #bf5b1f;
+  }
+  html.gg-theme-starry {
+    --bg: linear-gradient(135deg,#0d0221,#150734); --bg2: #150a2e; --bg3: #1d1040; --bg4: #261a55;
+    --border: #392a6e; --text: #ece8fb; --text2: #b0a8dc; --text3: #8378b0;
+    --accent: #b39ddb; --green: #7ac98a; --yellow: #d8b64f; --red: #f07878; --orange: #e08b4d;
+  }
+  html.gg-theme-tech {
+    --bg: linear-gradient(135deg,#05070f,#0b1226); --bg2: #0c1428; --bg3: #121c38; --bg4: #18264a;
+    --border: #24355e; --text: #dce8f8; --text2: #8fa6cc; --text3: #64789e;
+    --accent: #00b0ff; --green: #3fb950; --yellow: #d29922; --red: #f85149; --orange: #f0883e;
+  }
+  /* ---- decorative background layer (ported from 拾光记 bg-decor) ---- */
+  #ggDeco { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  #ggDeco i { position: absolute; display: block; }
+  /* stars: three sizes + glow breathing */
+  #ggDeco .star { width: 3px; height: 3px; border-radius: 50%; opacity: .8; animation: bgTwinkle 2.6s ease-in-out infinite; }
+  #ggDeco .star.s { width: 2px; height: 2px; animation-duration: 3.4s; }
+  #ggDeco .star.l { width: 5px; height: 5px; box-shadow: 0 0 8px 2px currentColor; animation-duration: 2.2s; }
+  #ggDeco .star.glow { width: 3px; height: 3px; box-shadow: 0 0 12px 4px rgba(255,255,255,.45); }
+  @keyframes bgTwinkle { 0%,100% { opacity: .15; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.15); } }
+  /* moon: crescent + glow pulse */
+  #ggDeco .moon { width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 38% 35%,#fffbe6,#ffe9a8 55%,#ffd76a); box-shadow: 0 0 40px 14px rgba(255,225,130,.35), inset -10px -8px 16px rgba(214,164,60,.5); animation: bgMoonGlow 6s ease-in-out infinite; }
+  #ggDeco .moon::after { content: ''; position: absolute; top: -4px; left: -6px; width: 70px; height: 70px; border-radius: 50%; background: transparent; box-shadow: inset 14px 6px 0 rgba(20,20,40,.18); }
+  @keyframes bgMoonGlow { 0%,100% { box-shadow: 0 0 30px 10px rgba(255,225,130,.25), inset -10px -8px 16px rgba(214,164,60,.5); } 50% { box-shadow: 0 0 52px 20px rgba(255,225,130,.42), inset -10px -8px 16px rgba(214,164,60,.5); } }
+  /* earth: CSS gradient globe + rotating cloud bands */
+  #ggDeco .earth { width: 62px; height: 62px; border-radius: 50%; background: radial-gradient(circle at 30% 30%,#4fc3f7 0%,#1e88e5 45%,#0d47a1 100%); box-shadow: 0 4px 16px rgba(30,136,229,.3), inset -12px -10px 20px rgba(6,32,74,.55); opacity: .55; filter: blur(1px); animation: bgEarthRot 40s linear infinite; }
+  #ggDeco .earth::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(ellipse at 40% 60%,rgba(129,199,132,.75) 0%,rgba(129,199,132,.55) 18%,rgba(67,160,71,.35) 32%,transparent 46%), radial-gradient(ellipse at 65% 30%,rgba(165,214,167,.7) 0%,rgba(165,214,167,.4) 16%,transparent 30%), radial-gradient(ellipse at 20% 80%,rgba(174,213,129,.6) 0%,transparent 22%); animation: bgEarthRot 40s linear infinite reverse; }
+  #ggDeco .earth::after { content: ''; position: absolute; inset: -12%; border-radius: 50%; background: conic-gradient(from 0deg,transparent 0deg,rgba(255,255,255,.16) 24deg,transparent 50deg,transparent 130deg,rgba(255,255,255,.12) 160deg,transparent 200deg,rgba(255,255,255,.14) 240deg,transparent 280deg); animation: bgClouds 22s linear infinite; }
+  @keyframes bgEarthRot { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  @keyframes bgClouds { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  /* petals */
+  #ggDeco .petal { width: 11px; height: 15px; border-radius: 60% 0 60% 0; background: linear-gradient(135deg,var(--pc1,#ffc1d8),var(--pc2,#ff8fb3)); opacity: .8; animation: bgFallSway 9s linear infinite; }
+  @keyframes bgFallSway { 0% { transform: translate(0,-6vh) rotate(0); } 25% { transform: translate(14px,20vh) rotate(80deg); } 50% { transform: translate(-10px,50vh) rotate(180deg); } 75% { transform: translate(12px,78vh) rotate(270deg); } 100% { transform: translate(0,106vh) rotate(360deg); } }
+  @keyframes bgFall { 0% { transform: translateY(-6vh) rotate(0); } 100% { transform: translateY(106vh) rotate(360deg); } }
+  #ggDeco .petal.s { width: 7px; height: 10px; opacity: .5; }
+  #ggDeco .petal.l { width: 15px; height: 20px; opacity: .95; }
+  #ggDeco .petal.xl { width: 22px; height: 28px; opacity: .72; animation-duration: 11s; }
+  /* meteors */
+  #ggDeco .meteor { position: absolute; width: 86px; height: 2px; border-radius: 2px; background: linear-gradient(90deg,#fff,rgba(255,255,255,0)); transform: rotate(32deg); animation: bgMeteor 3.8s ease-in forwards; }
+  #ggDeco .meteor::after { content: ''; position: absolute; right: 0; top: -1.5px; width: 5px; height: 5px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px 2px rgba(255,255,255,.8); }
+  @keyframes bgMeteor { 0% { transform: translate(0,0) rotate(32deg); opacity: 0; } 10% { opacity: 1; } 70% { opacity: .55; } 100% { transform: translate(-190px,118px) rotate(32deg); opacity: 0; } }
+  /* fireflies */
+  #ggDeco .firefly { width: 4px; height: 4px; border-radius: 50%; background: #ffe97a; box-shadow: 0 0 10px 3px rgba(255,233,122,.75); animation: bgFirefly 7s ease-in-out infinite; }
+  @keyframes bgFirefly { 0%,100% { opacity: .08; transform: translate(0,0); } 20% { opacity: .85; transform: translate(16px,-20px); } 45% { opacity: .4; transform: translate(-12px,-34px); } 70% { opacity: .8; transform: translate(10px,-14px); } }
+  /* ribbons */
+  #ggDeco .ribbon { width: 36px; height: 9px; border-radius: 5px; opacity: .5; animation: bgRibbon 9s linear infinite; }
+  @keyframes bgRibbon { 0% { transform: translateY(-9vh) rotate(0); } 100% { transform: translateY(107vh) rotate(480deg); } }
+  /* bubbles */
+  #ggDeco .bubble { width: 16px; height: 16px; border: 1.5px solid rgba(255,255,255,.6); border-radius: 50%; background: radial-gradient(circle at 30% 30%,rgba(255,255,255,.35),rgba(255,255,255,.05) 60%); animation: bgRise 10s linear infinite; }
+  #ggDeco .bubble.s { width: 10px; height: 10px; }
+  #ggDeco .bubble.l { width: 22px; height: 22px; border-width: 2px; }
+  @keyframes bgRise { 0% { transform: translateY(106vh) scale(.8); } 100% { transform: translateY(-8vh) scale(1.15); } }
+  /* waves */
+  #ggDeco .wave { position: absolute; left: -30%; bottom: -26px; width: 160%; height: 62px; border-radius: 48% 52% 0 0/62% 62% 0 0; background: linear-gradient(180deg,rgba(190,229,248,.4),rgba(140,205,235,.16)); animation: bgWaveDrift 8s ease-in-out infinite alternate; }
+  #ggDeco .wave.w2 { height: 42px; bottom: -16px; background: linear-gradient(180deg,rgba(255,255,255,.5),rgba(190,229,248,.22)); animation-duration: 6s; animation-delay: .7s; }
+  @keyframes bgWaveDrift { from { transform: translateX(-3%); } to { transform: translateX(3%); } }
+  /* ripples */
+  #ggDeco .ripple { width: 46px; height: 13px; border: 2px solid rgba(126,200,227,.35); border-radius: 50%; animation: bgRipple 6s ease-out infinite; }
+  @keyframes bgRipple { 0% { transform: translateY(0) scale(.5); opacity: .6; } 100% { transform: translateY(-30vh) scale(2.4); opacity: 0; } }
+  /* fish */
+  #ggDeco .fish { font-size: 16px; animation: bgFish 14s linear infinite; filter: drop-shadow(0 2px 4px rgba(30,136,229,.3)); }
+  #ggDeco .fish.s { font-size: 11px; opacity: .75; }
+  @keyframes bgFish { 0% { transform: translateX(-8vw) translateY(0); } 25% { transform: translateX(22vw) translateY(-8px); } 50% { transform: translateX(52vw) translateY(6px); } 75% { transform: translateX(80vw) translateY(-5px); } 100% { transform: translateX(110vw) translateY(0); } }
+  /* sunbeams */
+  #ggDeco .sunbeam { position: absolute; top: -14vh; width: 72px; height: 150%; background: linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,0)); transform: rotate(18deg); animation: bgBeamPulse 7s ease-in-out infinite alternate; opacity: .5; }
+  @keyframes bgBeamPulse { from { opacity: .3; } to { opacity: .75; } }
+  /* leaves */
+  #ggDeco .leaf { width: 12px; height: 12px; border-radius: 80% 0 80% 0; background: linear-gradient(135deg,#c8e6c9,#81c784); opacity: .75; animation: bgFall 12s linear infinite; }
+  /* dots */
+  #ggDeco .dot { width: 11px; height: 11px; border-radius: 50%; opacity: .65; animation: bgFloat 5s ease-in-out infinite; }
+  #ggDeco .dot.l { width: 16px; height: 16px; opacity: .45; }
+  @keyframes bgFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-22px); } }
+  /* signal rings */
+  #ggDeco .signal { width: 30px; height: 30px; border: 2.5px solid rgba(0,229,255,.7); border-radius: 50%; animation: bgPulse 2.4s ease-out infinite; }
+  #ggDeco .signal.s2 { animation-delay: .8s; border-color: rgba(0,229,255,.42); }
+  #ggDeco .signal.s3 { animation-delay: 1.6s; border-color: rgba(0,229,255,.26); }
+  @keyframes bgPulse { 0% { transform: scale(.3); opacity: 1; } 100% { transform: scale(2.8); opacity: 0; } }
+  /* gears */
+  #ggDeco .gear { font-size: 58px; line-height: 1; filter: drop-shadow(0 3px 10px rgba(120,144,255,.45)); animation: bgSpinSlow 14s linear infinite; }
+  #ggDeco .gear.g2 { font-size: 38px; animation-direction: reverse; animation-duration: 9s; }
+  @keyframes bgSpinSlow { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  /* circuit lines + node pulse */
+  #ggDeco .circuit { height: 2.5px; background: linear-gradient(90deg,transparent,rgba(0,229,255,.9),transparent); background-size: 200% 100%; animation: bgShine 3s linear infinite; border-radius: 3px; }
+  #ggDeco .circuit.v { width: 2.5px; height: 90px; background: linear-gradient(180deg,transparent,rgba(0,229,255,.8),transparent); background-size: 100% 200%; }
+  @keyframes bgShine { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  #ggDeco .circuit-node { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,229,255,.9); box-shadow: 0 0 14px 4px rgba(0,229,255,.65); animation: bgNodePulse 1.8s ease-in-out infinite; }
+  @keyframes bgNodePulse { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.5); opacity: 1; } }
+  /* business geometry */
+  #ggDeco .geo { width: 38px; height: 38px; border: 2px solid rgba(100,180,170,.32); border-radius: 10px; opacity: .55; animation: bgFloat 7s ease-in-out infinite; }
+  #ggDeco .geo.circle { border-radius: 50%; }
+  /* forest: tree/grass silhouettes + butterflies + mushrooms */
+  #ggDeco .tree { position: absolute; bottom: 0; width: 92px; height: 118px; background: linear-gradient(180deg,rgba(76,175,80,.26),rgba(46,125,50,.14)); border-radius: 60% 60% 8% 8%/85% 85% 10% 10%; opacity: .8; }
+  #ggDeco .tree.s { width: 54px; height: 72px; opacity: .6; }
+  #ggDeco .tree.xs { width: 34px; height: 46px; opacity: .5; }
+  #ggDeco .tree.xl { width: 128px; height: 158px; opacity: .85; }
+  #ggDeco .grass { position: absolute; bottom: 0; width: 130px; height: 24px; border-radius: 50% 50% 0 0; background: linear-gradient(180deg,rgba(129,199,132,.32),rgba(129,199,132,.1)); opacity: .8; }
+  #ggDeco .butterfly { font-size: 17px; animation: bgButterfly 12s ease-in-out infinite; filter: drop-shadow(0 2px 3px rgba(76,175,80,.3)); }
+  @keyframes bgButterfly { 0%,100% { transform: translate(0,0) rotate(-8deg); } 25% { transform: translate(18px,-14px) rotate(8deg); } 50% { transform: translate(-14px,-28px) rotate(-6deg); } 75% { transform: translate(12px,-10px) rotate(7deg); } }
+  #ggDeco .mushroom { font-size: 13px; animation: bgFloat 5s ease-in-out infinite; opacity: .85; }
+  /* candy: rainbow arc + lollipops */
+  #ggDeco .rainbow { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); width: 170%; height: 104px; border-radius: 50% 50% 0 0/100% 100% 0 0; background: conic-gradient(from 180deg at 50% 100%,#ff6b6b,#ffd43b,#69db7c,#74c0fc,#b197fc,#ff8fb3,#ff6b6b); opacity: .16; animation: bgRainbow 10s ease-in-out infinite alternate; }
+  @keyframes bgRainbow { from { opacity: .1; } to { opacity: .26; } }
+  #ggDeco .lollipop { font-size: 15px; animation: bgLolli 9s linear infinite; opacity: .82; }
+  @keyframes bgLolli { 0% { transform: translateY(-8vh) rotate(0); } 100% { transform: translateY(106vh) rotate(360deg); } }
+  /* business: glass blocks + particles */
+  #ggDeco .glass { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,.1)); border: 1px solid rgba(255,255,255,.32); backdrop-filter: blur(3px); animation: bgFloat 8s ease-in-out infinite; opacity: .62; }
+  #ggDeco .glass.bar { width: 112px; height: 13px; border-radius: 7px; }
+  #ggDeco .particle { width: 5px; height: 5px; border-radius: 50%; background: rgba(100,180,170,.42); animation: bgFloat 6s ease-in-out infinite; }
+  #ggDeco .particle.line { width: 46px; height: 1px; border-radius: 1px; background: linear-gradient(90deg,rgba(100,180,170,.35),rgba(100,180,170,0)); }
+  /* tech chip nodes */
+  #ggDeco .chip { width: 10px; height: 10px; border-radius: 2px; background: rgba(0,229,255,.55); box-shadow: 0 0 8px rgba(0,229,255,.5); animation: bgChipBlink 3s ease-in-out infinite; }
+  @keyframes bgChipBlink { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* ===== header ===== */
+  header {
+    height: 48px; flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    /* z-index 10: above #statsBar/#main (z-index 1) so the header's own
+       dropdowns (#themeMenu, #filterMenu) are not covered by them */
+    position: relative; z-index: 10;
+  }
+  header .title { font-weight: 700; font-size: 14px; letter-spacing: .2px; white-space: nowrap; }
+  .themeWrap { position: relative; }
+  #themeMenu {
+    display: none; position: absolute; top: 32px; right: 0; z-index: 30;
+    min-width: 158px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 5px; box-shadow: 0 10px 34px rgba(0,0,0,.45);
+  }
+  #themeMenu.show { display: block; }
+  #themeMenu label {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 9px; border-radius: 6px; cursor: pointer;
+    font-size: 12.5px; white-space: nowrap;
+  }
+  #themeMenu label:hover { background: var(--bg4); }
+  #themeMenu input { accent-color: var(--accent); cursor: pointer; }
+  /* stats bar under the header */
+  #statsBar {
+    position: relative; z-index: 1;
+    height: 26px; flex: none; display: flex; align-items: center; gap: 18px;
+    padding: 0 14px; border-bottom: 1px solid var(--border);
+    background: var(--bg2); color: var(--text3); font-size: 11.5px;
+    white-space: nowrap; overflow: hidden;
+  }
+  #statsBar b { color: var(--text2); font-weight: 600; }
+  #statsBar .st-num { color: var(--accent); font-weight: 700; }
+  header .repo { color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34%; font-size: 12px; }
+  header select#repoSwitch {
+    max-width: 240px; height: 28px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg3); color: var(--text);
+    padding: 0 6px; font-size: 11.5px; outline: none; cursor: pointer;
+  }
+  header select#repoSwitch:focus { border-color: var(--accent); }
+  header .spacer { flex: 1; }
+  header input#searchBox {
+    height: 28px; width: 210px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg3); color: var(--text);
+    padding: 0 10px; font-size: 12px; outline: none;
+  }
+  header input#searchBox:focus { border-color: var(--accent); }
+  header input#searchBox::placeholder { color: var(--text3); }
+  /* filter menu lives in .filterWrap; the old select rule is removed */
+  .filterWrap { position: relative; }
+  /* directory picker removed (manual repo selection dropped) */
+  #btnFilter {
+    height: 28px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg3); color: var(--text);
+    cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  #btnFilter:hover { border-color: var(--text3); background: var(--bg4); }
+  #filterMenu {
+    display: none; position: absolute; top: 32px; right: 0; z-index: 30;
+    min-width: 200px; max-height: 340px; overflow: auto;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 6px; box-shadow: 0 10px 34px rgba(0,0,0,.45);
+  }
+  #filterMenu.show { display: block; }
+  #filterMenu .fm-all {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 8px 7px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  #filterMenu .fm-group { font-size: 10.5px; color: var(--text3); font-weight: 700; padding: 6px 8px 2px; letter-spacing: .4px; }
+  #filterMenu label {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 8px; border-radius: 6px; cursor: pointer;
+    font-size: 12.5px; white-space: nowrap;
+  }
+  #filterMenu label:hover { background: var(--bg4); }
+  #filterMenu label input { accent-color: var(--accent); cursor: pointer; }
+  #filterMenu label .fm-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  #filterMenu .fm-hint { font-size: 10.5px; color: var(--text3); padding: 4px 8px 2px; }
+  header button {
+    height: 28px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg3); color: var(--text);
+    cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  header button:hover { border-color: var(--text3); background: var(--bg4); }
+  header .hint { color: var(--text3); font-size: 11px; white-space: nowrap; }
+  #searchCount { color: var(--text3); font-size: 11px; min-width: 40px; }
+  header button.on {
+    border-color: var(--accent); color: var(--accent);
+  }
+  /* --- context menu --- */
+  #ctxMenu {
+    position: fixed; z-index: 40; display: none; min-width: 190px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+    padding: 5px; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  }
+  #ctxMenu.show { display: block; }
+  #ctxMenu .cm-title {
+    padding: 4px 10px 6px; font-size: 10.5px; color: var(--text3);
+    border-bottom: 1px solid var(--border); margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;
+  }
+  #ctxMenu .cm-item {
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 12.5px; display: flex; align-items: center; gap: 8px;
+  }
+  #ctxMenu .cm-item:hover { background: var(--bg4); }
+  #ctxMenu .cm-item .cm-key { margin-left: auto; color: var(--text3); font-size: 10.5px; }
+  /* ===== main ===== */
+  #main { flex: 1; display: flex; min-height: 0; position: relative; z-index: 1; }
+  /* Narrow container (docked right column): details overlays the graph */
+  @media (max-width: 760px) {
+    #detail.open {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 400px; max-width: 86%;
+      z-index: 5;
+      box-shadow: -10px 0 28px rgba(0,0,0,.4);
+    }
+    #legend { display: none; }
+    header .hint { display: none; }
+    .gg-sub { display: none; }
+    #searchBox { width: 140px; }
+  }
+  /* --- commit list (GitHub-style) --- */
+  /* transparent: the themed background + #ggDeco ambient layer show through */
+  #graphWrap { flex: 1; overflow: auto; position: relative; }
+  #commitList { padding: 10px 0 24px; min-width: 520px; }
+  .cl-row {
+    display: flex; align-items: stretch;
+    padding: 0; cursor: pointer; position: relative;
+  }
+  .cl-row:hover { background: var(--bg2); }
+  .cl-row.sel { background: rgba(88,166,255,.1); }
+  .cl-row.kbd { outline: 1px dashed var(--accent); outline-offset: -1px; }
+  .cl-row.searchHit .cl-dot { outline: 2px solid #f0b429; outline-offset: 1px; }
+  .cl-graph { width: 40px; flex: none; position: relative; }
+  .cl-graph::before {
+    content: ''; position: absolute; left: 19px; top: 0; bottom: 0;
+    width: 2px; opacity: .4; pointer-events: none;
+  }
+  .cl-row.first .cl-graph::before { top: 50%; }
+  .cl-row.last .cl-graph::before { bottom: 50%; }
+  .cl-row.solo .cl-graph::before { display: none; }
+  .cl-dot {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border);
+  }
+  .cl-head-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .cl-body { flex: 1; min-width: 0; padding: 7px 12px 7px 0; }
+  .cl-line1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .cl-msg {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cl-refs { display: inline-flex; gap: 5px; flex: none; }
+  .cl-ref {
+    font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px;
+    border: 1px solid var(--border); white-space: nowrap;
+  }
+  .cl-ref.head { color: var(--green); border-color: rgba(63,185,80,.4); background: rgba(63,185,80,.12); }
+  .cl-ref.branch { color: var(--accent); border-color: rgba(88,166,255,.35); background: rgba(88,166,255,.1); }
+  .cl-ref.tag { color: var(--yellow); border-color: rgba(210,153,34,.4); background: rgba(210,153,34,.1); }
+  .cl-line2 {
+    margin-top: 2px; font-size: 11px; color: var(--text3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cl-line2 .cl-author { color: var(--text2); }
+  .cl-line2 .cl-hash { font-family: Consolas, monospace; color: var(--text3); }
+  /* branch group header */
+  .cl-head {
+    display: flex; align-items: center; gap: 9px;
+    margin: 10px 0 2px; padding: 7px 12px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer; user-select: none;
+  }
+  .cl-head:hover { background: var(--bg3); }
+  .cl-head .cl-caret { color: var(--text3); font-size: 10px; flex: none; transition: transform .15s ease; }
+  .cl-head.open .cl-caret { transform: rotate(90deg); }
+  .cl-head .cl-head-name { font-size: 13px; font-weight: 700; color: var(--text); flex: none; }
+  .cl-head .cl-head-badge {
+    flex: none; font-size: 9.5px; font-weight: 700;
+    padding: 1px 6px; border-radius: 5px;
+    background: var(--green); color: #04260f;
+  }
+  .cl-head .cl-head-count { font-size: 11.5px; color: var(--text3); flex: none; }
+  .cl-head .cl-head-count.cl-synced { color: var(--green); }
+  .cl-head .cl-head-tip {
+    flex: 1; min-width: 0; text-align: right;
+    font-size: 11.5px; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cl-more { text-align: center; padding: 10px 0 18px; }
+  .cl-more button {
+    height: 30px; padding: 0 20px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg3); color: var(--text2); cursor: pointer; font-size: 12px;
+  }
+  .cl-more button:hover { border-color: var(--accent); color: var(--accent); }
+  .cl-more button:disabled { opacity: .6; cursor: wait; }
+  #legend {
+    position: sticky; top: 8px; left: 8px;
+    display: flex; flex-wrap: wrap; gap: 4px 10px;
+    padding: 6px 10px; margin: 8px;
+    width: fit-content;
+    background: rgba(18,23,31,.82); border: 1px solid var(--border); border-radius: 8px;
+    font-size: 11px; color: var(--text2);
+    z-index: 3; pointer-events: none;
+  }
+  #legend .lg { display: inline-flex; align-items: center; gap: 5px; }
+  #legend .lg.lg-on { outline: 1px solid var(--accent); border-radius: 6px; padding: 1px 5px; margin: -1px -5px; }
+  #legend .lg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  /* --- detail --- */
+  #detail {
+    width: 0; flex: none;
+    border-left: 1px solid var(--border);
+    background: var(--bg2);
+    overflow: auto;
+    transition: width .16s ease;
+  }
+  #detail.open { width: 430px; }
+  #detail .dhead {
+    position: sticky; top: 0;
+    background: var(--bg2);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    z-index: 2;
+  }
+  #detail .dhead .dtitle { font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  #detail .dclose { cursor: pointer; color: var(--text2); border: 0; background: none; font-size: 16px; padding: 2px 6px; border-radius: 6px; }
+  #detail .dclose:hover { background: var(--bg4); }
+  #detail .dmeta {
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--text2);
+    display: grid; grid-template-columns: 52px 1fr; gap: 4px 10px;
+  }
+  #detail .dmeta b { color: var(--text3); font-weight: 600; }
+  #detail .dmeta .hash { color: var(--accent); cursor: pointer; font-family: Consolas, monospace; font-size: 11px; word-break: break-all; }
+  #detail .dbody { padding: 12px 14px; font-size: 12.5px; }
+  #detail .dbody .msg { margin-bottom: 10px; white-space: pre-wrap; word-break: break-word; }
+  #detail .dbody .msg .subj { font-weight: 700; color: var(--text); font-size: 13.5px; }
+  #detail pre.stat, #detail pre.diff {
+    margin: 0 0 10px; padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: auto;
+    font: 11.5px/1.6 Consolas, "Courier New", monospace;
+    color: var(--text);
+    white-space: pre;
+    max-height: 280px;
+  }
+  #detail pre.diff { max-height: 420px; }
+  #detail .section {
+    font-weight: 700; margin: 16px 0 8px; color: var(--text2); font-size: 11.5px;
+    letter-spacing: .3px; text-transform: uppercase;
+  }
+  #detail .empty { color: var(--text3); font-size: 12px; }
+  .stat-files { margin-bottom: 8px; }
+  .stat-files .sf-row { display: flex; gap: 8px; padding: 1px 0; font-size: 12px; white-space: pre; }
+  .stat-files .sf-file { color: var(--accent); cursor: pointer; white-space: pre; }
+  .stat-files .sf-file:hover { text-decoration: underline; }
+  .stat-files .sf-rest { color: var(--text2); white-space: pre; }
+  .stat-files .sf-loading { opacity: .5; }
+  .sf-diff-block { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+  .sf-diff-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; background: var(--bg3);
+    font-size: 12px; font-weight: 600;
+  }
+  .sf-diff-head span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sf-diff-close { cursor: pointer; color: var(--text2); }
+  .sf-diff-close:hover { color: var(--text); }
+  .sf-diff-block pre.diff { border: 0; border-radius: 0; margin: 0; max-height: 340px; }
+  .sf-hist { margin-left: 6px; font-size: 12px; }
+  .sf-hist-row {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 5px 12px; cursor: pointer; font-size: 12.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sf-hist-row:hover { background: var(--bg4); }
+  .sf-hist-row .sf-hist-msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sf-hist-row .sf-hist-meta { flex: none; color: var(--text3); font-size: 11px; white-space: nowrap; }
+  /* --- workdir panel (VSCode-style changes, persistent at the top of the graph) --- */
+  #wdPanel {
+    margin: 8px 12px 0; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg2);
+    /* no overflow:hidden here: the ☑ 分组 dropdown is absolutely positioned and
+       must stay visible even when the panel body is short/collapsed */
+  }
+  #wdPanel .wd-top {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    background: var(--bg3); cursor: pointer; user-select: none;
+    border-radius: 9px 9px 0 0;
+  }
+  #wdPanel.folded .wd-top { border-radius: 9px; }
+  #wdPanel .wd-top .wd-title { font-weight: 700; font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; }
+  #wdPanel .wd-caret { color: var(--text3); font-size: 10px; flex: none; transition: transform .15s ease; }
+  #wdPanel .wd-top .wd-caret { transform: rotate(90deg); }
+  #wdPanel.folded .wd-top .wd-caret { transform: rotate(0deg); }
+  #wdPanel.folded .wd-body { display: none; }
+  #wdPanel .wd-top .wd-counts { font-weight: 600; font-size: 11px; color: var(--text2); }
+  #wdPanel .wd-top .sp { flex: 1; }
+  #wdPanel .wd-top button {
+    height: 24px; padding: 0 10px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--text); border-radius: 6px;
+    cursor: pointer; font-size: 11.5px;
+  }
+  #wdPanel .wd-top button:hover { border-color: var(--text3); background: var(--bg4); }
+  #wdPanel .wd-top button:disabled { opacity: .45; cursor: not-allowed; }
+  #wdPanel .wd-top button:disabled:hover { border-color: var(--border); background: var(--bg2); }
+  #wdPanel .wd-filterWrap { position: relative; }
+  #wdPanel .wd-menu {
+    display: none; position: absolute; top: 27px; right: 0; z-index: 30;
+    min-width: 158px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
+  #wdPanel .wd-menu.show { display: block; }
+  #wdPanel .wd-menu label {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 8px; border-radius: 6px; cursor: pointer;
+    font-size: 12.5px; white-space: nowrap;
+  }
+  #wdPanel .wd-menu label:hover { background: var(--bg4); }
+  #wdPanel .wd-menu input { accent-color: var(--accent); cursor: pointer; }
+  #wdPanel .wd-clean { padding: 7px 12px; font-size: 12px; color: var(--green); }
+  #wdPanel .wd-check { flex: none; accent-color: var(--accent); cursor: pointer; margin: 0; }
+  /* batch action bar (multi-select) */
+  #wdPanel .wd-batch {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    background: rgba(88,166,255,.07);
+  }
+  #wdPanel .wd-batch .wd-batch-info { font-size: 11.5px; color: var(--accent); font-weight: 700; }
+  #wdPanel .wd-batch button {
+    height: 24px; padding: 0 10px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text); border-radius: 6px;
+    cursor: pointer; font-size: 11.5px;
+  }
+  #wdPanel .wd-batch button:hover { border-color: var(--text3); background: var(--bg4); }
+  #wdPanel .wd-batch button.danger:hover { color: var(--red); border-color: var(--red); }
+  #wdPanel .wd-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px 2px; font-size: 11px; font-weight: 700;
+    color: var(--text2); text-transform: uppercase; letter-spacing: .3px;
+    cursor: pointer; user-select: none;
+  }
+  #wdPanel .wd-head:hover { color: var(--text); }
+  #wdPanel .wd-head .wd-caret { transform: rotate(90deg); }
+  #wdPanel .wd-group.folded .wd-caret { transform: rotate(0deg); }
+  #wdPanel .wd-group.folded .wd-row { display: none; }
+  #wdPanel .wd-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 12px 3px 16px; border-radius: 6px; cursor: pointer;
+  }
+  #wdPanel .wd-row:hover { background: var(--bg4); }
+  #wdPanel .wd-row.open { background: var(--bg3); }
+  #wdPanel .wd-badge {
+    flex: none; width: 20px; height: 20px; border-radius: 5px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 800; font-family: Consolas, monospace;
+  }
+  #wdPanel .wd-badge.A { background: rgba(63,185,80,.18); color: var(--green); }
+  #wdPanel .wd-badge.M { background: rgba(240,136,62,.16); color: var(--orange); }
+  #wdPanel .wd-badge.D { background: rgba(248,81,73,.16); color: var(--red); }
+  #wdPanel .wd-badge.R { background: rgba(188,140,255,.16); color: #bc8cff; }
+  #wdPanel .wd-badge.U { background: rgba(210,153,34,.16); color: var(--yellow); }
+  #wdPanel .wd-badge.q { background: rgba(154,167,180,.16); color: var(--text2); }
+  #wdPanel .wd-path {
+    flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: Consolas, monospace; font-size: 12px;
+  }
+  #wdPanel .wd-old { color: var(--text3); text-decoration: line-through; }
+  #wdPanel .wd-counts { flex: none; font-size: 11px; font-family: Consolas, monospace; }
+  #wdPanel .wd-counts .add { color: var(--green); }
+  #wdPanel .wd-counts .del { color: var(--red); }
+  #wdPanel .wd-binary { flex: none; font-size: 10px; color: var(--text3); }
+  #wdPanel .wd-diff { display: none; }
+  #wdPanel .wd-row.open .wd-diff { display: block; }
+  #wdPanel .wd-diff pre {
+    margin: 6px 0 4px; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    overflow: auto; font: 11.5px/1.6 Consolas, "Courier New", monospace;
+    color: var(--text); white-space: pre; max-height: 420px;
+  }
+  /* row action buttons (stage / unstage / discard) */
+  #wdPanel .wd-acts { flex: none; display: inline-flex; gap: 4px; opacity: 0; }
+  #wdPanel .wd-row:hover .wd-acts, #wdPanel .wd-row.open .wd-acts { opacity: 1; }
+  #wdPanel .wd-acts button {
+    height: 20px; padding: 0 7px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2); border-radius: 5px;
+    cursor: pointer; font-size: 10.5px; white-space: nowrap;
+  }
+  #wdPanel .wd-acts button:hover { color: var(--text); border-color: var(--text3); }
+  #wdPanel .wd-acts button.danger:hover { color: var(--red); border-color: var(--red); }
+  /* diff syntax highlighting */
+  pre.diff .df-head, #wdPanel pre .df-head { color: var(--accent); font-weight: 700; }
+  pre.diff .df-hunk, #wdPanel pre .df-hunk { color: var(--text2); background: rgba(88,166,255,.08); }
+  pre.diff .df-add, #wdPanel pre .df-add { background: rgba(63,185,80,.14); color: var(--green); }
+  pre.diff .df-del, #wdPanel pre .df-del { background: rgba(248,81,73,.14); color: var(--red); }
+  pre.diff .df-pos, #wdPanel pre .df-pos { background: rgba(63,185,80,.08); color: var(--green); }
+  pre.diff .df-neg, #wdPanel pre .df-neg { background: rgba(248,81,73,.08); color: var(--red); }
+  /* dialogs */
+  #ggDlg, #commitDlg, #tagDlg, #branchDlg, #shortcutDlg {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    background: rgba(0,0,10,.55); align-items: center; justify-content: center;
+  }
+  #ggDlg.show, #commitDlg.show, #tagDlg.show, #branchDlg.show, #shortcutDlg.show { display: flex; }
+  #ggDlg .dlg-box, #commitDlg .dlg-box, #tagDlg .dlg-box, #branchDlg .dlg-box, #shortcutDlg .dlg-box {
+    width: min(480px, 90%); background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 14px 48px rgba(0,0,0,.55); overflow: hidden;
+  }
+  .dlg-head { padding: 10px 16px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .dlg-head .dlg-ico { font-size: 15px; }
+  .dlg-body { padding: 14px 16px; font-size: 12.5px; color: var(--text2); max-height: 50vh; overflow: auto; }
+  .dlg-body b { color: var(--text); }
+  .dlg-body .dlg-list { margin-top: 8px; font-family: Consolas, monospace; font-size: 11.5px; color: var(--text2); white-space: pre-wrap; word-break: break-all; }
+  .dlg-body textarea {
+    width: 100%; min-height: 64px; margin-top: 10px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font-size: 12.5px;
+    font-family: inherit; outline: none; resize: vertical;
+  }
+  .dlg-body textarea:focus { border-color: var(--accent); }
+  .dlg-body .ai-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .dlg-body .ai-btn {
+    height: 26px; padding: 0 12px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text); border-radius: 7px;
+    cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .dlg-body .ai-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,.1); }
+  .dlg-body .ai-btn:disabled { opacity: .55; cursor: default; }
+  .dlg-body .ai-tip { font-size: 11.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dlg-body label.ck { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; cursor: pointer; }
+  .dlg-body label.ck input { accent-color: var(--accent); }
+  /* tag management list inside the tag dialog */
+  .tag-list { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+  .tag-none { font-size: 11.5px; color: var(--text3); }
+  .tag-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); font-size: 12px;
+  }
+  .tag-row .tag-name { flex: 1; font-family: Consolas, monospace; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag-row .tag-acts { display: flex; gap: 5px; flex: none; }
+  .tag-row .tag-acts button {
+    height: 22px; min-width: 24px; padding: 0 7px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2); border-radius: 5px;
+    cursor: pointer; font-size: 11px;
+  }
+  .tag-row .tag-acts button:hover { border-color: var(--accent); color: var(--accent); }
+  .tag-row .tag-acts button:last-child:hover { border-color: var(--red); color: var(--red); }
+  .tag-rename-hint { margin-top: 7px; font-size: 11.5px; color: var(--orange); }
+  .dlg-foot { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .dlg-foot button {
+    height: 30px; padding: 0 16px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text); border-radius: 7px;
+    cursor: pointer; font-size: 12.5px;
+  }
+  .dlg-foot button:hover { border-color: var(--text3); background: var(--bg4); }
+  .dlg-foot button.primary { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,.1); }
+  .dlg-foot button.danger { border-color: var(--red); color: var(--red); background: rgba(248,81,73,.1); }
+  /* shortcut panel */
+  #shortcutDlg .sc-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 5px 2px; font-size: 12.5px; }
+  #shortcutDlg .sc-row .sc-key {
+    flex: none; font-family: Consolas, monospace; font-size: 11px; color: var(--accent);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; background: var(--bg3);
+  }
+  /* --- status line --- */
+  #statusLine {
+    height: 32px; flex: none;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text2); font-size: 12px;
+    white-space: nowrap; overflow: hidden;
+    position: relative; z-index: 1;
+  }
+  #statusLine .branch { font-weight: 600; color: var(--text); }
+  #statusLine .dirty { color: var(--orange); cursor: pointer; }
+  #statusLine .dirty:hover { text-decoration: underline; }
+  #statusLine .clean { color: var(--green); }
+  /* plugin version badge pinned to the right end of the status bar */
+  #statusLine .gg-version {
+    margin-left: auto; flex: none;
+    font-size: 11px; color: var(--text3);
+    cursor: pointer; user-select: none;
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 7px; background: var(--bg3);
+  }
+  #statusLine .gg-version:hover { color: var(--accent); border-color: var(--accent); }
+  /* --- graph elements --- */
+  .gg-node { cursor: pointer; }
+  .gg-node circle { stroke: var(--bg); stroke-width: 2; }
+  .gg-node:hover circle { stroke-width: 3; }
+  .gg-node.selected circle { stroke: #f0b429; stroke-width: 2.6; }
+  .gg-node.searchHit circle { stroke: #f0b429; stroke-dasharray: 3 2; stroke-width: 2; }
+  .gg-node.kbd circle { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: 4 3; }
+  .gg-node.ghost { opacity: .18; pointer-events: none; }
+  .gg-node.ghost text { display: none; }
+  .gg-ref { font-size: 10px; font-weight: 600; fill: var(--text2); }
+  .gg-ref rect { rx: 4; }
+  .gg-ref.branch rect { fill: rgba(88,166,255,.17); }
+  .gg-ref.branch text { fill: var(--accent); }
+  .gg-ref.tag rect { fill: rgba(210,153,34,.16); }
+  .gg-ref.tag text { fill: var(--yellow); }
+  .gg-ref.head rect { fill: rgba(63,185,80,.2); }
+  .gg-ref.head text { fill: var(--green); }
+  .gg-msg { font-size: 12px; font-weight: 600; fill: var(--text); }
+  .gg-sub { font-size: 10.5px; fill: var(--text3); }
+  .gg-edge { fill: none; opacity: .55; }
+  .gg-edge.mainline { opacity: .95; }
+  .gg-wip {
+    cursor: pointer;
+  }
+  .gg-wip rect { fill: rgba(240,136,62,.1); stroke: var(--orange); stroke-width: 1.2; rx: 5; }
+  .gg-wip text { fill: var(--orange); font-size: 11px; font-weight: 600; }
+  .tooltip {
+    position: fixed; z-index: 30; pointer-events: none;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font-size: 12px; color: var(--text);
+    max-width: 460px; box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  }
+  .tooltip .tt-sub { color: var(--text2); font-size: 11px; margin-top: 2px; }
+  #loading {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--text2); font-size: 14px; background: var(--bg); z-index: 10;
+  }
+  #loading.hidden { display: none; }
+  #emptyState {
+    position: absolute; inset: 0; z-index: 9; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px; text-align: center;
+    padding: 28px; color: var(--text2); background: var(--bg);
+  }
+  #emptyState.hidden { display: none; }
+  .es-ico { font-size: 46px; opacity: .85; }
+  .es-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .es-sub { font-size: 12.5px; line-height: 1.8; max-width: 420px; }
+  .es-path { font-size: 11.5px; color: var(--text2); word-break: break-all; max-width: 460px; opacity: .85; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div id="ggDeco" aria-hidden="true"></div>
+<header>
+  <span class="title">Git 图谱</span>
+  <span class="repo" id="repoLabel" title=""></span>
+  <select id="repoSwitch" title="切换仓库"></select>
+  <span class="spacer"></span>
+  <input id="searchBox" type="text" placeholder="搜索提交（消息/作者/哈希）…">
+  <span id="searchCount"></span>
+  <div class="filterWrap">
+    <button id="btnFilter" title="选择显示哪些分支">☑ 分支过滤</button>
+    <div id="filterMenu">
+      <label class="fm-all"><input type="checkbox" id="fAll" checked> 全选（显示全部提交）</label>
+      <div class="fm-hint">勾选 = 显示该分支 · 不勾 = 隐藏</div>
+      <div id="fmBranches"></div>
+    </div>
+  </div>
+  <button id="btnFetch" title="拉取远程更新（git fetch）">⬇ 拉取</button>
+  <button id="btnPush" title="推送当前分支到远程（git push）">⬆ 推送</button>
+  <button id="btnRefresh" title="重新加载">↻ 刷新</button>
+  <button id="btnUpdate" title="检查插件新版本" style="display:none">🔄 检查更新</button>
+  <div class="themeWrap">
+    <button id="btnTheme" title="切换主题">◐ 主题</button>
+    <div id="themeMenu">
+      <label><input type="radio" name="ggTheme" value="auto"> 自动（跟随界面）</label>
+      <label><input type="radio" name="ggTheme" value="dark"> 深色</label>
+      <label><input type="radio" name="ggTheme" value="light"> 浅色</label>
+      <label><input type="radio" name="ggTheme" value="sakura"> 🌸 樱花</label>
+      <label><input type="radio" name="ggTheme" value="ocean"> 🌊 海洋</label>
+      <label><input type="radio" name="ggTheme" value="forest"> 🌲 森林</label>
+      <label><input type="radio" name="ggTheme" value="night"> 🌙 夜空</label>
+      <label><input type="radio" name="ggTheme" value="candy"> 🍬 糖果</label>
+      <label><input type="radio" name="ggTheme" value="business"> 💼 商务</label>
+      <label><input type="radio" name="ggTheme" value="starry"> ✨ 星河</label>
+      <label><input type="radio" name="ggTheme" value="tech"> 🤖 科技</label>
+    </div>
+  </div>
+  <span class="hint">滚轮上下滚动 · ↑↓ 导航 · 右键菜单 · Ctrl+/ 快捷键</span>
+</header>
+<div id="statsBar"></div>
+<div id="main">
+  <div id="graphWrap">
+    <div id="legend"></div>
+    <div id="loading">加载中…</div>
+    <div id="emptyState" class="hidden">
+      <div class="es-ico">🗂️</div>
+      <div class="es-title">当前对话区域不是 Git 仓库</div>
+      <div class="es-sub">该对话的工作区没有 git 仓库，图谱不显示。</div>
+      <div class="es-path" id="emptyPath"></div>
+    </div>
+    <div id="wdPanel"></div>
+    <div id="commitList"></div>
+  </div>
+  <div id="detail">
+    <div class="dhead">
+      <span class="dtitle" id="dTitle">提交详情</span>
+      <button class="dclose" id="dClose" title="关闭">✕</button>
+    </div>
+    <div id="dContent"></div>
+  </div>
+</div>
+<div id="statusLine"></div>
+<div id="ctxMenu"></div>
+<div id="ggDlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span class="dlg-ico">⚠️</span><span id="ggDlgTitle">确认操作</span></div>
+    <div class="dlg-body" id="ggDlgBody"></div>
+    <div class="dlg-foot"><button id="ggDlgCancel">取消</button><button id="ggDlgOk" class="primary">确认</button></div>
+  </div>
+</div>
+<div id="commitDlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span class="dlg-ico">📝</span>提交更改</div>
+    <div class="dlg-body" id="commitDlgBody"></div>
+    <div class="dlg-foot"><button id="commitDlgCancel">取消</button><button id="commitDlgOk" class="primary">提交</button></div>
+  </div>
+</div>
+<div id="tagDlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span class="dlg-ico">🏷️</span>打标签</div>
+    <div class="dlg-body" id="tagDlgBody"></div>
+    <div class="dlg-foot"><button id="tagDlgCancel">取消</button><button id="tagDlgOk" class="primary">创建标签</button></div>
+  </div>
+</div>
+<div id="branchDlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span class="dlg-ico">🌿</span>从此提交新建分支</div>
+    <div class="dlg-body" id="branchDlgBody"></div>
+    <div class="dlg-foot"><button id="branchDlgCancel">取消</button><button id="branchDlgOk" class="primary">创建分支</button></div>
+  </div>
+</div>
+<div id="shortcutDlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span class="dlg-ico">⌨️</span>快捷键</div>
+    <div class="dlg-body" id="shortcutDlgBody"></div>
+    <div class="dlg-foot"><button id="shortcutDlgClose">关闭</button></div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ===================== state ===================== */
+let REPO = null;
+let COMMITS = [];          // [{hash, parents[], author, email, date, subject, refs[]}]
+let BRANCHES = [];         // [{refname, kind, name, sha, head}]
+let WORKSTATUS = null;     // {branch, staged[], unstaged[], untracked[], counts}
+let wdDiffCache = new Map(); // workfile cache: "staged\0path" -> display text
+function loadStored(key, def) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? def : JSON.parse(v);
+  } catch { return def; }
+}
+function saveStored(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* ignore */ }
+}
+let WD_SHOW = loadStored("gg2-wdshow", { staged: true, unstaged: true, untracked: true }); // group visibility toggles
+let WD_FOLDED = loadStored("gg2-wdfolded", false);      // whole panel collapsed
+const WD_GROUP_FOLDED = new Set(loadStored("gg2-wdgroupfolded", [])); // folded group keys
+const WD_SELECT = new Set(); // "groupKey\0path" of checkbox-selected rows
+let SELECTED = null;
+let SEARCH = "";
+let FILTER = "all";        // "all" | "multi"
+let HIGHLIGHT = null;      // branch sha highlighted via legend click (others ghosted)
+let KEY_IDX = -1;          // keyboard cursor: index into COMMITS
+let SCALE = 1;
+let PAN = { x: 0, y: 0 };
+let drag = null;
+
+const ROW_H = 40, LANE_W = 30, X0 = 26, Y0 = 46, NODE_R = 6;
+const LANE_COLORS = [
+  "#58a6ff", "#3fb950", "#d29922", "#bc8cff", "#f778ba", "#39c5cf",
+  "#f85149", "#7ee787", "#ffa198", "#a5d6ff", "#e3b341", "#79c0ff"
+];
+const AUTHOR_COLORS = [
+  "#f0883e", "#3fb950", "#d29922", "#bc8cff", "#f778ba", "#39c5cf",
+  "#58a6ff", "#7ee787", "#ffa198", "#a5d6ff", "#e3b341", "#f85149"
+];
+function authorColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AUTHOR_COLORS[h % AUTHOR_COLORS.length];
+}
+
+/* Branch color of a commit: HEAD branch green, other local branches in order,
+ * remotes grey, shared history follows the HEAD branch. Cached per render. */
+const BRANCH_PALETTE = LANE_COLORS.filter((c) => c !== "#3fb950");
+let BRANCH_COLOR_CACHE = null;
+function branchColorOf(hash) {
+  if (BRANCH_COLOR_CACHE) return BRANCH_COLOR_CACHE.get(hash) || "#8b949e";
+  const cache = new Map();
+  const headB = BRANCHES.find((b) => b.head);
+  if (headB) {
+    const set = reachable(headB.sha);
+    for (const h of set) cache.set(h, "#3fb950");
+  }
+  const locals = BRANCHES.filter((b) => b.kind === "local" && !b.head);
+  for (let i = 0; i < locals.length; i++) {
+    const set = reachable(locals[i].sha);
+    const color = BRANCH_PALETTE[i % BRANCH_PALETTE.length];
+    for (const h of set) if (!cache.has(h)) cache.set(h, color);
+  }
+  const remotes = BRANCHES.filter((b) => b.kind === "remote");
+  for (const b of remotes) {
+    const set = reachable(b.sha);
+    for (const h of set) if (!cache.has(h)) cache.set(h, "#6e7681");
+  }
+  BRANCH_COLOR_CACHE = cache;
+  return cache.get(hash) || "#8b949e";
+}
+
+const $ = (id) => document.getElementById(id);
+const byHash = () => new Map(COMMITS.map((c) => [c.hash, c]));
+let CACHE_LAYOUT = null; // {laneOf, laneCount} refreshed on each render
+
+/* ===================== theme (8 style presets, ported from 拾光记) ===================== */
+// themePref: 'auto' | 'dark' | 'light' | 'sakura' | 'ocean' | 'forest' | 'night' | 'candy' | 'business' | 'starry' | 'tech'
+const THEMES = ["auto", "dark", "light", "sakura", "ocean", "forest", "night", "candy", "business", "starry", "tech"];
+const THEME_LABELS = { auto: "自动", dark: "深色", light: "浅色", sakura: "🌸 樱花", ocean: "🌊 海洋", forest: "🌲 森林", night: "🌙 夜空", candy: "🍬 糖果", business: "💼 商务", starry: "✨ 星河", tech: "🤖 科技" };
+const THEME_CLASSES = ["gg-theme-sakura", "gg-theme-ocean", "gg-theme-forest", "gg-theme-night", "gg-theme-candy", "gg-theme-business", "gg-theme-starry", "gg-theme-tech"];
+let themePref = "auto";
+try {
+  const saved = localStorage.getItem("gg2-theme");
+  if (THEMES.includes(saved)) themePref = saved;
+  else if (saved) {
+    // v0.8 removed violet/sunset presets; migrate leftovers to auto
+    localStorage.removeItem("gg2-theme");
+  }
+} catch { /* storage unavailable */ }
+
+function parentIsDark() {
+  try {
+    const d = window.parent.document.body.dataset.dsDarkTheme;
+    return d === undefined || (d !== "false" && d !== "");
+  } catch { return true; }
+}
+function currentStyleId() {
+  // which style preset is active ('' for auto/dark/light)
+  if (THEME_CLASSES.includes("gg-theme-" + themePref)) return themePref;
+  return "";
+}
+function applyTheme() {
+  const root = document.documentElement;
+  root.classList.remove("gg-light", ...THEME_CLASSES);
+  if (themePref === "auto") root.classList.toggle("gg-light", !parentIsDark());
+  else if (themePref === "light") root.classList.add("gg-light");
+  else if (themePref !== "dark") root.classList.add("gg-theme-" + themePref);
+  renderBgDecor();
+  // reflect in the menu
+  const radios = document.querySelectorAll("#themeMenu input");
+  for (const r of radios) r.checked = (r.value === themePref);
+  const btn = $("btnTheme");
+  if (btn) btn.title = "主题：" + THEME_LABELS[themePref];
+}
+
+/* decorative background layer, ported from 拾光记 renderBgDecor */
+function renderBgDecor() {
+  const box = $("ggDeco");
+  if (!box) return;
+  box.innerHTML = "";
+  const style = currentStyleId();
+  if (!style) return; // auto/dark/light have no ambient decoration
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const add = (cls, st, txt) => {
+    const i = document.createElement("i");
+    i.className = cls;
+    Object.assign(i.style, st || {});
+    if (txt) i.textContent = txt;
+    box.appendChild(i);
+    return i;
+  };
+  if (style === "starry" || style === "night") {
+    const n = style === "starry" ? 56 : 36;
+    const sc = "#fff";
+    for (let i = 0; i < n; i++) {
+      const cls = "star" + (i % 6 === 0 ? " l" : i % 5 === 0 ? " glow" : i % 3 === 0 ? " s" : "");
+      add(cls, { left: rnd(0, 96) + "%", top: rnd(0, 94) + "%", animationDelay: rnd(0, 3.5) + "s", animationDuration: rnd(1.8, 4.5) + "s", background: sc, color: sc });
+    }
+    add("moon", { right: rnd(10, 34) + "px", top: rnd(56, 130) + "px" });
+    for (let i = 0; i < 3; i++) add("meteor", { right: rnd(4, 38) + "%", top: rnd(2, 20) + "%", animationDelay: rnd(1.2, 7) + "s" });
+    if (style === "starry") add("earth", { right: "-30px", bottom: "-58px" });
+  } else if (style === "sakura") {
+    for (let i = 0; i < 36; i++) {
+      const sz = i % 8 === 0 ? "xl" : i % 4 === 0 ? "l" : i % 5 === 0 ? "s" : "";
+      const pc = i % 3 === 0 ? { "--pc1": "#ffc1d8", "--pc2": "#ff8fb3" } : i % 3 === 1 ? { "--pc1": "#ffd6e5", "--pc2": "#ff9ec7" } : { "--pc1": "#ff9db8", "--pc2": "#f76b95" };
+      add("petal " + sz, { left: rnd(2, 95) + "%", top: rnd(0, 70) + "%", animationDelay: rnd(0, 9) + "s", animationDuration: rnd(6, 16) + "s", ...pc });
+    }
+  } else if (style === "ocean") {
+    add("wave", {});
+    add("wave w2", {});
+    for (let i = 0; i < 4; i++) add("sunbeam", { left: rnd(8, 72) + "%", animationDelay: rnd(0, 4) + "s", animationDuration: rnd(6, 9) + "s" });
+    for (let i = 0; i < 5; i++) add("ripple", { left: rnd(5, 90) + "%", bottom: rnd(8, 32) + "%", animationDelay: rnd(0, 5) + "s", animationDuration: rnd(5, 8) + "s" });
+    for (let i = 0; i < 28; i++) {
+      const sz = i % 4 === 0 ? "l" : i % 4 === 1 ? "s" : "";
+      add("bubble " + sz, { left: rnd(2, 96) + "%", animationDelay: rnd(0, 9) + "s", animationDuration: rnd(7, 15) + "s" });
+    }
+    for (let i = 0; i < 5; i++) add("fish" + (i === 2 || i === 4 ? " s" : ""), { top: rnd(52, 80) + "%", animationDelay: rnd(0, 6) + "s", animationDuration: rnd(12, 18) + "s" }, i % 2 ? "🐠" : "🐟");
+  } else if (style === "forest") {
+    add("tree xl", { left: rnd(-4, 14) + "%" });
+    add("tree", { left: rnd(72, 96) + "%" });
+    add("tree s", { left: rnd(30, 64) + "%" });
+    add("tree xs", { left: rnd(60, 86) + "%" });
+    add("grass", { left: rnd(0, 20) + "%" });
+    add("grass", { left: rnd(38, 60) + "%" });
+    add("grass", { left: rnd(74, 96) + "%" });
+    for (let i = 0; i < 12; i++) add("leaf", { left: rnd(2, 95) + "%", top: rnd(0, 60) + "%", animationDelay: rnd(0, 11) + "s", animationDuration: rnd(9, 17) + "s" });
+    for (let i = 0; i < 10; i++) add("firefly", { left: rnd(3, 95) + "%", top: rnd(6, 80) + "%", animationDelay: rnd(0, 6) + "s", animationDuration: rnd(5, 9) + "s" });
+    for (let i = 0; i < 2; i++) add("butterfly", { left: rnd(14, 78) + "%", top: rnd(14, 46) + "%", animationDelay: rnd(0, 5) + "s", animationDuration: rnd(9, 14) + "s" }, "🦋");
+    for (let i = 0; i < 4; i++) add("mushroom", { left: rnd(8, 88) + "%", bottom: rnd(2, 10) + "%", animationDelay: rnd(0, 3) + "s", animationDuration: rnd(4, 7) + "s" }, i % 2 ? "🍄" : "🌸");
+  } else if (style === "candy") {
+    const cs = ["#ffb74d", "#ff8fb3", "#7ec8e3", "#81c784", "#b39ddb", "#ff9a76", "#4fc3f7", "#f48fb1"];
+    for (let i = 0; i < 28; i++) add("dot" + (i % 4 === 0 ? " l" : ""), { left: rnd(2, 96) + "%", top: rnd(5, 93) + "%", background: cs[i % cs.length], animationDelay: rnd(0, 4) + "s", animationDuration: rnd(4, 8) + "s", width: rnd(7, 18) + "px", height: rnd(7, 18) + "px" });
+    add("rainbow", {});
+    const cb = ["#ff9a76", "#ff8fb3", "#7ec8e3", "#81c784", "#ffd54f", "#b39ddb"];
+    for (let i = 0; i < 18; i++) add("ribbon", { left: rnd(2, 94) + "%", background: cb[i % cb.length], animationDelay: rnd(0, 6) + "s", animationDuration: rnd(7, 12) + "s" });
+    for (let i = 0; i < 10; i++) add("lollipop", { left: rnd(4, 92) + "%", top: rnd(0, 40) + "%", animationDelay: rnd(0, 5) + "s", animationDuration: rnd(7, 12) + "s" }, "🍭");
+  } else if (style === "tech") {
+    for (let i = 0; i < 6; i++) add("signal" + (i ? " s" + (i % 3 + 1) : ""), { left: rnd(6, 74) + "%", top: rnd(6, 74) + "%" });
+    add("gear", { right: "22px", top: "16%" }, "⚙️");
+    add("gear g2", { left: "14px", bottom: "14%" }, "🔩");
+    for (let i = 0; i < 12; i++) {
+      add("circuit", { left: rnd(3, 50) + "%", top: rnd(8, 84) + "%", width: rnd(80, 200) + "px", animationDelay: rnd(0, 2.5) + "s" });
+      if (i % 2 === 0) add("circuit.v", { left: rnd(55, 95) + "%", top: rnd(6, 70) + "%", animationDelay: rnd(0, 3) + "s" });
+    }
+    for (let i = 0; i < 24; i++) {
+      add("circuit-node", { left: rnd(4, 93) + "%", top: rnd(5, 90) + "%", animationDelay: rnd(0, 1.8) + "s" });
+      if (i % 3 === 0) add("chip", { left: rnd(4, 93) + "%", top: rnd(5, 90) + "%", animationDelay: rnd(0, 3) + "s" });
+    }
+  } else if (style === "business") {
+    for (let i = 0; i < 14; i++) add("geo" + (i % 3 === 0 ? " circle" : ""), { left: rnd(4, 90) + "%", top: rnd(6, 88) + "%", animationDelay: rnd(0, 5) + "s", width: rnd(26, 46) + "px", height: rnd(26, 46) + "px" });
+    add("glass", { left: rnd(6, 20) + "%", top: rnd(12, 40) + "%" });
+    add("glass", { left: rnd(72, 88) + "%", top: rnd(16, 34) + "%" });
+    add("glass", { left: rnd(20, 40) + "%", top: rnd(58, 80) + "%" });
+    add("glass", { left: rnd(58, 70) + "%", top: rnd(60, 76) + "%" });
+    add("glass bar", { left: rnd(30, 58) + "%", top: rnd(26, 60) + "%" });
+    for (let i = 0; i < 12; i++) add("particle" + (i % 3 === 0 ? " line" : ""), { left: rnd(4, 92) + "%", top: rnd(8, 86) + "%", animationDelay: rnd(0, 4) + "s", width: rnd(5, 6) + "px", height: rnd(5, 6) + "px" });
+  }
+}
+function followParentTheme() {
+  try {
+    const parent = window.parent.document.body;
+    new MutationObserver(() => { if (themePref === "auto") applyTheme(); })
+      .observe(parent, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
+  } catch { /* cross-origin: keep default dark */ }
+}
+$("btnTheme").addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  $("themeMenu").classList.toggle("show");
+});
+$("themeMenu").addEventListener("click", (ev) => ev.stopPropagation());
+$("themeMenu").addEventListener("change", (ev) => {
+  const v = ev.target.value;
+  if (v && THEMES.includes(v)) {
+    themePref = v;
+    try { localStorage.setItem("gg2-theme", themePref); } catch { /* ignore */ }
+    applyTheme();
+    $("themeMenu").classList.remove("show");
+  }
+});
+document.addEventListener("click", (ev) => {
+  if (!ev.target.closest(".themeWrap")) $("themeMenu").classList.remove("show");
+});
+
+/* ===================== api ===================== */
+async function api(op, extra = {}) {
+  const p = new URLSearchParams();
+  p.set("op", op);
+  if (REPO) p.set("repo", REPO);
+  for (const [k, v] of Object.entries(extra)) {
+    if (Array.isArray(v)) for (const item of v) p.append(k, item);
+    else if (v !== undefined && v !== null && v !== "") p.set(k, v);
+  }
+  const res = await fetch("/git-graph/api?" + p.toString());
+  return res.json();
+}
+
+/* ===================== helpers ===================== */
+function relTime(iso) {
+  try {
+    const t = new Date(iso).getTime();
+    const d = Date.now() - t;
+    if (isNaN(t)) return "";
+    if (d < 60e3) return "刚刚";
+    if (d < 3600e3) return Math.floor(d / 60e3) + " 分钟前";
+    if (d < 86400e3) return Math.floor(d / 3600e3) + " 小时前";
+    if (d < 30 * 86400e3) return Math.floor(d / 86400e3) + " 天前";
+    const m = new Date(t);
+    return (m.getFullYear() === new Date().getFullYear() ? "" : m.getFullYear() + "年") + (m.getMonth() + 1) + "月" + m.getDate() + "日";
+  } catch { return ""; }
+}
+function short7(h) { return h.slice(0, 7); }
+function laneColor(l) { return LANE_COLORS[l % LANE_COLORS.length]; }
+
+/**
+ * Normalize branch rows. Newer server splits fields with %09 (tab); an older
+ * running server emits literal %x1f inside one field — recover from that too.
+ */
+function normalizeBranch(b) {
+  const raw = b.refname || "";
+  if (raw.includes("%x1f")) {
+    const parts = raw.split("%x1f");
+    const refname = parts[0];
+    return {
+      refname,
+      kind: refname.startsWith("refs/tags/") ? "tag" : refname.startsWith("refs/remotes/") ? "remote" : "local",
+      name: refname.replace(/^refs\/(heads|remotes|tags)\//, ""),
+      sha: parts[1] || "",
+      head: (parts[2] || "").trim() === "*",
+    };
+  }
+  return b;
+}
+
+/* ===================== layout ===================== */
+function layout() {
+  // Classic git-graph lane assignment, processed oldest -> newest so a commit
+  // can continue the lane of its ALREADY-PLACED parent. Every commit of one
+  // first-parent chain therefore lands on the same lane: one straight vertical
+  // line per branch.
+  const childCount = new Map();
+  for (const c of COMMITS) {
+    for (const p of c.parents) childCount.set(p, (childCount.get(p) || 0) + 1);
+  }
+  const laneOf = new Map();
+  const lanes = []; // lane -> last commit hash | null (released)
+  for (let k = COMMITS.length - 1; k >= 0; k--) {
+    const c = COMMITS[k];
+    let chosen = -1;
+    // continue the lane of the first already-placed parent
+    for (const p of c.parents) {
+      const li = laneOf.get(p);
+      if (li !== undefined && lanes[li] === p) { chosen = li; break; }
+    }
+    if (chosen === -1) {
+      // reuse a released lane if possible
+      for (let li = 0; li < lanes.length; li++) {
+        if (lanes[li] === null) { chosen = li; break; }
+      }
+      if (chosen === -1) { chosen = lanes.length; lanes.push(null); }
+    }
+    laneOf.set(c.hash, chosen);
+    lanes[chosen] = c.hash;
+    // release a lane whose last commit now has every child placed
+    for (let li = 0; li < lanes.length; li++) {
+      const last = lanes[li];
+      if (last === null || last === c.hash) continue;
+      const kids = COMMITS.filter((k2) => k2.parents.includes(last));
+      if (kids.length > 0 && kids.every((k2) => laneOf.has(k2.hash))) lanes[li] = null;
+    }
+  }
+  return { laneOf, laneCount: lanes.length };
+}
+
+/** Set of commits reachable from tip (BFS over parents). */
+function reachable(tip) {
+  const map = byHash();
+  const seen = new Set();
+  const stack = [tip];
+  while (stack.length) {
+    const h = stack.pop();
+    if (seen.has(h)) continue;
+    const c = map.get(h);
+    if (!c) continue;
+    seen.add(h);
+    for (const p of c.parents) stack.push(p);
+  }
+  return seen;
+}
+
+/* ===================== filter ===================== */
+const CHECKED_SET = new Set(); // branch shas kept visible when FILTER === "multi"
+let CHECKED_REFS = loadStored("gg2-bfilter", null); // persisted checked branch refnames (null = all)
+const PAGE = 200;         // commits per page (large-repo pagination)
+let LOADED = 0;           // commits loaded so far
+let TOTAL = 0;            // total commits in the repo
+let REPO_LIST = [];       // available repos for the switcher
+function visibleSet() {
+  if (FILTER === "all") return null;
+  if (FILTER === "multi") {
+    // 严格语义：只显示「已勾选分支」可达的提交；全部不勾选 → 空列表（不回落全显）
+    const union = new Set();
+    for (const b of BRANCHES) {
+      if (b.kind === "tag") continue;
+      if (CHECKED_SET.has(b.sha)) {
+        const s = reachable(b.sha);
+        for (const h of s) union.add(h);
+      }
+    }
+    return union;
+  }
+  return reachable(FILTER);
+}
+
+/* ===================== graph render ===================== */
+/* (long-chain folding removed — branch-group folding covers it) */
+
+/* ===== branch-group rows: each branch (incl. the HEAD mainline) gets a foldable group header ===== */
+let BRANCH_FOLDED = new Set(loadStored("gg2-brfolded", [])); // refnames of collapsed branch groups
+let BRANCH_FOLD_DEFAULTED = false; // one-time: fold every branch group on very first load
+function buildRows(vis) {
+  const rows = []; // {type:'commit', hash} | {type:'head', refname, name, tip, count, head?}
+  const seen = new Set();
+  const map = byHash();
+  const headB = BRANCHES.find((b) => b.head) || BRANCHES.find((b) => b.kind === "local");
+  // With an active branch filter, a branch whose tip is not visible must not
+  // mark its commits as seen — otherwise a visible branch that shares those
+  // commits (e.g. feature/x pointing at an ancestor of the hidden HEAD) would
+  // end up with an empty chain and its rows would vanish.
+  if (headB && !(vis && !vis.has(headB.sha))) {
+    const chain = [];
+    let cur = headB.sha;
+    while (cur && map.has(cur) && !seen.has(cur)) {
+      seen.add(cur);
+      chain.push(cur);
+      cur = map.get(cur).parents[0] || null;
+    }
+    if (chain.length) {
+      rows.push({ type: "head", refname: headB.refname, name: headB.name, tip: chain[0], count: chain.length, head: true });
+      if (!BRANCH_FOLDED.has(headB.refname)) {
+        for (const h of chain) rows.push({ type: "commit", hash: h });
+      }
+    }
+  }
+  for (const b of BRANCHES) {
+    if (b.kind !== "local" || (headB && b.refname === headB.refname)) continue;
+    if (vis && !vis.has(b.sha)) continue; // filtered-out branch: hide its group
+    const chain = [];
+    let cur = b.sha;
+    while (cur && map.has(cur) && !seen.has(cur)) {
+      seen.add(cur);
+      chain.push(cur);
+      const p = map.get(cur).parents[0] || null;
+      if (p && seen.has(p)) break; // merged into an already-shown commit
+      cur = p;
+    }
+    if (!chain.length) continue;
+    rows.push({ type: "head", refname: b.refname, name: b.name, tip: chain[0], count: chain.length });
+    if (!BRANCH_FOLDED.has(b.refname)) {
+      for (const h of chain) rows.push({ type: "commit", hash: h });
+    }
+  }
+  // remote branches: same treatment, so remote-only commits get their own
+  // foldable group instead of vanishing (or being buried in the leftovers).
+  // Even a fully-synced remote branch (chain empty) still gets a group header
+  // so origin/* is always visible; it just shows a "synced" hint when open.
+  for (const b of BRANCHES) {
+    if (b.kind !== "remote") continue;
+    if (vis && !vis.has(b.sha)) continue;
+    const chain = [];
+    let cur = b.sha;
+    while (cur && map.has(cur) && !seen.has(cur)) {
+      seen.add(cur);
+      chain.push(cur);
+      const p = map.get(cur).parents[0] || null;
+      if (p && seen.has(p)) break; // merged into an already-shown commit
+      cur = p;
+    }
+    const synced = !chain.length;
+    // label: "已同步" only when the remote tip equals a same-named local branch;
+    // otherwise the commits are all already shown under another group -> "已包含"
+    let syncedLabel = "已包含";
+    if (synced) {
+      const short = b.name.replace(/^[^/]+\//, ""); // origin/main -> main
+      const localTwin = BRANCHES.find((lb) => lb.kind === "local" && lb.name === short);
+      if (localTwin && localTwin.sha === b.sha) syncedLabel = "已同步";
+    }
+    rows.push({ type: "head", refname: b.refname, name: b.name, tip: b.sha, count: synced ? 0 : chain.length, synced, syncedLabel });
+    if (!synced && !BRANCH_FOLDED.has(b.refname)) {
+      for (const h of chain) rows.push({ type: "commit", hash: h });
+    }
+  }
+  // leftovers (should not happen with --all; with a filter they belong to
+  // hidden branches, so drop them unless they are inside the visible set)
+  for (const c of COMMITS) {
+    if (!seen.has(c.hash) && (!vis || vis.has(c.hash))) {
+      seen.add(c.hash);
+      rows.push({ type: "commit", hash: c.hash });
+    }
+  }
+  return rows;
+}
+
+/** Ctrl+B: collapse/expand every branch group at once. */
+function toggleBranchGroups() {
+  const refs = BRANCHES.filter((b) => b.kind === "local" || b.kind === "remote").map((b) => b.refname);
+  if (!refs.length) return;
+  const allFolded = refs.every((r) => BRANCH_FOLDED.has(r));
+  for (const r of refs) {
+    if (allFolded) BRANCH_FOLDED.delete(r);
+    else BRANCH_FOLDED.add(r);
+  }
+  saveStored("gg2-brfolded", [...BRANCH_FOLDED]);
+  render();
+}
+
+function render() {
+  BRANCH_COLOR_CACHE = null;
+  const map = byHash();
+  const vis = visibleSet();
+  const hlSet = HIGHLIGHT ? reachable(HIGHLIGHT) : null;
+  const ROWS = buildRows(vis);
+  const list = $("commitList");
+  list.innerHTML = "";
+
+  const kbdHash = KEY_IDX >= 0 && KEY_IDX < COMMITS.length ? COMMITS[KEY_IDX].hash : null;
+  const commitRows = [];
+  let prevCommitEl = null;
+  const firstCommitEl = null;
+
+  // gather visible commit hashes in row order (for keyboard nav + line joining)
+  const visibleCommits = ROWS.filter((r) => r.type === "commit" && !(vis && !vis.has(r.hash)) && !(hlSet && !hlSet.has(r.hash)));
+
+  for (let i = 0; i < ROWS.length; i++) {
+    const r = ROWS[i];
+    if (r.type === "head") {
+      // hide the whole group when its branch is filtered out
+      if (vis && !vis.has(r.tip)) continue;
+      list.appendChild(buildHeadRow(r, vis, hlSet));
+      continue;
+    }
+    const c = map.get(r.hash);
+    if (!c) continue;
+    const hidden = (vis && !vis.has(c.hash)) || (hlSet && !hlSet.has(c.hash));
+    if (hidden) continue;
+    const row = buildCommitRow(c, hidden, kbdHash === c.hash, vis, hlSet);
+    list.appendChild(row);
+    commitRows.push(row);
+    if (prevCommitEl) prevCommitEl.classList.remove("last");
+    row.classList.add("last");
+    prevCommitEl = row;
+  }
+  // line joining: each row's graph line connects to the previous visible commit
+  for (let i = 0; i < commitRows.length; i++) {
+    const row = commitRows[i];
+    if (i === 0) row.classList.add("first");
+    if (commitRows.length === 1) row.classList.add("solo");
+  }
+
+  // strict filter: every branch unchecked -> empty list with a hint
+  if (vis && vis.size === 0) {
+    const hint = document.createElement("div");
+    hint.style.cssText = "color:var(--text3);text-align:center;padding:26px 0 18px;font-size:12.5px";
+    hint.textContent = "未选择任何分支 —— 在 ☑ 分支过滤 中勾选要显示的分支";
+    list.appendChild(hint);
+  }
+
+  // large-repo pagination: load-more button
+  if (TOTAL > LOADED) {
+    const more = document.createElement("div");
+    more.className = "cl-more";
+    const b = document.createElement("button");
+    b.textContent = `加载更多（已显示 ${LOADED} / ${TOTAL}）`;
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      b.textContent = "加载中…";
+      await loadMore();
+    });
+    more.appendChild(b);
+    list.appendChild(more);
+  }
+
+  renderLegend();
+}
+
+/** Fetch the next page of commits and re-render. */
+async function loadMore() {
+  try {
+    const g = await api("graph", { limit: PAGE, skip: LOADED });
+    if (!g.ok) return;
+    const map = byHash();
+    const fresh = (g.commits || []).filter((c) => !map.has(c.hash));
+    COMMITS.push(...fresh);
+    LOADED = COMMITS.length;
+    TOTAL = g.total || LOADED;
+    BRANCH_COLOR_CACHE = null;
+    render();
+  } catch { /* ignore */ }
+}
+
+function buildCommitRow(c, hidden, isKbd, vis, hlSet) {
+  const row = document.createElement("div");
+  row.className = "cl-row"
+    + (SELECTED === c.hash ? " sel" : "")
+    + (isKbd ? " kbd" : "")
+    + (SEARCH && matches(c) ? " searchHit" : "");
+  row.dataset.hash = c.hash;
+  const color = branchColorOf(c.hash);
+
+  const graph = document.createElement("div");
+  graph.className = "cl-graph";
+  graph.style.setProperty("--line-color", color);
+  const dot = document.createElement("span");
+  dot.className = "cl-dot";
+  dot.style.background = color;
+  if (c.refs.some((r) => r.head)) dot.style.boxShadow = "0 0 0 2px var(--green)";
+  graph.appendChild(dot);
+  row.appendChild(graph);
+
+  const body = document.createElement("div");
+  body.className = "cl-body";
+  const line1 = document.createElement("div");
+  line1.className = "cl-line1";
+  const msg = document.createElement("span");
+  msg.className = "cl-msg";
+  msg.textContent = c.subject || "";
+  msg.title = c.subject || "";
+  line1.appendChild(msg);
+  if (c.refs.length) {
+    const refs = document.createElement("span");
+    refs.className = "cl-refs";
+    for (const ref of c.refs) {
+      const kind = ref.head ? "head" : ref.kind;
+      const pill = document.createElement("span");
+      pill.className = "cl-ref " + kind;
+      pill.textContent = ref.name;
+      refs.appendChild(pill);
+    }
+    line1.appendChild(refs);
+  }
+  body.appendChild(line1);
+  const line2 = document.createElement("div");
+  line2.className = "cl-line2";
+  const author = document.createElement("span");
+  author.className = "cl-author";
+  author.textContent = c.author;
+  line2.appendChild(author);
+  line2.appendChild(document.createTextNode(" · " + relTime(c.date) + " · "));
+  const hash = document.createElement("span");
+  hash.className = "cl-hash";
+  hash.textContent = short7(c.hash);
+  line2.appendChild(hash);
+  body.appendChild(line2);
+  row.appendChild(body);
+
+  row.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    selectCommit(c.hash);
+  });
+  row.addEventListener("contextmenu", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    openContextMenu(ev.clientX, ev.clientY, c);
+  });
+  row.addEventListener("mouseenter", (ev) => showTip(ev, c));
+  row.addEventListener("mousemove", (ev) => moveTip(ev));
+  row.addEventListener("mouseleave", hideTip);
+  return row;
+}
+
+function buildHeadRow(r, vis, hlSet) {
+  const row = document.createElement("div");
+  const folded = BRANCH_FOLDED.has(r.refname);
+  row.className = "cl-head" + (folded ? "" : " open");
+  const caret = document.createElement("span");
+  caret.className = "cl-caret";
+  caret.textContent = "▶";
+  row.appendChild(caret);
+  const dot = document.createElement("span");
+  dot.className = "cl-head-dot";
+  dot.style.background = branchColorOf(r.tip);
+  row.appendChild(dot);
+  const name = document.createElement("span");
+  name.className = "cl-head-name";
+  name.textContent = r.name;
+  row.appendChild(name);
+  if (r.head) {
+    const badge = document.createElement("span");
+    badge.className = "cl-head-badge";
+    badge.textContent = "HEAD";
+    row.appendChild(badge);
+  }
+  const count = document.createElement("span");
+  count.className = "cl-head-count";
+  if (r.synced) {
+    count.textContent = r.syncedLabel || "已同步";
+    count.classList.add("cl-synced");
+  } else {
+    count.textContent = `${r.count} 个提交`;
+  }
+  row.appendChild(count);
+  const tip = document.createElement("span");
+  tip.className = "cl-head-tip";
+  const map = byHash();
+  const tipC = map.get(r.tip);
+  if (tipC) tip.textContent = (tipC.subject || "") + " · " + relTime(tipC.date);
+  row.appendChild(tip);
+  row.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    if (BRANCH_FOLDED.has(r.refname)) BRANCH_FOLDED.delete(r.refname);
+    else BRANCH_FOLDED.add(r.refname);
+    saveStored("gg2-brfolded", [...BRANCH_FOLDED]);
+    render();
+  });
+  row.addEventListener("contextmenu", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    openBranchCtxMenu(ev.clientX, ev.clientY, r);
+  });
+  return row;
+}
+
+function computeMainline(map) {
+  // HEAD branch mainline: follow first-parent from the commit that carries HEAD ref
+  const set = new Set();
+  const headCommit = COMMITS.find((c) => c.refs.some((r) => r.head));
+  let cur = headCommit ? headCommit.hash : COMMITS.length ? COMMITS[0].hash : null;
+  while (cur && map.has(cur)) {
+    set.add(cur);
+    const c = map.get(cur);
+    cur = c.parents[0] || null;
+  }
+  return set;
+}
+
+function matches(c) {
+  if (!SEARCH) return false;
+  const q = SEARCH.toLowerCase();
+  return (c.subject || "").toLowerCase().includes(q)
+    || (c.author || "").toLowerCase().includes(q)
+    || c.hash.toLowerCase().includes(q)
+    || (c.email || "").toLowerCase().includes(q);
+}
+
+function renderLegend() {
+  const lg = $("legend");
+  lg.innerHTML = "";
+  const items = [];
+  const headBranch = BRANCHES.find((b) => b.head) || BRANCHES.find((b) => b.kind === "local");
+  if (headBranch) items.push({ color: "#3fb950", label: "HEAD · " + headBranch.name, sha: headBranch.sha });
+  const locals = BRANCHES.filter((b) => b.kind === "local" && !b.head);
+  const remotes = BRANCHES.filter((b) => b.kind === "remote");
+  const tags = BRANCHES.filter((b) => b.kind === "tag");
+  for (let i = 0; i < locals.length; i++) items.push({ color: BRANCH_PALETTE[i % BRANCH_PALETTE.length], label: locals[i].name, sha: locals[i].sha });
+  for (let i = 0; i < Math.min(3, remotes.length); i++) items.push({ color: "#6e7681", label: "⤴ " + remotes[i].name, sha: remotes[i].sha });
+  if (tags.length) items.push({ color: "var(--yellow)", label: "● " + tags.length + " 个标签" });
+  for (const it of items.slice(0, 8)) {
+    const span = document.createElement("span");
+    span.className = "lg" + (it.sha && HIGHLIGHT === it.sha ? " lg-on" : "");
+    if (it.sha) {
+      span.style.cursor = "pointer";
+      span.title = "点击高亮该分支路径";
+      span.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        HIGHLIGHT = HIGHLIGHT === it.sha ? null : it.sha;
+        render();
+      });
+    }
+    const i = document.createElement("i");
+    i.style.background = it.color;
+    span.appendChild(i);
+    span.appendChild(document.createTextNode(it.label));
+    lg.appendChild(span);
+  }
+}
+
+/* ===================== (branch tree removed: merged into the graph view;
+ * branch listing/filtering lives in the ☑ 分支过滤 menu) ===================== */
+
+function getLaneOf(hash) {
+  return CACHE_LAYOUT ? (CACHE_LAYOUT.laneOf.get(hash) ?? 0) : 0;
+}
+
+/* ===================== interactions ===================== */
+const tip = document.createElement("div");
+tip.className = "tooltip";
+tip.style.display = "none";
+document.body.appendChild(tip);
+function showTip(ev, c) {
+  tip.innerHTML = "";
+  const refs = c.refs.length ? c.refs.map((r) => r.name).join(", ") : "—";
+  tip.appendChild(document.createTextNode(`${c.hash}  ${c.subject}`));
+  const sub = document.createElement("div");
+  sub.className = "tt-sub";
+  sub.textContent = `${c.author} · ${c.date}  |  refs: ${refs}`;
+  tip.appendChild(sub);
+  tip.style.display = "block";
+  moveTip(ev);
+}
+function moveTip(ev) {
+  tip.style.left = (ev.clientX + 14) + "px";
+  tip.style.top = (ev.clientY + 12) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+/* No left-drag panning and no wheel zoom: the graph scrolls naturally with the
+ * mouse wheel (graphWrap is overflow:auto). SCALE/PAN stay fixed at defaults. */
+
+/* ===================== detail ===================== */
+async function selectCommit(hash, scroll = false) {
+  SELECTED = hash;
+  render();
+  if (scroll) scrollToNode(hash);
+  $("detail").classList.add("open");
+  const d = $("dContent");
+  d.innerHTML = "";
+  const loading = document.createElement("div");
+  loading.className = "empty";
+  loading.textContent = "加载详情…";
+  d.appendChild(loading);
+  try {
+    const info = await api("show", { hash });
+    if (!info.ok) { d.textContent = "加载失败: " + (info.error || "?"); return; }
+    const firstParent = info.parents[0];
+    const diff = firstParent ? await api("diff", { hash }) : null;
+    renderDetail(info, diff);
+  } catch (err) {
+    d.textContent = "加载失败: " + err.message;
+  }
+}
+function scrollToNode(hash) {
+  const row = $("commitList").querySelector(`.cl-row[data-hash="${hash}"]`);
+  if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function renderDetail(info, diff) {
+  const d = $("dContent");
+  d.innerHTML = "";
+  const meta = document.createElement("div");
+  meta.className = "dmeta";
+  const rows = [
+    ["提交", info.hash],
+    ["作者", `${info.author} <${info.email}>`],
+    ["时间", info.date],
+    ["父提交", (info.parents.length ? info.parents.join(", ") : "(root)")]
+  ];
+  for (const [k, v] of rows) {
+    const b = document.createElement("b"); b.textContent = k;
+    const s = document.createElement("span"); s.textContent = v;
+    if (k === "提交") { s.className = "hash"; s.title = "点击复制"; s.addEventListener("click", () => navigator.clipboard?.writeText(v).catch(() => {})); }
+    meta.appendChild(b); meta.appendChild(s);
+  }
+  d.appendChild(meta);
+
+  const body = document.createElement("div");
+  body.className = "dbody";
+  const msg = document.createElement("div");
+  msg.className = "msg";
+  if (info.subject) {
+    const subj = document.createElement("span");
+    subj.className = "subj";
+    subj.textContent = info.subject;
+    msg.appendChild(subj);
+  }
+  if (info.body) msg.appendChild(document.createTextNode("\n" + info.body));
+  body.appendChild(msg);
+
+  if (info.stat) {
+    const sec = document.createElement("div");
+    sec.className = "section";
+    sec.textContent = "变更统计（点击文件名看单个文件 diff）";
+    body.appendChild(sec);
+    const pre = document.createElement("pre");
+    pre.className = "stat";
+    const fileRow = document.createElement("div");
+    fileRow.className = "stat-files";
+    for (const line of String(info.stat).split("\n")) {
+      const row = document.createElement("div");
+      row.className = "sf-row";
+      const m = line.match(/^\s*(.+?)\s*\|\s*(\d+)(.*)$/);
+      if (m && !line.includes("files changed") && !line.includes("file changed") && !line.trim().startsWith("--")) {
+        let fname = m[1].trim();
+        // rename "a => b" keeps the new name
+        if (fname.includes("=>")) fname = fname.split("=>")[1].trim();
+        const fileSpan = document.createElement("span");
+        fileSpan.className = "sf-file";
+        fileSpan.textContent = fname;
+        fileSpan.title = "点击查看该文件 diff";
+        fileSpan.addEventListener("click", () => showFileDiff(info.hash, fname, row));
+        const histSpan = document.createElement("span");
+        histSpan.className = "sf-file sf-hist";
+        histSpan.textContent = "📜";
+        histSpan.title = "查看该文件的历史提交";
+        histSpan.addEventListener("click", () => showFileHist(fname, row));
+        const restSpan = document.createElement("span");
+        restSpan.className = "sf-rest";
+        restSpan.textContent = line.slice(line.indexOf("|"));
+        row.appendChild(fileSpan);
+        row.appendChild(histSpan);
+        row.appendChild(restSpan);
+      } else {
+        row.textContent = line;
+      }
+      fileRow.appendChild(row);
+    }
+    body.appendChild(fileRow);
+    body.appendChild(pre);
+  }
+  if (diff && diff.ok) {
+    const sec = document.createElement("div");
+    sec.className = "section";
+    sec.textContent = diff.truncated ? "Diff（过长已截断）" : "Diff";
+    body.appendChild(sec);
+    if (diff.diff && diff.diff.trim()) {
+      const pre = document.createElement("pre");
+      pre.className = "diff";
+      highlightDiff(pre, diff.diff);
+      body.appendChild(pre);
+    } else {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "（无差异内容）";
+      body.appendChild(e);
+    }
+  }
+  d.appendChild(body);
+}
+$("dClose").addEventListener("click", () => {
+  $("detail").classList.remove("open");
+  SELECTED = null;
+  render();
+});
+
+/* Show a single file's diff inside the detail panel (async). */
+async function showFileDiff(hash, file, rowEl) {
+  rowEl.classList.add("sf-loading");
+  try {
+    const res = await api("filediff", { hash, file });
+    rowEl.classList.remove("sf-loading");
+    const d = $("dContent");
+    let block = d.querySelector(".sf-diff-block[data-file='" + CSS.escape(file) + "']");
+    if (block) { block.remove(); return; } // toggle off
+    block = document.createElement("div");
+    block.className = "sf-diff-block";
+    block.dataset.file = file;
+    const head = document.createElement("div");
+    head.className = "sf-diff-head";
+    const name = document.createElement("span");
+    name.textContent = file;
+    const close = document.createElement("span");
+    close.className = "sf-diff-close";
+    close.textContent = "✕";
+    close.addEventListener("click", () => block.remove());
+    head.appendChild(name);
+    head.appendChild(close);
+    block.appendChild(head);
+    const pre = document.createElement("pre");
+    pre.className = "diff";
+    if (res.ok) {
+      highlightDiff(pre, res.diff || "（无差异）");
+    } else {
+      pre.textContent = "加载失败: " + (res.error || "?");
+    }
+    block.appendChild(pre);
+    d.appendChild(block);
+    block.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (err) {
+    rowEl.classList.remove("sf-loading");
+    alert("加载失败: " + err.message);
+  }
+}
+
+/** File history: list every commit touching the file (--follow). */
+async function showFileHist(file, rowEl) {
+  rowEl.classList.add("sf-loading");
+  try {
+    const res = await api("filelog", { file });
+    rowEl.classList.remove("sf-loading");
+    const d = $("dContent");
+    let block = d.querySelector(".sf-hist-block[data-file='" + CSS.escape(file) + "']");
+    if (block) { block.remove(); return; } // toggle off
+    block = document.createElement("div");
+    block.className = "sf-diff-block sf-hist-block";
+    block.dataset.file = file;
+    const head = document.createElement("div");
+    head.className = "sf-diff-head";
+    const name = document.createElement("span");
+    name.textContent = "📜 " + file + " 的历史提交";
+    const close = document.createElement("span");
+    close.className = "sf-diff-close";
+    close.textContent = "✕";
+    close.addEventListener("click", () => block.remove());
+    head.appendChild(name);
+    head.appendChild(close);
+    block.appendChild(head);
+    const list = document.createElement("div");
+    if (!res.ok || !res.commits.length) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = res.error || "（该文件没有提交历史）";
+      list.appendChild(e);
+    } else {
+      for (const c of res.commits) {
+        const r = document.createElement("div");
+        r.className = "sf-hist-row";
+        const msg = document.createElement("span");
+        msg.className = "sf-hist-msg";
+        msg.textContent = c.subject || "";
+        const meta = document.createElement("span");
+        meta.className = "sf-hist-meta";
+        meta.textContent = short7(c.hash) + " · " + relTime(c.date) + " · " + c.author;
+        r.appendChild(msg);
+        r.appendChild(meta);
+        r.addEventListener("click", () => selectCommit(c.hash));
+        list.appendChild(r);
+      }
+    }
+    block.appendChild(list);
+    d.appendChild(block);
+    block.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (err) {
+    rowEl.classList.remove("sf-loading");
+    alert("加载失败: " + err.message);
+  }
+}
+
+/* ===================== workdir modal (VSCode-style) ===================== */
+/* ===================== workdir panel (persistent, top of the graph) ===================== */
+/** Fetch workstatus, then render the top panel + status line. */
+async function refreshWorkdir() {
+  const panel = $("wdPanel");
+  panel.innerHTML = "";
+  const loading = document.createElement("div");
+  loading.className = "wd-clean";
+  loading.textContent = "加载工作区状态…";
+  panel.appendChild(loading);
+  try {
+    const ws = await api("workstatus");
+    if (!ws.ok) { panel.innerHTML = ""; return; }
+    WORKSTATUS = ws;
+    renderWorkdir();
+    renderStatusLine();
+    renderStats();
+  } catch { /* ignore */ }
+}
+
+function renderWorkdir() {
+  const panel = $("wdPanel");
+  panel.innerHTML = "";
+  const ws = WORKSTATUS;
+  const total = ws.counts.staged + ws.counts.unstaged + ws.counts.untracked;
+
+  const top = document.createElement("div");
+  top.className = "wd-top";
+  const caret = document.createElement("span");
+  caret.className = "wd-caret";
+  caret.textContent = "▶";
+  top.appendChild(caret);
+  const title = document.createElement("span");
+  title.className = "wd-title";
+  title.textContent = "未提交改动";
+  top.appendChild(title);
+  const counts = document.createElement("span");
+  counts.className = "wd-counts";
+  counts.textContent = `已暂存 ${ws.counts.staged} · 更改 ${ws.counts.unstaged} · 未跟踪 ${ws.counts.untracked}`;
+  top.appendChild(counts);
+  const sp = document.createElement("span");
+  sp.className = "sp";
+  top.appendChild(sp);
+
+  // working-tree write actions
+  const stageAllBtn = document.createElement("button");
+  stageAllBtn.type = "button";
+  stageAllBtn.textContent = "全部暂存";
+  stageAllBtn.title = "暂存所有未暂存/未跟踪的更改";
+  stageAllBtn.addEventListener("click", (ev) => { ev.stopPropagation(); runGitOp("stage-all"); });
+  top.appendChild(stageAllBtn);
+
+  const commitBtn = document.createElement("button");
+  commitBtn.type = "button";
+  commitBtn.textContent = "提交";
+  commitBtn.title = "提交更改到本地仓库";
+  commitBtn.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    const total = WORKSTATUS ? WORKSTATUS.counts.staged + WORKSTATUS.counts.unstaged + WORKSTATUS.counts.untracked : 0;
+    if (!total) { alert("没有可提交的改动"); return; }
+    const r = await commitDialog();
+    if (r && r.message) runGitOp("commit", { message: r.message, all: r.all ? 1 : 0 }, true);
+  });
+  top.appendChild(commitBtn);
+  // disable write buttons while the working tree is clean
+  if (total === 0) {
+    stageAllBtn.disabled = true;
+    commitBtn.disabled = true;
+    stageAllBtn.title = "工作区没有可暂存的改动";
+    commitBtn.title = "工作区没有可提交的改动";
+  }
+
+  // group visibility dropdown (已暂存 / 更改 / 未跟踪)
+  const filterWrap = document.createElement("div");
+  filterWrap.className = "wd-filterWrap";
+  const filterBtn = document.createElement("button");
+  filterBtn.type = "button";
+  filterBtn.textContent = "☑ 分组";
+  filterBtn.title = "选择显示哪些分组";
+  const menu = document.createElement("div");
+  menu.className = "wd-menu";
+  filterBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    menu.classList.toggle("show");
+  });
+  const mkToggle = (key, label) => {
+    const lab = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = WD_SHOW[key];
+    cb.addEventListener("change", () => {
+      WD_SHOW[key] = cb.checked;
+      saveStored("gg2-wdshow", WD_SHOW);
+      renderWdGroups(body);
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(label));
+    menu.appendChild(lab);
+  };
+  mkToggle("staged", "已暂存");
+  mkToggle("unstaged", "更改");
+  mkToggle("untracked", "未跟踪");
+  menu.addEventListener("click", (ev) => ev.stopPropagation());
+  filterWrap.appendChild(filterBtn);
+  filterWrap.appendChild(menu);
+  top.appendChild(filterWrap);
+
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.textContent = "↻ 刷新";
+  refresh.title = "重新加载未提交改动";
+  refresh.addEventListener("click", (ev) => { ev.stopPropagation(); refreshWorkdir(); });
+  top.appendChild(refresh);
+  // clicking anywhere else on the bar folds/unfolds the whole panel (like a branch group)
+  top.addEventListener("click", () => {
+    WD_FOLDED = !WD_FOLDED;
+    saveStored("gg2-wdfolded", WD_FOLDED);
+    panel.classList.toggle("folded", WD_FOLDED);
+  });
+  panel.appendChild(top);
+
+  // batch action bar (shown when rows are checked)
+  const batch = document.createElement("div");
+  batch.className = "wd-batch";
+  batch.style.display = "none";
+  panel.appendChild(batch);
+
+  const body = document.createElement("div");
+  body.className = "wd-body";
+  panel.appendChild(body);
+  panel.classList.toggle("folded", WD_FOLDED);
+  renderWdGroups(body);
+  updateBatchBar();
+}
+
+/** Render the three groups (staged / changes / untracked) into the panel body. */
+function renderWdGroups(body) {
+  body.innerHTML = "";
+  const ws = WORKSTATUS;
+  const total = ws.counts.staged + ws.counts.unstaged + ws.counts.untracked;
+  if (!total) {
+    const clean = document.createElement("div");
+    clean.className = "wd-clean";
+    clean.textContent = "✓ 工作区干净";
+    body.appendChild(clean);
+    return;
+  }
+
+  const groups = [
+    { key: "staged", title: "已暂存", items: ws.staged, staged: "1" },
+    { key: "unstaged", title: "更改", items: ws.unstaged, staged: "0" },
+    { key: "untracked", title: "未跟踪", items: ws.untracked.map((f) => ({ path: f.path, code: "?" })), staged: "untracked" }
+  ];
+  for (const g of groups) {
+    if (!WD_SHOW[g.key] || !g.items.length) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "wd-group" + (WD_GROUP_FOLDED.has(g.key) ? " folded" : "");
+    const gh = document.createElement("div");
+    gh.className = "wd-head";
+    const gcaret = document.createElement("span");
+    gcaret.className = "wd-caret";
+    gcaret.textContent = "▶";
+    gh.appendChild(gcaret);
+    gh.appendChild(document.createTextNode(g.title));
+    const gn = document.createElement("span");
+    gn.className = "wd-n";
+    gn.textContent = "(" + g.items.length + ")";
+    gh.appendChild(gn);
+    gh.addEventListener("click", () => {
+      if (WD_GROUP_FOLDED.has(g.key)) WD_GROUP_FOLDED.delete(g.key);
+      else WD_GROUP_FOLDED.add(g.key);
+      saveStored("gg2-wdgroupfolded", [...WD_GROUP_FOLDED]);
+      wrap.classList.toggle("folded");
+    });
+    wrap.appendChild(gh);
+    for (const it of g.items) {
+      const row = document.createElement("div");
+      row.className = "wd-row";
+      const key = g.key + "\u0000" + it.path;
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "wd-check";
+      check.checked = WD_SELECT.has(key);
+      check.title = "勾选后可批量操作";
+      check.addEventListener("change", () => {
+        if (check.checked) WD_SELECT.add(key);
+        else WD_SELECT.delete(key);
+        updateBatchBar();
+      });
+      check.addEventListener("click", (ev) => ev.stopPropagation());
+      row.appendChild(check);
+      const badge = document.createElement("span");
+      badge.className = "wd-badge " + (it.code === "?" ? "q" : it.code);
+      badge.textContent = it.code === "?" ? "?" : it.code;
+      row.appendChild(badge);
+      const path = document.createElement("span");
+      path.className = "wd-path";
+      path.textContent = it.path;
+      path.title = (it.oldPath ? it.oldPath + " → " : "") + it.path;
+      if (it.oldPath) {
+        const old = document.createElement("span");
+        old.className = "wd-old";
+        old.textContent = "  ← " + it.oldPath;
+        path.appendChild(old);
+      }
+      row.appendChild(path);
+      if (it.code !== "?" && it.binary) {
+        const b = document.createElement("span");
+        b.className = "wd-binary";
+        b.textContent = "二进制";
+        row.appendChild(b);
+      } else if (it.code !== "?") {
+        const c = document.createElement("span");
+        c.className = "wd-counts";
+        const a = document.createElement("span");
+        a.className = "add";
+        a.textContent = "+" + (it.added ?? 0);
+        const d = document.createElement("span");
+        d.className = "del";
+        d.textContent = "−" + (it.deleted ?? 0);
+        c.appendChild(a);
+        c.appendChild(document.createTextNode("  "));
+        c.appendChild(d);
+        row.appendChild(c);
+      }
+      // per-row write actions
+      const acts = document.createElement("span");
+      acts.className = "wd-acts";
+      const mkAct = (label, fn, danger) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        if (danger) b.className = "danger";
+        b.addEventListener("click", (ev) => { ev.stopPropagation(); fn(); });
+        acts.appendChild(b);
+      };
+      if (g.key === "staged") {
+        mkAct("取消暂存", () => runGitOp("unstage", { file: it.path }));
+        mkAct("还原", () => discardConfirm([it.path]), true);
+      } else {
+        mkAct("暂存", () => runGitOp("stage", { file: it.path }));
+        if (g.key === "unstaged") mkAct("还原", () => discardConfirm([it.path]), true);
+      }
+      row.appendChild(acts);
+      const diffBox = document.createElement("div");
+      diffBox.className = "wd-diff";
+      const pre = document.createElement("pre");
+      pre.textContent = "加载中…";
+      diffBox.appendChild(pre);
+      row.appendChild(diffBox);
+      row.addEventListener("click", () => {
+        const open = row.classList.contains("open");
+        if (open) { row.classList.remove("open"); return; }
+        row.classList.add("open");
+        loadWdFile(it, g.staged, pre);
+      });
+      wrap.appendChild(row);
+    }
+    body.appendChild(wrap);
+  }
+}
+
+/** Load one file's diff (or content for untracked) on demand; cached. */
+async function loadWdFile(item, staged, pre) {
+  const key = staged + "\u0000" + item.path;
+  const cached = wdDiffCache.get(key);
+  if (cached) { renderWdText(pre, cached.text, cached.isDiff); return; }
+  try {
+    const res = await api("workfile", { file: item.path, staged, ...(item.oldPath ? { old: item.oldPath } : {}) });
+    let text = "";
+    let isDiff = false;
+    if (!res.ok) {
+      text = "加载失败: " + (res.error || "?");
+    } else if (res.isDir) {
+      text = "（未跟踪目录）";
+    } else if (res.binary) {
+      text = "（二进制文件，不显示内容）";
+    } else if (res.content !== undefined) {
+      text = res.content.trim() ? res.content : "（空文件）";
+      if (res.truncated) text = "（内容过长已截断）\n" + text;
+    } else {
+      text = res.diff || "（无差异）";
+      isDiff = true;
+      if (res.truncated) text = "（diff 过长已截断）\n" + text;
+    }
+    wdDiffCache.set(key, { text, isDiff });
+    renderWdText(pre, text, isDiff);
+  } catch (err) {
+    pre.textContent = "加载失败: " + err.message;
+  }
+}
+
+function renderWdText(pre, text, isDiff) {
+  if (isDiff) highlightDiff(pre, text);
+  else pre.textContent = text;
+}
+
+/** Render unified-diff text into a <pre> with line-level coloring. */
+function highlightDiff(pre, text) {
+  pre.textContent = "";
+  if (!text) return;
+  const lines = String(text).split("\n");
+  const frag = document.createDocumentFragment();
+  for (const line of lines) {
+    const span = document.createElement("span");
+    span.style.display = "block";
+    span.textContent = line || " ";
+    let cls = "";
+    if (line.startsWith("@@")) cls = "df-hunk";
+    else if (/^(diff --git|index |new file mode|deleted file mode|similarity index|rename from|rename to|copy from|copy to|old mode|new mode|Binary files)/.test(line)) cls = "df-head";
+    else if (line.startsWith("+++") || line.startsWith("---")) cls = "df-meta";
+    else if (line.startsWith("+")) cls = "df-add";
+    else if (line.startsWith("-")) cls = "df-del";
+    if (cls) span.className = cls;
+    frag.appendChild(span);
+  }
+  pre.appendChild(frag);
+}
+
+/** Confirm dialog (destructive actions). Resolves true/false. */
+function confirmDialog(title, bodyHtml, danger, okLabel) {
+  return new Promise((resolve) => {
+    const d = $("ggDlg");
+    $("ggDlgTitle").textContent = title;
+    $("ggDlgBody").innerHTML = bodyHtml;
+    const ok = $("ggDlgOk");
+    ok.className = danger ? "danger" : "primary";
+    ok.textContent = okLabel || (danger ? "确认还原" : "确认");
+    const finish = (v) => {
+      d.classList.remove("show");
+      ok.onclick = null;
+      $("ggDlgCancel").onclick = null;
+      resolve(v);
+    };
+    ok.onclick = () => finish(true);
+    $("ggDlgCancel").onclick = () => finish(false);
+    d.classList.add("show");
+  });
+}
+
+/** Commit dialog: message input + include-all checkbox. Resolves {message, all} or null. */
+function commitDialog(paths) {
+  return new Promise((resolve) => {
+    const d = $("commitDlg");
+    const body = $("commitDlgBody");
+    body.innerHTML = "";
+    const ws = WORKSTATUS;
+    const p = document.createElement("div");
+    if (paths && paths.length) {
+      p.textContent = "将提交选中的 " + paths.length + " 个文件（其余改动不受影响）";
+    } else {
+      const parts = [];
+      if (ws.counts.staged) parts.push("已暂存 " + ws.counts.staged + " 个文件");
+      if (ws.counts.unstaged) parts.push("未暂存 " + ws.counts.unstaged + " 个文件");
+      if (ws.counts.untracked) parts.push("未跟踪 " + ws.counts.untracked + " 个文件");
+      p.textContent = "将提交" + (parts.length ? "：" + parts.join("、") : "（当前没有可提交的改动）");
+    }
+    body.appendChild(p);
+    const ta = document.createElement("textarea");
+    ta.placeholder = "提交信息（必填），例如：修复登录 bug";
+    body.appendChild(ta);
+    const aiRow = document.createElement("div");
+    aiRow.className = "ai-row";
+    const aiBtn = document.createElement("button");
+    aiBtn.type = "button";
+    aiBtn.className = "ai-btn";
+    aiBtn.textContent = "✨ AI 生成提交信息";
+    aiBtn.title = "根据当前改动自动生成（基于 diff 统计的启发式建议，可编辑后提交）";
+    const aiTip = document.createElement("span");
+    aiTip.className = "ai-tip";
+    aiTip.textContent = "";
+    aiRow.appendChild(aiBtn);
+    aiRow.appendChild(aiTip);
+    body.appendChild(aiRow);
+    aiBtn.addEventListener("click", async () => {
+      aiBtn.disabled = true;
+      aiTip.textContent = "分析中…";
+      try {
+        const res = await api("suggestmsg");
+        if (!res.ok) { aiTip.textContent = "生成失败: " + (res.error || "?"); return; }
+        if (!res.candidates || !res.candidates.length) { aiTip.textContent = "当前没有可提交的改动"; return; }
+        ta.value = res.candidates[0];
+        ta.focus();
+        aiTip.textContent = "已生成 " + res.candidates.length + " 条建议，可修改";
+      } catch (err) {
+        aiTip.textContent = "生成失败: " + err.message;
+      } finally {
+        aiBtn.disabled = false;
+      }
+    });
+    const lab = document.createElement("label");
+    lab.className = "ck";
+    const ck = document.createElement("input");
+    ck.type = "checkbox";
+    ck.checked = true;
+    lab.appendChild(ck);
+    lab.appendChild(document.createTextNode("同时暂存所有未暂存/未跟踪的更改（相当于全部提交）"));
+    body.appendChild(lab);
+    if (paths && paths.length) lab.style.display = "none"; // selective commit uses only the picked files
+    const finish = (v) => {
+      d.classList.remove("show");
+      $("commitDlgOk").onclick = null;
+      $("commitDlgCancel").onclick = null;
+      resolve(v);
+    };
+    $("commitDlgOk").onclick = () => {
+      if (!ta.value.trim()) {
+        ta.style.borderColor = "var(--red)";
+        ta.focus();
+        return; // keep the dialog open
+      }
+      finish({ message: ta.value.trim(), all: ck.checked });
+    };
+    $("commitDlgCancel").onclick = () => finish(null);
+    d.classList.add("show");
+    ta.focus();
+    ta.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        if (ta.value.trim()) $("commitDlgOk").click();
+      }
+    });
+  });
+}
+
+/* ---- batch actions (checkbox multi-select) ---- */
+function updateBatchBar() {
+  const batch = $("wdPanel").querySelector(".wd-batch");
+  if (!batch) return;
+  batch.innerHTML = "";
+  const n = WD_SELECT.size;
+  batch.style.display = n ? "" : "none";
+  if (!n) return;
+  const info = document.createElement("span");
+  info.className = "wd-batch-info";
+  info.textContent = "已选 " + n + " 个文件";
+  batch.appendChild(info);
+  const selected = [...WD_SELECT].map((k) => {
+    const i = k.indexOf("\u0000");
+    return { group: k.slice(0, i), path: k.slice(i + 1) };
+  });
+  const mk = (label, fn, danger) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    if (danger) b.className = "danger";
+    b.addEventListener("click", fn);
+    batch.appendChild(b);
+  };
+  mk("暂存选中", () => batchOp("stage", selected, ["unstaged", "untracked"]));
+  mk("取消暂存选中", () => batchOp("unstage", selected, ["staged"]));
+  mk("还原选中", () => discardConfirm(selected.map((s) => s.path)), true);
+  mk("忽略选中", () => ignoreConfirm(selected.map((s) => s.path)), true);
+  mk("提交选中", () => commitSelected(selected));
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.textContent = "✕";
+  clear.title = "清除选择";
+  clear.addEventListener("click", () => {
+    WD_SELECT.clear();
+    renderWdGroups($("wdPanel").querySelector(".wd-body"));
+    updateBatchBar();
+  });
+  batch.appendChild(clear);
+}
+
+/** Run a batch action on the selected rows that belong to the given groups. */
+function batchOp(action, selected, groups) {
+  const paths = selected.filter((s) => groups.includes(s.group)).map((s) => s.path);
+  if (!paths.length) { alert("当前选择中没有可执行此操作的文件"); return; }
+  WD_SELECT.clear();
+  runGitOp(action, { file: paths });
+}
+
+/** Ignore confirmation: add to .gitignore; tracked files are untracked (kept on disk). */
+async function ignoreConfirm(paths) {
+  const ok = await confirmDialog(
+    "忽略选中",
+    "将把这些文件<b>加入 .gitignore</b>；已跟踪的文件会<b>取消跟踪（文件保留在磁盘上）</b>：" +
+      "<div class='dlg-list'>" + paths.join("\n") + "</div>",
+    true
+  );
+  if (ok) { WD_SELECT.clear(); runGitOp("ignore", { file: paths }); }
+}
+
+/** Commit only the selected files. */
+async function commitSelected(selected) {
+  const paths = selected.map((s) => s.path);
+  const r = await commitDialog(paths);
+  if (r && r.message) {
+    WD_SELECT.clear();
+    runGitOp("commit", { message: r.message, file: paths }, true);
+  }
+}
+
+/** Discard confirmation for one or more paths. */
+async function discardConfirm(paths) {
+  const ok = await confirmDialog(
+    "还原更改",
+    "以下文件将被<b>还原到最近一次提交（HEAD）</b>，当前所有修改（含已暂存）都会<b>永久丢失</b>且不可恢复：" +
+      "<div class='dlg-list'>" + paths.join("\n") + "</div>",
+    true
+  );
+  if (ok) runGitOp("discard", { file: paths });
+}
+
+// dialogs: click the backdrop (but not the box) to cancel; Esc handled in keydown
+$("ggDlg").addEventListener("click", (ev) => { if (ev.target === $("ggDlg")) $("ggDlgCancel").click(); });
+$("commitDlg").addEventListener("click", (ev) => { if (ev.target === $("commitDlg")) $("commitDlgCancel").click(); });
+
+/** Run a write operation, then refresh the panel (+ graph for commits). */
+async function runGitOp(action, params, needGraph) {
+  try {
+    const res = await api("gitop", { action, ...params });
+    if (!res.ok) { alert("操作失败: " + (res.error || "?")); return false; }
+    WD_SELECT.clear();
+    wdDiffCache.clear();
+    await refreshWorkdir();
+    if (needGraph) await reloadGraphLight();
+    return true;
+  } catch (err) {
+    alert("操作失败: " + err.message);
+    return false;
+  }
+}
+
+/** Light reload of graph + branches (no workspace re-resolution). */
+async function reloadGraphLight() {
+  try {
+    const [graph, branches] = await Promise.all([
+      api("graph", { limit: PAGE, skip: 0 }),
+      api("branches")
+    ]);
+    if (graph.ok) { COMMITS = graph.commits; TOTAL = graph.total || COMMITS.length; }
+    LOADED = COMMITS.length;
+    if (branches.ok) BRANCHES = branches.branches.map(normalizeBranch);
+    BRANCH_COLOR_CACHE = null;
+    fillFilterMenu();
+    SELECTED = null;
+    $("detail").classList.remove("open");
+    render();
+    renderStats();
+  } catch { /* ignore */ }
+}
+
+/* ===================== status line ===================== */
+/** Top stats bar: commits / branches / authors / uncommitted / tags. */
+function renderStats() {
+  const bar = $("statsBar");
+  if (!bar) return;
+  const totalCommits = TOTAL || COMMITS.length;
+  const authors = new Set(COMMITS.map((c) => c.author || "?")).size;
+  const locals = BRANCHES.filter((b) => b.kind === "local").length;
+  const remotes = BRANCHES.filter((b) => b.kind === "remote").length;
+  const tags = BRANCHES.filter((b) => b.kind === "tag").length;
+  const u = WORKSTATUS ? WORKSTATUS.counts.staged + WORKSTATUS.counts.unstaged + WORKSTATUS.counts.untracked : 0;
+  bar.innerHTML = "";
+  const mk = (label, val) => {
+    const s = document.createElement("span");
+    s.appendChild(document.createTextNode(label + " "));
+    const n = document.createElement("span");
+    n.className = "st-num";
+    n.textContent = val;
+    s.appendChild(n);
+    bar.appendChild(s);
+  };
+  mk("提交", totalCommits);
+  mk("本地分支", locals);
+  mk("远程分支", remotes);
+  mk("标签", tags);
+  mk("作者", authors);
+  mk("未提交", u);
+}
+
+function renderStatusLine() {
+  const ws = WORKSTATUS;
+  const el = $("statusLine");
+  el.innerHTML = "";
+  const b = document.createElement("span");
+  b.className = "branch";
+  b.textContent = "分支: " + (ws.branch || "?");
+  el.appendChild(b);
+  const total = ws.counts.staged + ws.counts.unstaged + ws.counts.untracked;
+  if (total > 0) {
+    const dirty = document.createElement("span");
+    dirty.className = "dirty";
+    dirty.textContent = `◌ 未提交改动：已暂存 ${ws.counts.staged} · 更改 ${ws.counts.unstaged} · 未跟踪 ${ws.counts.untracked}`;
+    dirty.addEventListener("click", () => {
+      $("wdPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    el.appendChild(dirty);
+  } else {
+    const clean = document.createElement("span");
+    clean.className = "clean";
+    clean.textContent = "✓ 工作区干净";
+    el.appendChild(clean);
+  }
+  // version badge pinned to the right end of the status bar
+  const ver = document.createElement("span");
+  ver.className = "gg-version";
+  ver.id = "ggVersion";
+  ver.title = "插件版本，点击检查更新";
+  ver.textContent = "v" + (UPDATE_STATE && UPDATE_STATE.current ? UPDATE_STATE.current : "?");
+  ver.addEventListener("click", () => checkForUpdate(false));
+  el.appendChild(ver);
+}
+
+/* ===================== load ===================== */
+const SID_PARAM = new URLSearchParams(location.search).get("sid") || ""; // hosting session id
+let SESSION_WS = ""; // resolved workspace path of the hosting session
+
+/** Resolve the hosting session's cwd via the DSH internal session.list RPC. */
+async function resolveSessionWs() {
+  if (!SID_PARAM) return "";
+  try {
+    const res = await fetch("/api/session.list", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "client-request", rpcId: "gg-" + Date.now(), method: "session.list", payload: {} })
+    });
+    const j = await res.json();
+    const items = (j && j.result && j.result.value && j.result.value.items) || [];
+    const entry = items.find((s) => s.sessionId === SID_PARAM);
+    return (entry && entry.cwd) || "";
+  } catch { return ""; }
+}
+
+/** 当前对话不是 git 仓库：显示空态，不显示图谱。 */
+function showEmpty(ws) {
+  $("loading").classList.add("hidden");
+  $("detail").classList.remove("open");
+  COMMITS = [];
+  BRANCHES = [];
+  $("wdPanel").innerHTML = "";
+  $("commitList").innerHTML = "";
+  $("legend").innerHTML = "";
+  $("statsBar").innerHTML = "";
+  $("repoLabel").textContent = "—";
+  $("repoLabel").title = "";
+  $("emptyPath").textContent = ws || "";
+  $("emptyState").classList.remove("hidden");
+}
+function hideEmpty() {
+  $("emptyState").classList.add("hidden");
+}
+
+async function load() {
+  $("loading").classList.remove("hidden");
+  hideEmpty();
+  try {
+    if (!SESSION_WS) SESSION_WS = await resolveSessionWs();
+    const ws = SESSION_WS;
+    const repos = await api("repos", ws ? { ws } : {});
+    if (!repos.ok || !repos.repos.length) {
+      $("loading").textContent = "未配置仓库：请在 cordis.patch.yml 的 git-graph config.repo 中填写仓库路径";
+      return;
+    }
+    // 当前对话的目录不是 git 仓库 → 不显示图谱（不回落配置仓库）
+    if (SESSION_WS && !repos.wsIsGit) {
+      showEmpty(SESSION_WS);
+      return;
+    }
+    REPO = repos.current || repos.repos[0];
+    $("repoLabel").textContent = REPO;
+    $("repoLabel").title = REPO;
+    // repo switcher (hidden when only one repo)
+    const sw = $("repoSwitch");
+    REPO_LIST = repos.repos || [];
+    sw.innerHTML = "";
+    for (const r of REPO_LIST) {
+      const o = document.createElement("option");
+      o.value = r;
+      o.textContent = r;
+      if (r === REPO) o.selected = true;
+      sw.appendChild(o);
+    }
+    sw.style.display = REPO_LIST.length > 1 ? "" : "none";
+    const [graph, branches] = await Promise.all([
+      api("graph", { limit: PAGE, skip: 0 }),
+      api("branches")
+    ]);
+    if (!graph.ok) { $("loading").textContent = "加载失败: " + (graph.error || "?"); return; }
+    COMMITS = graph.commits;
+    TOTAL = graph.total || COMMITS.length;
+    LOADED = COMMITS.length;
+    BRANCHES = branches.ok ? branches.branches.map(normalizeBranch) : [];
+    BRANCH_COLOR_CACHE = null;
+    // 首次加载（尚无任何折叠偏好存储时）默认折叠全部分支组：
+    // 只显示分组头，点击组头才展开该组提交；仅执行一次，之后尊重用户手动状态。
+    if (!BRANCH_FOLD_DEFAULTED && !localStorage.getItem("gg2-brfolded")) {
+      BRANCH_FOLD_DEFAULTED = true;
+      for (const b of BRANCHES) {
+        if (b.kind === "local" || b.kind === "remote") BRANCH_FOLDED.add(b.refname);
+      }
+      saveStored("gg2-brfolded", [...BRANCH_FOLDED]);
+    }
+    fillFilterMenu();
+    SELECTED = null;
+    KEY_IDX = 0;
+    $("detail").classList.remove("open");
+    render();
+    renderStats();
+    refreshWorkdir();
+    if (COMMITS.length) {
+      setTimeout(() => scrollToNode(COMMITS[0].hash), 120);
+    }
+    // silent update check after the graph is usable
+    setTimeout(() => checkForUpdate(true), 800);
+  } catch (err) {
+    $("loading").textContent = "加载失败: " + err.message;
+  } finally {
+    $("loading").classList.add("hidden");
+  }
+}
+
+/* ---- branch checkbox filter ---- */
+function fillFilterMenu() {
+  const box = $("fmBranches");
+  box.innerHTML = "";
+  const groups = [
+    { key: "local", title: "本地分支", items: BRANCHES.filter((b) => b.kind === "local") },
+    { key: "remote", title: "远程分支", items: BRANCHES.filter((b) => b.kind === "remote") }
+  ];
+  for (const grp of groups) {
+    if (!grp.items.length) continue;
+    const title = document.createElement("div");
+    title.className = "fm-group";
+    title.textContent = grp.title;
+    box.appendChild(title);
+    for (const b of grp.items) {
+      const label = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "fBranch";
+      cb.dataset.sha = b.sha;
+      cb.dataset.ref = b.refname;
+      // restore persisted filter: null = all checked; else only stored refnames checked
+      cb.checked = CHECKED_REFS === null || CHECKED_REFS.includes(b.refname);
+      const dot = document.createElement("span");
+      dot.className = "fm-dot";
+      dot.style.background = branchColorOf(b.sha);
+      label.appendChild(cb);
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(b.name + (b.head ? " (HEAD)" : "")));
+      label.addEventListener("click", (ev) => ev.stopPropagation());
+      cb.addEventListener("change", applyFilter);
+      box.appendChild(label);
+    }
+  }
+  applyFilter();
+}
+function applyFilter() {
+  const boxes = [...document.querySelectorAll(".fBranch")];
+  const anyUnchecked = boxes.some((b) => !b.checked);
+  const all = $("fAll");
+  all.checked = !anyUnchecked;
+  if (!anyUnchecked) {
+    FILTER = "all";
+    CHECKED_REFS = null;
+  } else {
+    // union of checked branches
+    FILTER = "multi";
+    CHECKED_SET.clear();
+    const refs = [];
+    for (const b of boxes) {
+      if (b.checked) CHECKED_SET.add(b.dataset.sha);
+      else refs.push(b.dataset.ref); // remember what was turned OFF
+    }
+    const allRefs = boxes.map((b) => b.dataset.ref);
+    CHECKED_REFS = allRefs.filter((r) => !refs.includes(r));
+  }
+  saveStored("gg2-bfilter", CHECKED_REFS);
+  render();
+}
+$("fAll").addEventListener("change", () => {
+  const all = $("fAll").checked;
+  for (const b of document.querySelectorAll(".fBranch")) b.checked = all;
+  applyFilter();
+});
+$("btnFilter").addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  $("filterMenu").classList.toggle("show");
+});
+document.addEventListener("click", (ev) => {
+  if (!ev.target.closest(".filterWrap")) $("filterMenu").classList.remove("show");
+  if (!ev.target.closest(".wd-filterWrap")) {
+    const m = document.querySelector(".wd-menu.show");
+    if (m) m.classList.remove("show");
+  }
+});
+
+/* ===================== events ===================== */
+$("btnRefresh").addEventListener("click", load);
+
+/** Fetch remote refs (git fetch --all --prune), then refresh graph + branches. */
+$("btnFetch").addEventListener("click", async () => {
+  const b = $("btnFetch");
+  b.disabled = true;
+  const orig = b.textContent;
+  b.textContent = "拉取中…";
+  try {
+    const res = await api("gitop", { action: "fetch" });
+    if (!res.ok) { alert("拉取失败: " + (res.error || "?")); return; }
+    await reloadGraphLight();
+    refreshWorkdir();
+  } catch (err) {
+    alert("拉取失败: " + err.message);
+  } finally {
+    b.disabled = false;
+    b.textContent = orig;
+  }
+});
+
+/** Push the current branch to origin (confirm first). */
+$("btnPush").addEventListener("click", async () => {
+  const ws = WORKSTATUS;
+  const branch = ws && ws.branch ? ws.branch : "";
+  const ok = await confirmDialog(
+    "推送到远程",
+    "将把当前分支 <b>" + (branch || "HEAD") + "</b> 推送到 <b>origin</b>（会影响云端仓库，请确认）：",
+    false, "确认推送"
+  );
+  if (!ok) return;
+  const b = $("btnPush");
+  b.disabled = true;
+  const orig = b.textContent;
+  b.textContent = "推送中…";
+  try {
+    const res = await api("gitop", { action: "push", branch });
+    if (!res.ok) { alert("推送失败: " + (res.error || "?")); return; }
+    alert(res.summary || "推送成功");
+  } catch (err) {
+    alert("推送失败: " + err.message);
+  } finally {
+    b.disabled = false;
+    b.textContent = orig;
+  }
+});
+$("repoSwitch").addEventListener("change", (ev) => {
+  const v = ev.target.value;
+  if (!v || v === REPO) return;
+  REPO = v;
+  $("repoLabel").textContent = v;
+  $("repoLabel").title = v;
+  wdDiffCache.clear();
+  reloadGraphLight();
+  refreshWorkdir();
+});
+
+/* ---- self-update: check GitHub for a newer tag, offer one-click update ---- */
+let UPDATE_STATE = null; // {current, latest, hasUpdate}
+async function checkForUpdate(silent) {
+  const btn = $("btnUpdate");
+  try {
+    const res = await api("checkupdate");
+    if (!res.ok) { if (!silent) alert("检查更新失败: " + (res.error || "?")); return; }
+    UPDATE_STATE = res;
+    // keep the version badge in the status bar in sync
+    const ver = $("ggVersion");
+    if (ver && res.current) ver.textContent = "v" + res.current;
+    if (res.hasUpdate && res.latest) {
+      btn.style.display = "";
+      btn.textContent = "🔄 新版本 " + res.latest;
+      btn.title = "发现新版本 " + res.latest + "（当前 " + (res.current || "?") + "），点击一键更新";
+    } else if (!silent) {
+      btn.style.display = "none";
+      alert("已是最新版本（" + (res.current || "?") + "）");
+    }
+  } catch (err) {
+    if (!silent) alert("检查更新失败: " + err.message);
+  }
+}
+$("btnUpdate").addEventListener("click", async () => {
+  if (!UPDATE_STATE || !UPDATE_STATE.hasUpdate) { checkForUpdate(false); return; }
+  const ok = await confirmDialog(
+    "发现新版本",
+    "当前版本 <b>" + (UPDATE_STATE.current || "?") + "</b>，最新版本 <b>" + UPDATE_STATE.latest +
+      "</b>。将自动从 GitHub 下载并替换插件文件，<b>完成后需要重启 DeepSeek Harness 才能生效</b>。继续？",
+    false, "立即更新"
+  );
+  if (!ok) return;
+  const btn = $("btnUpdate");
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = "更新中…";
+  try {
+    const res = await api("autoupdate", { tag: UPDATE_STATE.latest });
+    if (!res.ok) { alert("更新失败: " + (res.error || "?")); return; }
+    alert("更新完成！请重启 DeepSeek Harness 使新版本生效。");
+    btn.style.display = "none";
+  } catch (err) {
+    alert("更新失败: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+let searchTimer = null;
+$("searchBox").addEventListener("input", (ev) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    SEARCH = ev.target.value.trim();
+    const n = SEARCH ? COMMITS.filter(matches).length : 0;
+    $("searchCount").textContent = SEARCH ? `${n} 条匹配` : "";
+    render();
+  }, 200);
+});
+
+/* ---- context menu ---- */
+function openContextMenu(x, y, c) {
+  const menu = $("ctxMenu");
+  menu.innerHTML = "";
+  const title = document.createElement("div");
+  title.className = "cm-title";
+  title.textContent = short7(c.hash) + "  " + (c.subject || "");
+  menu.appendChild(title);
+  const mk = (label, key, fn) => {
+    const item = document.createElement("div");
+    item.className = "cm-item";
+    const txt = document.createElement("span");
+    txt.textContent = label;
+    item.appendChild(txt);
+    if (key) {
+      const k = document.createElement("span");
+      k.className = "cm-key";
+      k.textContent = key;
+      item.appendChild(k);
+    }
+    item.addEventListener("click", () => { hideContextMenu(); fn(); });
+    menu.appendChild(item);
+  };
+  mk("复制提交哈希", "Ctrl+C", () => {
+    navigator.clipboard?.writeText(c.hash).catch(() => {});
+  });
+  mk("复制提交消息", "", () => {
+    navigator.clipboard?.writeText(c.subject || "").catch(() => {});
+  });
+  mk("复制 哈希 + 消息", "", () => {
+    navigator.clipboard?.writeText(c.hash + " " + (c.subject || "")).catch(() => {});
+  });
+  mk("查看详情 / diff", "Enter", () => {
+    selectCommit(c.hash);
+  });
+  mk("🏷️ 打标签…", "", () => openTagDlg(c.hash));
+  mk("🌿 从此提交新建分支…", "", () => openBranchDlg(c.hash));
+  mk("🌐 打开 GitHub 提交页", "", () => openGithubCommit(c.hash));
+  mk("复制仓库路径", "", () => {
+    navigator.clipboard?.writeText(REPO || "").catch(() => {});
+  });
+  mk("在文件管理器中打开", "", () => {
+    api("reveal").catch(() => {});
+  });
+  menu.classList.add("show");
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, window.innerWidth - r.width - 10) + "px";
+  menu.style.top = Math.min(y, window.innerHeight - r.height - 10) + "px";
+}
+function hideContextMenu() {
+  $("ctxMenu").classList.remove("show");
+}
+window.addEventListener("click", hideContextMenu);
+window.addEventListener("blur", hideContextMenu);
+
+/* ---- branch-group context menu: switch / push / delete / fetch ---- */
+function openBranchCtxMenu(x, y, r) {
+  const menu = $("ctxMenu");
+  menu.innerHTML = "";
+  const title = document.createElement("div");
+  title.className = "cm-title";
+  title.textContent = r.name;
+  menu.appendChild(title);
+  const mk = (label, key, fn) => {
+    const item = document.createElement("div");
+    item.className = "cm-item";
+    const txt = document.createElement("span");
+    txt.textContent = label;
+    item.appendChild(txt);
+    if (key) {
+      const k = document.createElement("span");
+      k.className = "cm-key";
+      k.textContent = key;
+      item.appendChild(k);
+    }
+    item.addEventListener("click", () => { hideContextMenu(); fn(); });
+    menu.appendChild(item);
+  };
+  const isRemote = r.refname.startsWith("refs/remotes/");
+  const branchName = isRemote
+    ? r.refname.replace(/^refs\/remotes\/[^/]+\//, "")
+    : r.refname.replace(/^refs\/heads\//, "");
+  if (isRemote) {
+    mk("⬇ 拉取远程更新", "", () => runFetch());
+    mk("复制远程分支名", "", () => {
+      navigator.clipboard?.writeText(r.refname.replace(/^refs\/remotes\//, "")).catch(() => {});
+    });
+  } else {
+    mk("🔄 切换到该分支", "", () => checkoutBranch(branchName));
+    mk("⬆ 推送该分支", "", () => pushBranch(branchName));
+    mk("🗑️ 删除该分支", "", () => deleteBranch(branchName, !!r.head));
+  }
+  menu.classList.add("show");
+  const rr = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, window.innerWidth - rr.width - 10) + "px";
+  menu.style.top = Math.min(y, window.innerHeight - rr.height - 10) + "px";
+}
+
+async function runFetch() {
+  const res = await api("gitop", { action: "fetch" });
+  if (!res.ok) { alert("拉取失败: " + (res.error || "?")); return; }
+  await reloadGraphLight();
+  refreshWorkdir();
+}
+
+async function checkoutBranch(name) {
+  const ws = WORKSTATUS;
+  if (ws && (ws.counts.staged || ws.counts.unstaged || ws.counts.untracked)) {
+    const ok = await confirmDialog(
+      "切换分支",
+      "当前有<b>未提交的改动</b>，切换分支可能导致这些改动被带入或冲突。确定切换到 <b>" + name + "</b> 吗？",
+      false, "确认切换"
+    );
+    if (!ok) return;
+  }
+  const res = await api("gitop", { action: "checkout", name });
+  if (!res.ok) { alert("切换失败: " + (res.error || "?")); return; }
+  await reloadGraphLight();
+  refreshWorkdir();
+}
+
+async function pushBranch(name) {
+  const ok = await confirmDialog(
+    "推送分支",
+    "将把本地分支 <b>" + name + "</b> 推送到 <b>origin</b>（会影响云端仓库，请确认）：",
+    false, "确认推送"
+  );
+  if (!ok) return;
+  const res = await api("gitop", { action: "push", branch: name });
+  if (!res.ok) { alert("推送失败: " + (res.error || "?")); return; }
+  alert(res.summary || "推送成功");
+}
+
+async function deleteBranch(name, isHead) {
+  if (isHead) { alert("不能删除当前所在的 HEAD 分支"); return; }
+  const ok = await confirmDialog(
+    "删除分支",
+    "确定删除本地分支 <b>" + name + "</b>？（已合并的分支可删除；未合并的会失败）",
+    true, "确认删除"
+  );
+  if (!ok) return;
+  const res = await api("gitop", { action: "delete-branch", name });
+  if (!res.ok) { alert("删除失败: " + (res.error || "?")); return; }
+  await reloadGraphLight();
+  refreshWorkdir();
+}
+
+/* ---- tag dialog: create / rename / delete tags on one commit ---- */
+function openTagDlg(hash) {
+  return new Promise((resolve) => {
+    const d = $("tagDlg");
+    const body = $("tagDlgBody");
+    body.innerHTML = "";
+    const p = document.createElement("div");
+    p.innerHTML = "给提交 <b>" + short7(hash) + "</b> 创建或管理轻量标签（不会推送到远程）：";
+    body.appendChild(p);
+    // existing tags on this commit
+    const commit = COMMITS.find((c) => c.hash === hash);
+    const myTags = (commit && Array.isArray(commit.refs) ? commit.refs : [])
+      .filter((r) => r.kind === "tag").map((r) => r.name);
+    const tagList = document.createElement("div");
+    tagList.className = "tag-list";
+    const rerenderTags = () => {
+      tagList.innerHTML = "";
+      if (!myTags.length) {
+        const none = document.createElement("div");
+        none.className = "tag-none";
+        none.textContent = "该提交暂无标签";
+        tagList.appendChild(none);
+        return;
+      }
+      for (const t of myTags) {
+        const row = document.createElement("div");
+        row.className = "tag-row";
+        const nm = document.createElement("span");
+        nm.className = "tag-name";
+        nm.textContent = t;
+        row.appendChild(nm);
+        const btns = document.createElement("span");
+        btns.className = "tag-acts";
+        const mkBtn = (label, title, fn) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.textContent = label;
+          b.title = title;
+          b.addEventListener("click", fn);
+          btns.appendChild(b);
+        };
+        mkBtn("✎", "改名", () => {
+          input.value = t;
+          renameHint.textContent = "正在给 「" + t + "」 改名，输入新名字后点「改名」或回车";
+          renameHint.style.display = "";
+          renaming = t;
+          $("tagDlgOk").textContent = "改名";
+          input.focus();
+        });
+        mkBtn("✕", "删除", () => {
+          const safe = String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          confirmDialog("删除标签", "确定删除标签 <b>" + safe + "</b>？（仅删除本地标签，不会推送远程）", true, "确认删除").then((ok) => {
+            if (!ok) return;
+            api("gitop", { action: "tag-delete", name: t }).then((res) => {
+              if (!res.ok) { alert("删除标签失败: " + (res.error || "?")); return; }
+              const i = myTags.indexOf(t);
+              if (i >= 0) myTags.splice(i, 1);
+              rerenderTags();
+              wdDiffCache.clear();
+              reloadGraphLight();
+            });
+          });
+        });
+        row.appendChild(btns);
+        tagList.appendChild(row);
+      }
+    };
+    body.appendChild(tagList);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "新标签名，例如 v1.0.0 / 正式版";
+    input.style.cssText = "width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12.5px;outline:none";
+    body.appendChild(input);
+    const renameHint = document.createElement("div");
+    renameHint.className = "tag-rename-hint";
+    renameHint.style.display = "none";
+    body.appendChild(renameHint);
+    let renaming = null;
+    rerenderTags();
+    const finish = (v) => {
+      d.classList.remove("show");
+      $("tagDlgOk").onclick = null;
+      $("tagDlgCancel").onclick = null;
+      resolve(v);
+    };
+    const doOk = async () => {
+      const val = input.value.trim();
+      if (!val) {
+        input.style.borderColor = "var(--red)";
+        input.focus();
+        return;
+      }
+      const res = renaming
+        ? await api("gitop", { action: "tag-rename", name: renaming, newname: val, hash })
+        : await api("gitop", { action: "tag", name: val, hash });
+      if (!res.ok) { alert((renaming ? "改名失败" : "打标签失败") + ": " + (res.error || "?")); return; }
+      if (renaming) {
+        const i = myTags.indexOf(renaming);
+        if (i >= 0) myTags[i] = val;
+        renaming = null;
+        renameHint.style.display = "none";
+        input.value = "";
+        $("tagDlgOk").textContent = "创建标签";
+        rerenderTags();
+        wdDiffCache.clear();
+        reloadGraphLight();
+      } else {
+        finish(true);
+        wdDiffCache.clear();
+        await reloadGraphLight();
+      }
+    };
+    $("tagDlgOk").onclick = doOk;
+    $("tagDlgOk").textContent = "创建标签";
+    $("tagDlgCancel").onclick = () => finish(false);
+    d.classList.add("show");
+    input.focus();
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && input.value.trim()) doOk();
+    });
+  });
+}
+$("tagDlg").addEventListener("click", (ev) => { if (ev.target === $("tagDlg")) $("tagDlgCancel").click(); });
+
+/* ---- branch dialog (write: lightweight branch from commit) ---- */
+function openBranchDlg(hash) {
+  return new Promise((resolve) => {
+    const d = $("branchDlg");
+    const body = $("branchDlgBody");
+    body.innerHTML = "";
+    const p = document.createElement("div");
+    p.innerHTML = "在提交 <b>" + short7(hash) + "</b> 处创建一个新分支（不会切换、不会推送远程）：";
+    body.appendChild(p);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "分支名，例如 feature/login";
+    input.style.cssText = "width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12.5px;outline:none";
+    body.appendChild(input);
+    const finish = (v) => {
+      d.classList.remove("show");
+      $("branchDlgOk").onclick = null;
+      $("branchDlgCancel").onclick = null;
+      resolve(v);
+    };
+    $("branchDlgOk").onclick = async () => {
+      if (!input.value.trim()) {
+        input.style.borderColor = "var(--red)";
+        input.focus();
+        return;
+      }
+      finish(true);
+      const res = await api("gitop", { action: "branch", name: input.value.trim(), hash });
+      if (!res.ok) { alert("创建分支失败: " + (res.error || "?")); return; }
+      wdDiffCache.clear();
+      await reloadGraphLight();
+    };
+    $("branchDlgCancel").onclick = () => finish(false);
+    d.classList.add("show");
+    input.focus();
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && input.value.trim()) $("branchDlgOk").click();
+    });
+  });
+}
+$("branchDlg").addEventListener("click", (ev) => { if (ev.target === $("branchDlg")) $("branchDlgCancel").click(); });
+
+/* ---- open commit page on GitHub (via origin remote URL) ---- */
+async function openGithubCommit(hash) {
+  const res = await api("remoteinfo");
+  if (!res.ok || !res.web) { alert("未配置远程仓库（origin），无法打开 GitHub 提交页"); return; }
+  window.open(res.web + "/commit/" + hash, "_blank");
+}
+
+/* ---- shortcut panel (Ctrl+/) ---- */
+const SHORTCUTS = [
+  ["↑ / ↓ 或 j / k", "在提交间移动选中"],
+  ["Enter", "查看选中提交的详情 / diff"],
+  ["Ctrl+C", "复制提交哈希"],
+  ["Esc", "关闭弹窗 / 详情面板"],
+  ["Ctrl+/", "打开 / 关闭本快捷键面板"],
+  ["Ctrl+F", "聚焦搜索框"],
+  ["Ctrl+B", "折叠 / 展开分支分组"],
+  ["双击提交", "复制提交哈希"],
+];
+function fillShortcuts() {
+  const box = $("shortcutDlgBody");
+  if (box.dataset.filled) return;
+  box.dataset.filled = "1";
+  for (const [key, desc] of SHORTCUTS) {
+    const row = document.createElement("div");
+    row.className = "sc-row";
+    const k = document.createElement("span");
+    k.className = "sc-key";
+    k.textContent = key;
+    const d = document.createElement("span");
+    d.textContent = desc;
+    row.appendChild(k);
+    row.appendChild(d);
+    box.appendChild(row);
+  }
+}
+function toggleShortcutDlg(force) {
+  const d = $("shortcutDlg");
+  const show = force !== undefined ? force : !d.classList.contains("show");
+  if (show) fillShortcuts();
+  d.classList.toggle("show", show);
+}
+$("shortcutDlgClose").addEventListener("click", () => toggleShortcutDlg(false));
+$("shortcutDlg").addEventListener("click", (ev) => { if (ev.target === $("shortcutDlg")) toggleShortcutDlg(false); });
+
+/* ---- auto refresh: poll workstatus + head while the page is visible ---- */
+let AUTO_REFRESHING = false;
+async function autoRefreshTick() {
+  if (document.hidden) return;            // only refresh when the tab is visible
+  if (AUTO_REFRESHING) return;
+  AUTO_REFRESHING = true;
+  try {
+    // Working tree changes (cheap).
+    const ws = await api("workstatus");
+    if (ws.ok) {
+      const before = JSON.stringify(WORKSTATUS ? { branch: WORKSTATUS.branch, counts: WORKSTATUS.counts } : null);
+      const after = JSON.stringify({ branch: ws.branch, counts: ws.counts });
+      if (before !== after) {
+        wdDiffCache.clear();
+        WORKSTATUS = ws;
+        refreshWorkdir();
+        renderStats();
+      }
+    }
+    // New commits / branch moves: compare the newest hash with what we have.
+    const g = await api("graph", { limit: 1, skip: 0 });
+    if (g.ok && g.commits && g.commits.length) {
+      const newest = g.commits[0].hash;
+      const old = COMMITS.length ? COMMITS[0].hash : null;
+      if (newest !== old || (g.total || 0) !== TOTAL) {
+        await reloadGraphLight();
+      }
+    }
+  } catch { /* ignore transient failures */ }
+  finally { AUTO_REFRESHING = false; }
+}
+setInterval(autoRefreshTick, 5000);
+
+/* ---- keyboard navigation ---- */
+function kbdVisibleList() {
+  // hashes of currently visible commit rows, in display order
+  const vis = visibleSet();
+  const ROWS = buildRows(vis);
+  const out = [];
+  for (const r of ROWS) {
+    if (r.type !== "commit") continue;
+    if (vis && !vis.has(r.hash)) continue;
+    out.push(r.hash);
+  }
+  return out;
+}
+window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") {
+    if ($("shortcutDlg").classList.contains("show")) { toggleShortcutDlg(false); return; }
+    if ($("ggDlg").classList.contains("show")) { $("ggDlgCancel").click(); return; }
+    if ($("commitDlg").classList.contains("show")) { $("commitDlgCancel").click(); return; }
+    if ($("tagDlg").classList.contains("show")) { $("tagDlgCancel").click(); return; }
+    if ($("branchDlg").classList.contains("show")) { $("branchDlgCancel").click(); return; }
+    if ($("ctxMenu").classList.contains("show")) { hideContextMenu(); return; }
+    if ($("detail").classList.contains("open")) { $("dClose").click(); return; }
+  }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target && ev.target.tagName || "");
+  // Ctrl+ shortcuts (global; not while typing in an input)
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey) {
+    if (ev.key === "/") { ev.preventDefault(); toggleShortcutDlg(); return; }
+    if (!typing) {
+      if (ev.key === "f" || ev.key === "F") {
+        ev.preventDefault();
+        const sb = $("searchBox");
+        if (sb) { sb.focus(); sb.select(); }
+        return;
+      }
+      if (ev.key === "b" || ev.key === "B") {
+        ev.preventDefault();
+        toggleBranchGroups();
+        return;
+      }
+    }
+  }
+  // skip when typing in the search box
+  if (ev.target === $("searchBox")) return;
+  const list = kbdVisibleList();
+  if (!list.length) return;
+  if (ev.key === "ArrowDown" || ev.key === "j") {
+    ev.preventDefault();
+    KEY_IDX = Math.min(list.length - 1, KEY_IDX < 0 ? 0 : KEY_IDX + 1);
+    const c = list[KEY_IDX];
+    render();
+    scrollToNode(c);
+  } else if (ev.key === "ArrowUp" || ev.key === "k") {
+    ev.preventDefault();
+    KEY_IDX = KEY_IDX < 0 ? 0 : Math.max(0, KEY_IDX - 1);
+    const c = list[KEY_IDX];
+    render();
+    scrollToNode(c);
+  } else if (ev.key === "Enter") {
+    if (KEY_IDX >= 0 && KEY_IDX < list.length) {
+      ev.preventDefault();
+      selectCommit(list[KEY_IDX]);
+    }
+  }
+});
+window.addEventListener("dblclick", (ev) => {
+  const node = ev.target.closest && ev.target.closest(".gg-node");
+  if (!node) return;
+  const hash = node.dataset.hash;
+  navigator.clipboard?.writeText(hash).catch(() => {});
+});
+
+followParentTheme();
+applyTheme();
+load();
+</script>
+</body>
+</html>
