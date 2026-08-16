@@ -7,7 +7,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc -b && node packages/cardo-skills/scripts/copy-skills.mjs",
+    "build": "tsc -b && node packages/cardo-skills/scripts/copy-skills.mjs && pnpm --filter @cardo/cardo-provider build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
