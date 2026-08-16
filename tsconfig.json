@@ -4,6 +4,7 @@
     { "path": "./packages/cardo-systemprompt" },
     { "path": "./packages/cardo-skills" },
     { "path": "./packages/cardo-cli" },
-    { "path": "./packages/cardo-desktop" }
+    { "path": "./packages/cardo-desktop" },
+    { "path": "./packages/cardo-updater" }
   ]
 }

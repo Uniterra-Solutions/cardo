@@ -1,7 +1,5 @@
 packages:
   - 'packages/*'
-  - 'vendor/pi-gui/apps/*'
-  - 'vendor/pi-gui/packages/*'
 allowBuilds:
   '@google/genai': true
   protobufjs: true

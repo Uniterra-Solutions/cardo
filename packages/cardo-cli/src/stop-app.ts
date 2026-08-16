@@ -19,7 +19,7 @@ export interface StopAppOptions {
   readonly pollIntervalMs?: number;
 }
 
-export const APP_BUNDLE_NAME = 'pi-gui';
+export const APP_BUNDLE_NAME = 'cardo';
 export const DEFAULT_GRACEFUL_WAIT_MS = 10_000;
 export const DEFAULT_POLL_INTERVAL_MS = 250;
 

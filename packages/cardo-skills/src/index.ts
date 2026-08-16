@@ -1,18 +1,17 @@
 /**
  * Cardo built-in skill registry — bundles the company-standard skills and
- * injects them into the desktop app's agent skills directory.
+ * provisions them into the cardo desktop app's dsh skills directory.
  *
- * The desktop app (vendor/pi-gui) calls `provisionBuiltinSkills()` at startup;
- * the bundled skills are copied into `<agentDir>/skills/` (pi's user-level
- * skills directory, e.g. `~/.pi/agent/skills/`), where the pi resource loader
- * and the app's Skills view discover them like any other user skill. Skills
- * that already exist at the destination are left untouched so user edits are
- * never clobbered.
+ * The desktop shell (packages/cardo-desktop) sets DSH_BUNDLED_SKILL_DIR to
+ * this package's `src/skills` (dev) or a bundled copy (packaged); dsh's
+ * rank-600 bundled skill provider discovers them like any other skill.
+ * `provisionBuiltinSkills()` additionally copies them into a target skills
+ * directory; skills that already exist there are left untouched so user
+ * edits are never clobbered.
  *
- * The bundled content lives in `src/skills/*` (vendored from the Jovaltus and
- * Caelterra Hermes plugins) and is copied to `dist/skills/` by
- * `scripts/copy-skills.mjs` during the build — consumers must load this
- * package from its built `dist` output.
+ * The bundled content lives in `src/skills/*` and is copied to
+ * `dist/skills/` by `scripts/copy-skills.mjs` during the build — consumers
+ * must load this package from its built `dist` output.
  */
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';

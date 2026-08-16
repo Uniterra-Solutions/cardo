@@ -33,7 +33,7 @@ function fakeOps(config: FakeOpsConfig): { readonly ops: ProcessOps; readonly ca
 test('no-op when nothing is running: only probes once, never quits or kills', async () => {
   const { ops, calls } = fakeOps({ pids: () => [] });
   await stopRunningAppInstances(ops, { gracefulWaitMs: 1000, pollIntervalMs: 5 });
-  assert.deepEqual(calls, ['pgrep:pi-gui']);
+  assert.deepEqual(calls, ['pgrep:cardo']);
 });
 
 test('graceful quit stops immediately when the app exits on AppleScript quit', async () => {
@@ -42,7 +42,7 @@ test('graceful quit stops immediately when the app exits on AppleScript quit', a
     pids: () => (pgrepCount++ === 0 ? [42] : []),
   });
   await stopRunningAppInstances(ops, { gracefulWaitMs: 1000, pollIntervalMs: 5 });
-  assert.deepEqual(calls, ['pgrep:pi-gui', 'quit', 'pgrep:pi-gui']);
+  assert.deepEqual(calls, ['pgrep:cardo', 'quit', 'pgrep:cardo']);
 });
 
 test('everything quitting during the grace period avoids any force-kill', async () => {
@@ -51,13 +51,13 @@ test('everything quitting during the grace period avoids any force-kill', async 
     pids: () => (pgrepCount++ < 2 ? [42] : []),
   });
   await stopRunningAppInstances(ops, { gracefulWaitMs: 1000, pollIntervalMs: 5 });
-  assert.deepEqual(calls, ['pgrep:pi-gui', 'quit', 'pgrep:pi-gui', 'sleep', 'pgrep:pi-gui']);
+  assert.deepEqual(calls, ['pgrep:cardo', 'quit', 'pgrep:cardo', 'sleep', 'pgrep:cardo']);
 });
 
 test('stragglers still alive after the grace period are SIGKILLed', async () => {
   const { ops, calls } = fakeOps({ pids: () => [42] });
   await stopRunningAppInstances(ops, { gracefulWaitMs: 30, pollIntervalMs: 5 });
-  assert.equal(calls[0], 'pgrep:pi-gui');
+  assert.equal(calls[0], 'pgrep:cardo');
   assert.equal(calls[1], 'quit');
   assert.ok(calls.some((call) => call === 'kill:SIGKILL:42'));
 });

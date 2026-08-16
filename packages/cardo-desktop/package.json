@@ -11,9 +11,11 @@
     "lint": "eslint src",
     "dev": "electron .",
     "start": "electron .",
-    "test": "pnpm run build && node --test test/*.test.mjs"
+    "test": "pnpm run build && node --test test/*.test.mjs",
+    "package": "pnpm run build && electron-builder --mac --publish never"
   },
   "dependencies": {
+    "@cardo/cardo-updater": "workspace:*",
     "@deepseek-ai/dsh": "0.1.0-rc.6",
     "dshmarket": "1.9.0",
     "dsh-notifier": "0.6.2",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
   }
 }
