@@ -11,3 +11,4 @@ dist/
 
 .codegraph/
 vendor/dsh-runtime/
+.pnpm-store/
