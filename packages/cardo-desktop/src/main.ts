@@ -65,7 +65,7 @@ let restarts = 0;
 
 const UPDATE_STATE_FILE = 'cardo-update-state.json';
 const DEFAULT_API_BASE = 'https://api.github.com/repos/Uniterra-Solutions/cardo';
-const DEFAULT_NPM_LATEST_URL = 'https://registry.npmjs.org/@cardo/cardo-cli/latest';
+const DEFAULT_NPM_LATEST_URL = 'https://registry.npmjs.org/@uniterra-solutions/cardo/latest';
 const DEFAULT_RELEASES_PAGE = 'https://github.com/Uniterra-Solutions/cardo/releases/latest';
 const FETCH_TIMEOUT_MS = 10_000;
 const CLI_PROBE_TIMEOUT_MS = 3_000;

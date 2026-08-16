@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { stopRunningAppInstances, type ProcessOps } from './stop-app.js';
 
 const REPO = process.env.CARDO_GITHUB_REPO ?? 'Uniterra-Solutions/cardo';
-const PACKAGE_NAME = '@cardo/cardo-cli';
+const PACKAGE_NAME = '@uniterra-solutions/cardo';
 const APP_INSTALL_DIR_NAME = 'Applications';
 const MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 

@@ -1,5 +1,5 @@
 {
-  "name": "@cardo/cardo-cli",
+  "name": "@uniterra-solutions/cardo",
   "version": "0.5.0",
   "description": "Cardo desktop app installer: one-command setup and update for the Cardo macOS app.",
   "license": "MIT",

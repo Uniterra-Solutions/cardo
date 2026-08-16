@@ -10,9 +10,9 @@
 - `packages/cardo-skills`:
   - `pnpm --filter @cardo/cardo-skills test` — builds, then runs provisioning tests (every bundled skill ships a SKILL.md; provisioning is idempotent)
 - `packages/cardo-cli`:
-  - `pnpm --filter @cardo/cardo-cli run build` — compile the installer CLI (tsc -b)
-  - `pnpm --filter @cardo/cardo-cli run lint` / `typecheck` — lint/type-check the CLI source
-  - `pnpm --filter @cardo/cardo-cli test` — CLI unit tests (node:test on compiled `dist/`; the stop-app sequence is tested with injected process ops)
+  - `pnpm --filter @uniterra-solutions/cardo run build` — compile the installer CLI (tsc -b)
+  - `pnpm --filter @uniterra-solutions/cardo run lint` / `typecheck` — lint/type-check the CLI source
+  - `pnpm --filter @uniterra-solutions/cardo test` — CLI unit tests (node:test on compiled `dist/`; the stop-app sequence is tested with injected process ops)
 - Desktop app (migration in progress): the cardo desktop shell is being rebuilt as a DeepSeek Harness (dsh) profile — Web UI + thin shell, no longer the vendored pi-gui Electron app
 
 # Project Business Goals
@@ -27,7 +27,7 @@
 - `packages/cardo-systemprompt/` — pi-agent extension: app-wide working rules (no emoji, concise replies, no over-engineering, minimal code, verify external APIs, tests per business logic, reply in the user's language) appended to every agent turn's system prompt via a `before_agent_start` handler. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — see below)
 - `packages/cardo-skills/` — built-in skill registry: bundles the company-standard skills (cardo-planmode pipeline, cardo-pbt-debugging, qa, project-documentation, create-skill, manage-agents-md, manage-git-repo) in `src/skills/*` and copies them to `dist/skills/` via `scripts/copy-skills.mjs` during build. `provisionBuiltinSkills()` provisions them into an agent skills directory at startup; idempotent — existing skills are never clobbered. In the dsh runtime these ship as the rank-600 bundled provider via `DSH_BUNDLED_SKILL_DIR`
 - `packages/runtime/` — desktop runtime: built-in extension registry (`builtinExtensionFactories` + `builtinExtensionMetadata`) plus the dsh profile spec (`src/dsh-profile.ts`: official bundles, cardo bundles, pinned community plugins, profile env)
-- `packages/cardo-cli/` — public npm installer (`@cardo/cardo-cli`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
+- `packages/cardo-cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
 - `vendor/pi-gui/` — legacy vendored Electron desktop app (git-subtree-managed). Being replaced by the dsh profile + shell; keep cardo patches minimal and `// Cardo:` marked until removal
 - `vendor/dsh-plugins/` — pinned community dsh plugins not published to npm (vendored at fixed commits; see `VENDOR.md` pin ledger)
 - Root holds shared tooling only: eslint, prettier, husky, tsconfig.base.json
