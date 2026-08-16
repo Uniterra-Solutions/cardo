@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-17
+
+### Fixed
+
+- Desktop app would not open after upgrading to v0.6.0: the root `build` script (`cardo setup` runs it on every install) did not run the `@cardo/cardo-provider` esbuild step, so the source archive shipped without `packages/cardo-provider/lib/index.js`. The app then copied a broken provider package into the dsh profile and boot died with `ERR_MODULE_NOT_FOUND` (window never appears, app auto-quits after the 60s readiness timeout). Root `build` now emits the provider bundle (`pnpm --filter @cardo/cardo-provider build`).
+- The container harness (`scripts/verify-cli-container`) missed this class of regression: it only asserted install/build/dsh-resolution. It now has a provider-bundle dead gate, a pristine build context (`.dockerignore` excludes local `packages/cardo-provider/lib` build artifacts), and a Docker PBT suite (`pbt/provisioning-pbt.test.mjs`) locking provisioning properties (workspace/vendored built-in entry files, `hasAllBuiltins`, staleness detection) plus a real `dsh --profile web` boot to a reachable readiness URL.
+
 ## [0.6.0] — 2026-08-17
 
 ### Added
