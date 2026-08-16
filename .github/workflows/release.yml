@@ -85,7 +85,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.check.outputs.exists != 'true'
-        working-directory: packages/cli
+        working-directory: packages/cardo-cli
         # Trusted publishing (OIDC, npm >= 11.5.1) authenticates via the GitHub
         # OIDC token and auto-generates provenance — no --provenance flag and
         # no NODE_AUTH_TOKEN needed.
