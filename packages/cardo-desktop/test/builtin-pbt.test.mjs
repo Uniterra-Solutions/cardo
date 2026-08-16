@@ -15,9 +15,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fc from 'fast-check';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import {
   BUILTIN_NPM_PLUGINS,
@@ -25,6 +25,7 @@ import {
   builtinPackageName,
   expectedBuiltinBundles,
   hasAllBuiltins,
+  vendoredPluginsStale,
 } from '../dist/builtin.js';
 import { awaitReadiness } from '../dist/dsh-process.js';
 
@@ -159,6 +160,126 @@ test('SET: a missing profile directory is "not provisioned"', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'cardo-set-'));
   try {
     assert.equal(hasAllBuiltins(dir), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// VENDOR — vendored built-ins must be self-contained, and a stale copy of a
+//          previously-provisioned distribution must force re-provision
+// ---------------------------------------------------------------------------
+
+const vendorPluginsRoot = resolve(import.meta.dirname, '..', '..', '..', 'vendor', 'dsh-plugins');
+
+/**
+ * A vendored bundle patch is self-contained iff every top-level entry is a
+ * root `insert`. The retired skin distribution augmented a base
+ * `ui-skin-maid-atelier` row that only the theme-plugins bundle ships — an
+ * id-targeted patch like that silently no-ops on the pinned rc.6 family and
+ * the plugin never mounts (the reported bug).
+ */
+function isSelfContainedPatch(patchText) {
+  const topLevel = patchText
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => /^- /u.test(line));
+  assert.ok(topLevel.length > 0, 'patch must have at least one top-level entry');
+  return topLevel.every((line) => /^-\s+insert\s*:/u.test(line));
+}
+
+test('VENDOR: every built-in vendored plugin contributes its Loader row via a self-contained insert patch', async () => {
+  const entries = Object.entries(BUILTIN_VENDOR_PLUGINS);
+  assert.ok(entries.length >= 3, 'all three vendored built-ins remain shipped');
+  for (const [dirName] of entries) {
+    const text = await readFile(join(vendorPluginsRoot, dirName, 'cordis.patch.yml'), 'utf8');
+    assert.ok(
+      isSelfContainedPatch(text),
+      `${dirName}/cordis.patch.yml must be a self-contained root insert`,
+    );
+  }
+});
+
+test('VENDOR regression: the skin ships the standalone dsh-deep-whale distribution, not the retired builtin-row one', () => {
+  assert.equal(
+    BUILTIN_VENDOR_PLUGINS['dsh-deep-whale'],
+    '@dsh-external/dsh-client-ui-skin-maid-atelier',
+  );
+  assert.ok(
+    !('deep-whale-day-night-theme' in BUILTIN_VENDOR_PLUGINS),
+    'the retired deep-whale-day-night-theme source must be gone',
+  );
+  assert.ok(
+    expectedBuiltinBundles(BUILTIN_NPM_PLUGINS, BUILTIN_VENDOR_PLUGINS).includes(
+      '@dsh-external/dsh-client-ui-skin-maid-atelier',
+    ),
+    'the skin package name stays an expected bundle',
+  );
+});
+
+/** Write one vendored built-in's source package.json under a vendor root. */
+async function writeVendorSource(vendorRootDir, dirName, version) {
+  const dest = join(vendorRootDir, dirName);
+  await mkdir(dest, { recursive: true });
+  await writeFile(join(dest, 'package.json'), `${JSON.stringify({ name: dirName, version })}\n`);
+}
+
+/** Write one vendored built-in's installed copy into a profile's node_modules. */
+async function writeInstalledVendor(profileDir, pkgName, version) {
+  const dest = join(profileDir, 'node_modules', ...pkgName.split('/'));
+  await mkdir(dest, { recursive: true });
+  await writeFile(join(dest, 'package.json'), `${JSON.stringify({ name: pkgName, version })}\n`);
+}
+
+/** Build a profile + vendor fixture where every vendored built-in is present,
+ * optionally drifting exactly one of them. Returns the profile dir. */
+async function staleFixture({ driftDir }) {
+  const dir = await mkdtemp(join(tmpdir(), 'cardo-vendor-'));
+  const vendor = join(dir, 'vendor');
+  const profile = join(dir, 'profiles', 'web');
+  await mkdir(profile, { recursive: true });
+  await writeProfileManifest(dir, []);
+  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
+    await writeVendorSource(vendor, dirName, '1.0.0');
+    const version = dirName === driftDir ? '1.0.1' : '1.0.0';
+    await writeInstalledVendor(profile, pkgName, version);
+  }
+  return { dir, vendor, profile };
+}
+
+test('STALE: a vendored copy matching the source is fresh; a single drift is stale', async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.constantFrom(...Object.keys(BUILTIN_VENDOR_PLUGINS), null),
+      async (driftDir) => {
+        const { dir, vendor, profile } = await staleFixture({ driftDir });
+        try {
+          assert.equal(vendoredPluginsStale(profile, vendor), driftDir !== null);
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+    ),
+  );
+});
+
+test('STALE: a missing or illegible installed copy is stale (forces re-provision)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cardo-vendor-'));
+  try {
+    const vendor = join(dir, 'vendor');
+    const profile = join(dir, 'profiles', 'web');
+    await mkdir(profile, { recursive: true });
+    await writeProfileManifest(dir, []);
+    for (const [dirName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
+      await writeVendorSource(vendor, dirName, '1.0.0');
+    }
+    // No installed copies at all → stale.
+    assert.equal(vendoredPluginsStale(profile, vendor), true);
+    // One illegible installed package.json → stale.
+    const skin = join(profile, 'node_modules', '@dsh-external', 'dsh-client-ui-skin-maid-atelier');
+    await mkdir(skin, { recursive: true });
+    await writeFile(join(skin, 'package.json'), 'not json at all');
+    assert.equal(vendoredPluginsStale(profile, vendor), true);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
