@@ -14,6 +14,9 @@
  *
  * No pre-built binary is downloaded: the source is the artifact, exactly as
  * the repo ships it, which is what makes Windows packaging natural later.
+ *
+ * `cardo update` updates the CLI ONLY (`npm install -g`); it never rebuilds
+ * or reinstalls the desktop app — that is `cardo setup`'s job.
  */
 
 import { execFile, type ExecFileException } from 'node:child_process';
@@ -23,7 +26,6 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { stopRunningAppInstances, type ProcessOps } from './stop-app.js';
 import {
   REPO,
   findBuiltApp,
@@ -165,8 +167,9 @@ async function installDesktopApp(options: InstallOptions): Promise<void> {
     }
 
     process.stdout.write('Installing dependencies...\n');
-    // CI=true: without a TTY (the app launches `cardo update` detached) pnpm
-    // aborts the install with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY.
+    // CI=true: the installer may run without a TTY (CI environments, or
+    // spawned detached) and pnpm 11 aborts with
+    // ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY otherwise.
     await run('pnpm', ['install', '--frozen-lockfile'], {
       cwd: src,
       env: { ...process.env, CI: 'true' },
@@ -217,39 +220,6 @@ async function packageApp(src: string, tag: string): Promise<void> {
   );
 }
 
-function realProcessOps(): ProcessOps {
-  return {
-    pgrep: async (bundleName: string): Promise<number[]> => {
-      try {
-        // pgrep exits 1 (and prints nothing) when nothing matches.
-        const { stdout } = await run('/usr/bin/pgrep', ['-f', `${bundleName}.app`]);
-        return stdout
-          .split('\n')
-          .filter((line) => line.trim().length > 0)
-          .map((line) => Number(line))
-          .filter((pid) => Number.isInteger(pid) && pid > 0);
-      } catch {
-        return [];
-      }
-    },
-    osascriptQuit: async (bundleName: string): Promise<void> => {
-      await run('/usr/bin/osascript', ['-e', `tell application "${bundleName}" to quit`]);
-    },
-    kill: async (pids: readonly number[], signal: NodeJS.Signals): Promise<void> => {
-      if (pids.length === 0) {
-        return;
-      }
-      await run('/bin/kill', ['-s', signal, ...pids.map((pid) => String(pid))]);
-    },
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  };
-}
-
-async function stopRunningApps(): Promise<void> {
-  process.stdout.write('Stopping running Cardo app instances...\n');
-  await stopRunningAppInstances(realProcessOps());
-}
-
 async function updateCli(): Promise<void> {
   process.stdout.write(`Updating CLI (${PACKAGE_NAME})...\n`);
   try {
@@ -272,7 +242,7 @@ function printHelp(): void {
       '',
       'Usage:',
       '  cardo setup [--no-open] [--dry-run]   Build and install the latest Cardo desktop app from source',
-      '  cardo update [--no-open] [--dry-run]  Update the CLI and rebuild/install the latest app',
+      '  cardo update                          Update the CLI only (the desktop app is rebuilt with cardo setup)',
       '  cardo --version                        Print the CLI version',
       '  cardo --help                           Print this help',
       '',
@@ -295,11 +265,7 @@ async function main(): Promise<void> {
       await installDesktopApp({ open: parsed.open, dryRun: parsed.dryRun });
       return;
     case 'update':
-      if (!parsed.dryRun) {
-        await stopRunningApps();
-      }
       await updateCli();
-      await installDesktopApp({ open: parsed.open, dryRun: parsed.dryRun });
       return;
   }
 }

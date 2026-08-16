@@ -1,7 +1,6 @@
 /**
  * Pure install/update business logic for the cardo CLI — no process side
- * effects, so the installer decisions are testable without running a shell
- * (same pattern as stop-app.ts).
+ * effects, so the installer decisions are testable without running a shell.
  */
 
 import { readFile, readdir } from 'node:fs/promises';
