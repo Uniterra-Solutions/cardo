@@ -1,10 +1,9 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/general" },
+    { "path": "./packages/cardo-systemprompt" },
     { "path": "./packages/runtime" },
-    { "path": "./packages/skills" },
-    { "path": "./packages/cli" },
-    { "path": "./packages/cardo-modes" }
+    { "path": "./packages/cardo-skills" },
+    { "path": "./packages/cardo-cli" }
   ]
 }

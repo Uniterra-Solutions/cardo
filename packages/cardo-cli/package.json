@@ -1,0 +1,34 @@
+{
+  "name": "@cardo/cardo-cli",
+  "version": "0.4.1",
+  "description": "Cardo desktop app installer: one-command setup and update for the Cardo macOS app.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Uniterra-Solutions/cardo.git"
+  },
+  "type": "module",
+  "bin": {
+    "cardo": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src",
+    "format": "prettier --write src",
+    "test": "pnpm run build && tsc -p tsconfig.test.json && node --test \"test/**/*.test.mts\"",
+    "prepack": "pnpm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

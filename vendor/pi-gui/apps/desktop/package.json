@@ -99,7 +99,7 @@
     "@aws-sdk/xml-builder": "^3.972.33",
     "@aws/lambda-invoke-store": "^0.2.2",
     "@cardo/runtime": "workspace:*",
-    "@cardo/skills": "workspace:*",
+    "@cardo/cardo-skills": "workspace:*",
     "@earendil-works/pi-coding-agent": "^0.84.1",
     "@google/genai": "1.52.0",
     "@mistralai/mistralai": "2.2.6",

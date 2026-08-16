@@ -5,41 +5,31 @@
 - `pnpm run lint` — ESLint validation (strictTypeChecked, max-warnings 0 enforced)
 - `pnpm run format` — Prettier formatting (single quotes, trailing commas, 100 width, LF)
 - `pnpm install --frozen-lockfile` — Install dependencies in CI (never `pnpm install` without `--frozen-lockfile`)
-- Desktop app (vendored pi-gui, `vendor/pi-gui/apps/desktop`):
-  - `pnpm --filter @pi-gui/desktop dev` — run the Electron app in dev (watch mode). From-source runs (dev server / `electron .` / preview) use the `pi-dev` user-data dir (`~/Library/Application Support/pi-dev`) so they never share the single-instance lock or state files with the packaged app's `pi` dir — see the `// Cardo:` patch in `electron/main.ts` (explicit `PI_APP_USER_DATA_DIR` always wins; e2e harness relies on this)
-  - `pnpm --filter @pi-gui/desktop typecheck` — type-check the app + vendored driver packages
-  - `pnpm --filter @pi-gui/desktop build` — production electron-vite build
-  - `pnpm --filter @pi-gui/desktop test:pbt` — property-based tests for the frontend↔backend contract layer (fast-check + node:test; compiles pure app-store modules via `tsconfig.pbt.json` into `out-pbt/`). Streaming-delivery invariants: `streaming-sync.test.mts` (coalesced pushes: ≤1 per `STREAM_PUBLISH_INTERVAL_MS`, content accounting, identity, payload monotonicity, liveness), `transcript-delta.test.mts` (transcript snapshot+delta: convergence/no-loss/delivery decision/reference stability), `store-liveness.test.mts` (K: the session-state fold never copies the accumulated transcript; K′: the full fold path's rebuild work is linear in event count; J: content-unchanged transcript items keep object identity), `transcript-store.test.mts` (persistent `TranscriptCacheEntry` semantics), `state-delta.test.mts` (state snapshot+delta channel: byte-compatible convergence, untouched-slice identity, delivery decisions, orchestration exclusion, revision handling)
-  - `pnpm --filter @pi-gui/desktop run test:cardo:core:multi-window` / `test:cardo:core:mentions-diff` / `test:cardo:core:update-flow` — Playwright e2e specs runnable from the cardo workspace (`@playwright/test` is a desktop devDep — the vendored root's copy is never installed by the cardo workspace). Requires built `out/` + `dist/`; the launch env forces `PI_OFFLINE=1` because specs seed a fake provider key (pi's model-availability refresh would otherwise hang on real network calls) — real-auth specs opt out. The harness also forces `PI_APP_DISABLE_CARDO_UPDATE_CHECK=1` so no spec probes npm/GitHub; the update-flow spec deletes the key via `envOverrides` and feeds a local fixture server + stubbed `dialog.showMessageBox`
-  - Layout/visual contracts live in the desktop suite: `tests/core/composer-layout.spec.ts` (single-row, borderless shell, two-state wrapped composer — controls stay flush right), `tests/core/sidebar-ordering.spec.ts` (Today/Earlier buckets, pinned ordering), `tests/core/sidebar-toggle.spec.ts` (toggle flush at the corner, New thread clear of the titlebar strip, collapsed-mode clearances), `tests/core/skills-settings.spec.ts`, `tests/core/streaming-delivery-live.spec.ts` (bounded live check: full snapshot on launch, revision advances + preview changes after a submit, sidebar toggle round-trips IPC without stalling). Extension-UI behavior contracts live in `tests/live/` (`extension-dock*.spec.ts`, `jovaltus-mode-toggle.spec.ts`, `jovaltus-new-thread-mode.spec.ts`). Run from the desktop dir: `PI_APP_TEST_MODE=background PI_OFFLINE=1 PI_APP_DISABLE_CARDO_UPDATE_CHECK=1 node_modules/.bin/playwright test -c playwright.config.ts tests/core/<file>`
-  - `pnpm --filter @pi-gui/pi-sdk-driver test` — node:test suite for vendored driver pure functions (includes PBT)
-- `packages/jovaltus`:
-  - `pnpm --filter @cardo/jovaltus test:pbt` — integrated PBT for the extension ↔ pi-backend interaction (SQLite session store incl. model-based invariants, phase chains, prompt rendering, JSONL protocol, plan-mode tool gating + execute-widget protocol, and the full tool surface against a fake `pi` backend in `test/fixtures/fake-pi.mjs`). Tests import the compiled `dist/` output; the build copies `src/prompts/*.md` → `dist/prompts/` (dist consumers must be able to load phase prompts)
-- `packages/general`:
-  - `pnpm --filter @cardo/general test` — node:test suite for the system-prompt injection handler (registration, append, no cross-turn duplication)
-- `packages/cli`:
-  - `pnpm --filter @uniterra-solutions/cardo run build` — compile the installer CLI (tsc -b)
-  - `pnpm --filter @uniterra-solutions/cardo run lint` / `typecheck` — lint/type-check the CLI source
-  - `pnpm --filter @uniterra-solutions/cardo test` — CLI unit tests (node:test on compiled `dist/`; the stop-app sequence is tested with injected process ops)
-- Desktop visual design: token-driven system — see `docs/design-system.md` (03b Warm Paper Sharp: warm palette, 0–4px radii, serif page titles, terracotta accent). Restyles are token changes, not per-component sweeps. Top-left titlebar contract: the sidebar toggle sits flush at the corner (`12px 11px`), the macOS traffic lights are positioned right of it (`trafficLightPosition {x:56, y:18}`, spanning ≈56–110px), and the sidebar's New thread button starts below the 48px strip
-- Desktop Jovaltus plan-mode UI (all `// Cardo:` marked): mode button + shift+tab in the composer submit `/planmode` (wired only while the extension's live `jovaltus-mode` status exists, so shift+tab stays native otherwise) and run **silently** — runtime slash commands never paint a timeline message (the composer submit path suppresses the optimistic row); the new-thread page shows a standard/plan picker (`.new-thread__mode`) so a conversation can start in plan mode — `startThread` runs `/planmode` before the first message; the execute panel above the input (spinner → green light → 3s auto-fade, click opens the right-side graph popup) is rendered natively from the structured `jovaltus-execute` widget — never parses mermaid/free text; the `jovaltus-mode` / `jovaltus-execute` statuses are excluded from the generic extension dock. Components in `apps/desktop/src/jovaltus-ui.tsx`, styles in `styles/jovaltus.css` + `styles/new-thread.css`
+- `packages/cardo-systemprompt`:
+  - `pnpm --filter @cardo/cardo-systemprompt test` — node:test suite for the system-prompt injection handler (registration, append, no cross-turn duplication)
+- `packages/cardo-skills`:
+  - `pnpm --filter @cardo/cardo-skills test` — builds, then runs provisioning tests (every bundled skill ships a SKILL.md; provisioning is idempotent)
+- `packages/cardo-cli`:
+  - `pnpm --filter @cardo/cardo-cli run build` — compile the installer CLI (tsc -b)
+  - `pnpm --filter @cardo/cardo-cli run lint` / `typecheck` — lint/type-check the CLI source
+  - `pnpm --filter @cardo/cardo-cli test` — CLI unit tests (node:test on compiled `dist/`; the stop-app sequence is tested with injected process ops)
+- Desktop app (migration in progress): the cardo desktop shell is being rebuilt as a DeepSeek Harness (dsh) profile — Web UI + thin shell, no longer the vendored pi-gui Electron app
 
 # Project Business Goals
 
 - Unified desktop workspace integrating Uniterra's Hermes plugins (Jovaltus, Caelterra, Tabularius, Fabricium) into one surface
 - Company-standard workflow: one app that embodies the standard way of working for all agents
-- Built on the pi-agent core; plugins stay as separate packages in this monorepo
-- The desktop app is pi-gui (vendored under `vendor/pi-gui`), with cardo's extensions registered as **built-in** extensions via `packages/runtime`
+- Built on the DeepSeek Harness (dsh) agent runtime; cardo's company knowledge ships as bundled skills
 
 # Project Structure
 
-- `packages/*` — pnpm workspace packages (app + shared libraries)
-- `packages/general/` — pi-agent extension: app-wide working rules (no emoji, concise replies, no over-engineering, minimal code, verify external APIs, tests per business logic, reply in the user's language) appended to every agent turn's system prompt via a `before_agent_start` handler. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — see below)
-- `packages/jovaltus/` — pi-agent extension: Jovaltus pipeline (`plan`/`execute_plan`/`simplify`/`review` + `list_sessions`/`resume_session`, 6 tools total) plus the plan-mode layer: `plan`/`execute_plan` are plan-mode-gated (`src/plan-mode.ts` — `setActiveTools` + `tool_call` gate; toggle with `/planmode`, shift+P in the TUI, shift+tab / mode button in the desktop composer, or the new-thread page's standard/plan picker to start a thread already in plan mode). The PRD subagent also writes `questions.json` (open questions + suggested options); the pipeline asks them ONE at a time through the structured clarification wizard (`ctx.ui.askQuestions` — options + Other, Next/Submit paging, total count; `src/clarify.ts`, desktop `questions` dialog kind) and stores the answers as `clarify.md` + `clarify.json`. The plan pipeline pushes a `jovaltus-plan` progress widget (PRD → clarify → design → plan) rendered as a strip above the composer, mirroring the execute panel. Every run is a session row in a SQLite store (`<agentDir>/jovaltus.sqlite`); a non-error stop is recorded as `interrupted` and can be resumed. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — `jiti.import(path, { default: true })` then `typeof factory === "function"`); all other modules use named exports
-- `packages/runtime/` — desktop runtime: built-in extension registry (`builtinExtensionFactories` + `builtinExtensionMetadata`). The app consumes this; add new cardo extensions here
-- `packages/skills/` — built-in skill registry: bundles the company-standard skills (5 Jovaltus pipeline skills + Caelterra `create-skill`, vendored from those Hermes plugins) and injects them into the app by provisioning `<agentDir>/skills/` at desktop startup (`provisionBuiltinSkills`); idempotent — existing skills are never clobbered
-- `packages/cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
-- `vendor/pi-gui/` — **git-subtree-managed** third-party desktop app (MIT, `@pi-gui/*` packages + Electron shell). Cardo-specific changes are minimal and marked with `// Cardo:` comments
+- `packages/*` — pnpm workspace packages
+- `packages/cardo-systemprompt/` — pi-agent extension: app-wide working rules (no emoji, concise replies, no over-engineering, minimal code, verify external APIs, tests per business logic, reply in the user's language) appended to every agent turn's system prompt via a `before_agent_start` handler. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — see below)
+- `packages/cardo-skills/` — built-in skill registry: bundles the company-standard skills (cardo-planmode pipeline, cardo-pbt-debugging, qa, project-documentation, create-skill, manage-agents-md, manage-git-repo) in `src/skills/*` and copies them to `dist/skills/` via `scripts/copy-skills.mjs` during build. `provisionBuiltinSkills()` provisions them into an agent skills directory at startup; idempotent — existing skills are never clobbered. In the dsh runtime these ship as the rank-600 bundled provider via `DSH_BUNDLED_SKILL_DIR`
+- `packages/runtime/` — desktop runtime: built-in extension registry (`builtinExtensionFactories` + `builtinExtensionMetadata`) plus the dsh profile spec (`src/dsh-profile.ts`: official bundles, cardo bundles, pinned community plugins, profile env)
+- `packages/cardo-cli/` — public npm installer (`@cardo/cardo-cli`, bin `cardo`): one-command macOS app setup/update. Downloads unsigned release zips from GitHub Releases over HTTPS (Node fetch → no `com.apple.quarantine` → Gatekeeper never blocks, no Apple signing needed). Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes
+- `vendor/pi-gui/` — legacy vendored Electron desktop app (git-subtree-managed). Being replaced by the dsh profile + shell; keep cardo patches minimal and `// Cardo:` marked until removal
+- `vendor/dsh-plugins/` — pinned community dsh plugins not published to npm (vendored at fixed commits; see `VENDOR.md` pin ledger)
 - Root holds shared tooling only: eslint, prettier, husky, tsconfig.base.json
 - Every package extends `tsconfig.base.json` with `rootDir: src`, `outDir: dist`
 
@@ -50,9 +40,10 @@
 - Never run `pnpm install` without `--frozen-lockfile` in CI
 - Never commit TypeScript files failing ESLint with warnings — pre-commit hook runs `lint-staged` with `--max-warnings 0` at `.husky/pre-commit`
 - Never bump Node below 22 — pinned in `.nvmrc` and `package.json`
-- Never add default exports — only named exports. **Single platform exception:** the pi extension entry files (`packages/jovaltus/src/index.ts`, `packages/general/src/index.ts`) are default-exported factories because pi's extension loader requires it (see Project Structure)
+- Never add default exports — only named exports. **Single platform exception:** the pi extension entry file (`packages/cardo-systemprompt/src/index.ts`) is a default-exported factory because pi's extension loader requires it (see Project Structure)
 - Never edit `vendor/` code outside the minimal, commented cardo patches (subtree merges will otherwise conflict); never run the vendored root's composite scripts (`pnpm --dir vendor/pi-gui …`) — cardo's root is the workspace root
 - Never point `@cardo/*` package exports at `./src` when the desktop app consumes them — Node cannot load TS source as an externalized dependency; exports point at built `dist`
+- dsh migration: lock all `@deepseek-ai/*` dependencies at exact versions (no caret) — dsh is a developer preview with breaking changes; `npm view X version` returns the stale `latest` tag (the current family is the `next` tag)
 
 # Boundaries
 
@@ -60,17 +51,14 @@
 
 - Run `pnpm run lint` and `pnpm run typecheck` before committing
 - Add tests for new behaviour
-- After changing `packages/jovaltus`, `packages/general`, `packages/runtime`, or `packages/skills` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
-- After changing the pi-gui frontend↔backend contract layer (pure app-store modules, vendored driver pure functions, state/persistence/timeline logic), run the PBT suites: `pnpm --filter @pi-gui/desktop test:pbt` and `pnpm --filter @pi-gui/pi-sdk-driver test`. Properties found failing because of a real bug → fix source with a `// Cardo:` marker + deterministic regression test
-- When touching the streaming delivery path (driver event → store fold → `electron/stream-publish.ts` coalesced window push → renderer), keep the sync contract locked by the PBT suites: `test/pbt/streaming-sync.test.mts` (pushes at most one per `STREAM_PUBLISH_INTERVAL_MS` always carrying the latest state), `test/pbt/transcript-delta.test.mts` (transcript rides a snapshot+delta channel), `test/pbt/state-delta.test.mts` + `src/state-delta.ts` (the STATE channel is full-once + `pi-gui:state-delta` ops; `orchestrationChildren` leaves the per-push payload and arrives on `pi-gui:orchestration-changed`), and `test/pbt/store-liveness.test.mts` (the store fold must stay linear — persistent `TranscriptCacheEntry`; per-event work must not grow with accumulated transcript length). Timeline rows are memoized by content fingerprint so unchanged rows bail out of re-rendering
-- After changing desktop styles/tokens (`vendor/pi-gui/apps/desktop/src/styles/*`), run `pnpm --filter @pi-gui/desktop build` + `pnpm --filter @pi-gui/desktop typecheck`, and verify the rendered app against the token contract (see `docs/testing.md` → Visual verification; `docs/design-system.md` for tokens)
-- After changing `packages/jovaltus` business logic (state machine / SQLite session store, chains, prompts, dispatch, plan model / plan-mode gating), run `pnpm --filter @cardo/jovaltus test:pbt`. Properties found failing because of a real bug → fix source + add a deterministic regression test with the minimal counterexample
+- After changing `packages/cardo-systemprompt`, `packages/runtime`, or `packages/cardo-skills` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
+- After changing `packages/cardo-skills/src/skills/*`, run `pnpm run build` so `copy-skills.mjs` refreshes `dist/skills/` (stale entries are removed, so a deleted skill stops shipping)
 
 **Ask first:**
 
 - Adding new dependencies to `package.json`
 - Changing eslint / prettier / tsconfig rules — they encode the company standard
-- Updating the vendored pi-gui subtree (`git subtree pull --prefix vendor/pi-gui https://github.com/minghinmatthewlam/pi-gui <tag> --squash`) — verify pi-coding-agent version alignment between vendor and `packages/*` after pulling
+- Updating the vendored pi-gui subtree (only relevant until the dsh migration removes it)
 
 **Never:**
 

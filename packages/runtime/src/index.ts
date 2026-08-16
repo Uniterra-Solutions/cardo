@@ -15,7 +15,7 @@
  * extension remains.
  */
 
-import generalFactory from '@cardo/general';
+import generalFactory from '@cardo/cardo-systemprompt';
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
 export const builtinExtensionFactories: ExtensionFactory[] = [generalFactory];

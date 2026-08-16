@@ -36,7 +36,7 @@ export const OFFICIAL_BUNDLES: readonly string[] = [
 ] as const;
 
 /** Cardo's own bundles (packages in this monorepo). */
-export const CARDO_BUNDLES: readonly string[] = ['@cardo/cardo-modes'] as const;
+export const CARDO_BUNDLES: readonly string[] = [] as const;
 
 /** Community plugins pinned as cardo built-ins. */
 export const BUILTIN_PLUGINS: readonly CardoPlugin[] = [
@@ -106,7 +106,8 @@ export const BUILTIN_PLUGINS: readonly CardoPlugin[] = [
 export const PROFILE_ENV: readonly { readonly key: string; readonly purpose: string }[] = [
   {
     key: 'DSH_BUNDLED_SKILL_DIR',
-    purpose: 'Company skills directory (rank-600 bundled provider): packages/skills/src/skills',
+    purpose:
+      'Company skills directory (rank-600 bundled provider): packages/cardo-skills/src/skills',
   },
   {
     key: 'DSH_HOME',

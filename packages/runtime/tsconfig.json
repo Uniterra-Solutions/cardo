@@ -5,5 +5,5 @@
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../general" }]
+  "references": [{ "path": "../cardo-systemprompt" }]
 }
