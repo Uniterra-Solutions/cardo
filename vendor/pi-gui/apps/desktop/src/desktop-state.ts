@@ -268,9 +268,9 @@ export type StartThreadInput = {
   readonly provider?: string;
   readonly modelId?: string;
   readonly thinkingLevel?: string;
-  // Cardo: start the new thread in Jovaltus plan mode (the extension's
-  // /planmode command runs before the first message).
-  readonly jovaltusMode?: boolean;
+  // Cardo: start the new thread in a Jovaltus mode (the extension's mode
+  // command runs silently before the first message; absent = standard).
+  readonly mode?: "plan" | "debug";
 };
 
 export type ForkThreadPosition = "before" | "at" | "after";

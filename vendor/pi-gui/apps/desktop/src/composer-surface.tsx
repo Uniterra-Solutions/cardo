@@ -15,6 +15,7 @@ import {
   JovaltusModeButton,
   JovaltusPlanPanel,
   type JovaltusExecuteModel,
+  type JovaltusMode,
   type JovaltusPlanModel,
 } from "./jovaltus-ui";
 import { QueuedComposerMessages } from "./queued-composer-messages";
@@ -65,8 +66,8 @@ interface ComposerSurfaceProps {
   readonly onToggleExtensionDock?: () => void;
   readonly leadingControls: ReactNode;
   readonly trailingControls: ReactNode;
-  // Cardo: Jovaltus plan-mode UI (mode toggle + execute panel above the input).
-  readonly jovaltusMode?: boolean;
+  // Cardo: Jovaltus mode UI (mode toggle + execute panel above the input).
+  readonly mode?: JovaltusMode;
   readonly onToggleJovaltusMode?: () => void;
   readonly jovaltusExecute?: JovaltusExecuteModel;
   readonly onOpenJovaltusGraph?: () => void;
@@ -116,7 +117,7 @@ export function ComposerSurface({
   onToggleExtensionDock,
   leadingControls,
   trailingControls,
-  jovaltusMode = false,
+  mode = "standard",
   onToggleJovaltusMode,
   jovaltusExecute,
   onOpenJovaltusGraph,
@@ -374,7 +375,7 @@ export function ComposerSurface({
           />
           {trailingControls}
           {onToggleJovaltusMode ? (
-            <JovaltusModeButton planModeOn={jovaltusMode} onToggle={onToggleJovaltusMode} />
+            <JovaltusModeButton mode={mode} onToggle={onToggleJovaltusMode} />
           ) : null}
         </div>
       </div>

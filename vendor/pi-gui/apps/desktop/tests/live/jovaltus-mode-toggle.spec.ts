@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { expect, test } from '@playwright/test';
 import {
   createNamedThread,
   getDesktopState,
@@ -8,74 +8,95 @@ import {
   launchDesktop,
   makeUserDataDir,
   makeWorkspace,
-} from "../helpers/electron-app";
+} from '../helpers/electron-app';
 
-// Cardo: regression contract for the plan-mode toggle UI, exercised against
-// the real built-in jovaltus extension.
+// Cardo: regression contract for the three-state Jovaltus mode toggle
+// (standard | plan | debug), exercised against the real built-in jovaltus
+// extension.
 //
-// 1. Toggling plan mode must NOT paint a "message sent to the agent" row:
-//    /planmode is a runtime slash command that executes in the extension host
-//    without a transcript message, so the composer submit path must not add
-//    an optimistic user row.
-// 2. The generic extension dock (chevron bar above the composer) must NOT
-//    appear for the jovaltus statuses — the mode button and execute panel
-//    already render them.
-test("plan-mode toggle runs silently: button flips, no timeline message, no dock bar", async () => {
+// 1. The composer mode button cycles standard -> plan -> debug -> standard;
+//    the label and aria-pressed reflect the active mode.
+// 2. Shift+tab in the composer cycles identically.
+// 3. Every toggle runs as a runtime slash command (/planmode | /debugmode)
+//    that must NOT paint a timeline row, and the jovaltus statuses must not
+//    surface as a generic dock bar (FR-9 / FR-11).
+test('mode toggle cycles standard -> plan -> debug -> standard, silently', async () => {
   test.setTimeout(60_000);
   const userDataDir = await makeUserDataDir();
-  const workspacePath = await makeWorkspace("jovaltus-mode-toggle-workspace");
+  const workspacePath = await makeWorkspace('jovaltus-mode-toggle-workspace');
   await initGitRepo(workspacePath);
-  await mkdir(join(workspacePath, "src"), { recursive: true });
-  await writeFile(join(workspacePath, "src", "App.tsx"), "export default function App() { return null; }\n", "utf8");
+  await mkdir(join(workspacePath, 'src'), { recursive: true });
+  await writeFile(join(workspacePath, 'src', 'App.tsx'), 'export default function App() { return null; }\n', 'utf8');
 
   const harness = await launchDesktop(userDataDir, {
     initialWorkspaces: [workspacePath],
-    testMode: "background",
+    testMode: 'background',
   });
 
   try {
     const window = await harness.firstWindow();
-    await createNamedThread(window, "Plan mode toggle session");
+    await createNamedThread(window, 'Mode toggle session');
 
-    const modeButton = window.getByTestId("jovaltus-mode-button");
+    const modeButton = window.getByTestId('jovaltus-mode-button');
     await expect(modeButton).toBeVisible({ timeout: 15_000 });
-    await expect(modeButton).toHaveAttribute("aria-pressed", "false");
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(modeButton).toContainText('standard');
 
-    // The toggle handler is guarded: it only submits /planmode once the
-    // jovaltus extension's command is known to the runtime, so wait for it.
+    // The toggle handler is guarded: it only submits the mode command once the
+    // jovaltus extension's commands are known to the runtime, so wait for both.
     await expect
       .poll(async () => {
         const nextState = await getDesktopState(window);
         const sessionKey = `${nextState.selectedWorkspaceId}:${nextState.selectedSessionId}`;
         return (nextState.sessionCommandsBySession[sessionKey] ?? []).map((command) => command.name).sort();
       })
-      .toEqual(expect.arrayContaining(["planmode"]));
+      .toEqual(expect.arrayContaining(['planmode', 'debugmode']));
 
-    const userMessages = window.locator(".timeline-item--user");
+    const userMessages = window.locator('.timeline-item--user');
     const userMessageCount = await userMessages.count();
-    const timeline = window.locator(".timeline");
-    const dock = window.getByTestId("extension-dock");
+    const timeline = window.locator('.timeline');
+    const dock = window.getByTestId('extension-dock');
 
     // The jovaltus mode status must not surface as a generic dock bar.
     await expect(dock).toHaveCount(0);
 
-    // Toggle ON via the mode button.
+    // Cycle standard -> plan via the mode button.
     await modeButton.click();
-    await expect(modeButton).toHaveAttribute("aria-pressed", "true");
-
-    // The toggle must not show up as a message sent to the agent…
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(modeButton).toContainText('plan');
     await expect(userMessages).toHaveCount(userMessageCount);
-    await expect(timeline).not.toContainText("/planmode");
-    // …and the dock bar must stay hidden.
+    await expect(timeline).not.toContainText('/planmode');
     await expect(dock).toHaveCount(0);
 
-    // Toggle OFF via shift+tab in the composer (same handler as the button).
-    const composer = window.getByTestId("composer");
+    // Cycle plan -> debug.
+    await modeButton.click();
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(modeButton).toContainText('debug');
+    await expect(timeline).not.toContainText('/debugmode');
+    await expect(dock).toHaveCount(0);
+
+    // Cycle debug -> standard.
+    await modeButton.click();
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(modeButton).toContainText('standard');
+    await expect(timeline).not.toContainText('/debugmode');
+    await expect(dock).toHaveCount(0);
+
+    // Shift+tab cycles identically (the handler prevents default, so focus
+    // stays in the composer and the key can be pressed repeatedly).
+    const composer = window.getByTestId('composer');
     await composer.focus();
-    await window.keyboard.press("Shift+Tab");
-    await expect(modeButton).toHaveAttribute("aria-pressed", "false");
+    await window.keyboard.press('Shift+Tab');
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(modeButton).toContainText('plan');
+    await window.keyboard.press('Shift+Tab');
+    await expect(modeButton).toContainText('debug');
+    await window.keyboard.press('Shift+Tab');
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(modeButton).toContainText('standard');
     await expect(userMessages).toHaveCount(userMessageCount);
-    await expect(timeline).not.toContainText("/planmode");
+    await expect(timeline).not.toContainText('/planmode');
+    await expect(timeline).not.toContainText('/debugmode');
     await expect(dock).toHaveCount(0);
   } finally {
     await harness.close();

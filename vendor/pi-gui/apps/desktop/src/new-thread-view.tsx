@@ -11,6 +11,7 @@ import {
   type ComposerSlashOptionEmptyState,
 } from "./composer-commands";
 import { ComposerSurface } from "./composer-surface";
+import { JOVALTUS_MODE_CYCLE, type JovaltusMode } from "./jovaltus-ui";
 import { ModelOnboardingNoticeBanner } from "./model-onboarding-notice";
 import type { ModelOnboardingState, ModelOnboardingSettingsSection } from "./model-onboarding";
 import { ModelSelector } from "./model-selector";
@@ -27,10 +28,10 @@ interface NewThreadViewProps {
   readonly modelId: string | undefined;
   readonly thinkingLevel: string | undefined;
   readonly modelOnboarding: ModelOnboardingState;
-  // Cardo: Jovaltus plan mode selection (plan vs standard) on the new-thread
-  // page, available before the conversation exists.
-  readonly jovaltusMode: boolean;
-  readonly onSelectJovaltusMode: (plan: boolean) => void;
+  // Cardo: Jovaltus mode selection (standard / plan / debug) on the
+  // new-thread page, available before the conversation exists.
+  readonly mode: JovaltusMode;
+  readonly onSelectJovaltusMode: (mode: JovaltusMode) => void;
   readonly composerRef: RefObject<HTMLTextAreaElement | null>;
   readonly activeSlashCommand?: ComposerSlashCommand;
   readonly activeSlashCommandMeta?: string;
@@ -75,7 +76,7 @@ export function NewThreadView({
   modelId,
   thinkingLevel,
   modelOnboarding,
-  jovaltusMode,
+  mode,
   onSelectJovaltusMode,
   composerRef,
   activeSlashCommand,
@@ -158,26 +159,19 @@ export function NewThreadView({
             data-testid="new-thread-mode"
             role="group"
           >
-            <button
-              aria-pressed={!jovaltusMode}
-              className={`new-thread__mode-option ${!jovaltusMode ? "new-thread__mode-option--active" : ""}`}
-              data-testid="new-thread-mode-standard"
-              type="button"
-              onClick={() => onSelectJovaltusMode(false)}
-            >
-              <span aria-hidden="true" className="new-thread__mode-dot" />
-              standard
-            </button>
-            <button
-              aria-pressed={jovaltusMode}
-              className={`new-thread__mode-option ${jovaltusMode ? "new-thread__mode-option--active" : ""}`}
-              data-testid="new-thread-mode-plan"
-              type="button"
-              onClick={() => onSelectJovaltusMode(true)}
-            >
-              <span aria-hidden="true" className="new-thread__mode-dot" />
-              plan
-            </button>
+            {JOVALTUS_MODE_CYCLE.map((option) => (
+              <button
+                aria-pressed={mode === option}
+                className={`new-thread__mode-option ${mode === option ? "new-thread__mode-option--active" : ""}`}
+                data-testid={`new-thread-mode-${option}`}
+                key={option}
+                type="button"
+                onClick={() => onSelectJovaltusMode(option)}
+              >
+                <span aria-hidden="true" className="new-thread__mode-dot" />
+                {option}
+              </button>
+            ))}
           </div>
         </div>
 

@@ -164,12 +164,13 @@ export async function startThread(store: AppStoreInternals, input: StartThreadIn
       activeView: "threads",
     });
 
-    // Cardo: start the new thread in Jovaltus plan mode. /planmode is a
-    // runtime slash command executed by the extension host (no transcript
-    // message), so the optimistic row is suppressed; it runs before the
-    // first message so plan/execute_plan are already available to the model.
-    if (input.jovaltusMode) {
-      await sendMessageToSession(store, session.ref, "/planmode", [], {
+    // Cardo: start the new thread in the selected Jovaltus mode. The mode
+    // command is a runtime slash command executed by the extension host (no
+    // transcript message), so the optimistic row is suppressed; it runs before
+    // the first message so the mode is active for the model.
+    const modeCommand = input.mode === "debug" ? "/debugmode" : input.mode === "plan" ? "/planmode" : undefined;
+    if (modeCommand) {
+      await sendMessageToSession(store, session.ref, modeCommand, [], {
         suppressOptimisticMessage: true,
       }).catch((error) => {
         void store.withError(error);

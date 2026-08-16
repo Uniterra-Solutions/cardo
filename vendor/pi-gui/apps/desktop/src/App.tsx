@@ -28,8 +28,10 @@ import { NewThreadView } from "./new-thread-view";
 import { buildThreadGroups } from "./thread-groups";
 import {
   JovaltusGraphPopup,
+  nextJovaltusMode,
   parseJovaltusExecuteWidget,
   parseJovaltusPlanWidget,
+  type JovaltusMode,
 } from "./jovaltus-ui";
 import { Sidebar } from "./sidebar";
 import { SidebarToggleButton } from "./sidebar-toggle-button";
@@ -225,12 +227,15 @@ export default function App() {
     setTakeoverTerminalSessionKey("");
   }, [selectedSessionKey]);
   const selectedExtensionDock = useMemo(() => buildExtensionDockModel(selectedExtensionUi), [selectedExtensionUi]);
-  // Cardo: Jovaltus plan-mode data (mode status + execute panel widget).
-  // The mode button + shift+tab are wired only while the extension is loaded
-  // (its live status exists), so shift+tab stays native otherwise.
+  // Cardo: Jovaltus mode state (mode status + execute panel widget). The
+  // extension reports the active mode under the live 'jovaltus-mode' status
+  // ('standard' | 'plan mode' | 'debug mode'); the mode button + shift+tab
+  // are wired only while the extension is loaded (its live status exists),
+  // so shift+tab stays native otherwise.
   const jovaltusModeStatus = selectedExtensionUi?.statuses.find((status) => status.key === "jovaltus-mode");
   const jovaltusAvailable = jovaltusModeStatus !== undefined;
-  const jovaltusMode = jovaltusModeStatus?.text === "plan mode";
+  const jovaltusMode: JovaltusMode =
+    jovaltusModeStatus?.text === "plan mode" ? "plan" : jovaltusModeStatus?.text === "debug mode" ? "debug" : "standard";
   const jovaltusExecuteWidget = selectedExtensionUi?.widgets.find((widget) => widget.key === "jovaltus-execute");
   const jovaltusExecute = useMemo(
     () => (jovaltusExecuteWidget ? parseJovaltusExecuteWidget(jovaltusExecuteWidget.lines) : undefined),
@@ -244,17 +249,21 @@ export default function App() {
     [jovaltusPlanWidget],
   );
   const [jovaltusGraphOpen, setJovaltusGraphOpen] = useState(false);
-  // Toggle plan mode by running the extension's /planmode command; guarded so
-  // an unknown command is never sent as a stray user message.
+  // Cardo: cycle the Jovaltus mode (standard → plan → debug → standard) by
+  // running the extension's mode command; guarded so an unknown command is
+  // never sent as a stray user message. Runtime slash commands run silently
+  // (no optimistic timeline row) via the composer submit path.
   const handleToggleJovaltusMode = useCallback(() => {
     if (!selectedSession || !api) {
       return;
     }
-    if (resolveRuntimeSlashCommand("/planmode", selectedRuntime, selectedSessionCommands) === undefined) {
+    const nextMode = nextJovaltusMode(jovaltusMode);
+    const command = nextMode === "plan" ? "/planmode" : "/debugmode";
+    if (resolveRuntimeSlashCommand(command, selectedRuntime, selectedSessionCommands) === undefined) {
       return;
     }
-    void api.submitComposer("/planmode");
-  }, [api, selectedSession, selectedRuntime, selectedSessionCommands]);
+    void api.submitComposer(command);
+  }, [api, jovaltusMode, selectedSession, selectedRuntime, selectedSessionCommands]);
   const displayedSessionTitle = selectedExtensionUi?.title ?? selectedSession?.title ?? "";
   const activeExtensionDialog = selectedExtensionUi?.pendingDialogs[0];
   const isSelectedExtensionDockExpanded = dockExpandedBySession[selectedSessionKey] ?? false;
@@ -898,8 +907,8 @@ export default function App() {
               modelId={newThread.resolvedModelId}
               thinkingLevel={newThread.resolvedThinkingLevel}
               modelOnboarding={newThread.modelOnboarding}
-              jovaltusMode={newThread.jovaltusMode}
-              onSelectJovaltusMode={newThread.setJovaltusMode}
+              mode={newThread.mode}
+              onSelectJovaltusMode={newThread.setMode}
               composerRef={newThread.composerRef}
               activeSlashCommand={newThread.slashMenu.activeSlashFlow?.command}
               activeSlashCommandMeta={newThread.slashMenu.activeSlashFlow?.command?.description}
@@ -1052,7 +1061,7 @@ export default function App() {
               extensionDock={selectedExtensionDock}
               extensionDockExpanded={isSelectedExtensionDockExpanded}
               onToggleExtensionDock={handleToggleExtensionDock}
-              jovaltusMode={jovaltusMode}
+              mode={jovaltusMode}
               onToggleJovaltusMode={jovaltusAvailable ? handleToggleJovaltusMode : undefined}
               jovaltusExecute={jovaltusExecute}
               onOpenJovaltusGraph={() => setJovaltusGraphOpen(true)}

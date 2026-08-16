@@ -10,7 +10,7 @@ import type {
   ComposerSlashOptionEmptyState,
 } from "./composer-commands";
 import { ComposerSurface } from "./composer-surface";
-import type { JovaltusExecuteModel, JovaltusPlanModel } from "./jovaltus-ui";
+import type { JovaltusExecuteModel, JovaltusMode, JovaltusPlanModel } from "./jovaltus-ui";
 import { ModelOnboardingNoticeBanner } from "./model-onboarding-notice";
 import type { ModelOnboardingState, ModelOnboardingSettingsSection } from "./model-onboarding";
 import { ModelSelector } from "./model-selector";
@@ -63,8 +63,8 @@ interface ComposerPanelProps {
   readonly extensionDock?: ExtensionDockModel;
   readonly extensionDockExpanded: boolean;
   readonly onToggleExtensionDock: () => void;
-  // Cardo: Jovaltus plan-mode UI.
-  readonly jovaltusMode?: boolean;
+  // Cardo: Jovaltus mode UI.
+  readonly mode?: JovaltusMode;
   readonly onToggleJovaltusMode?: () => void;
   readonly jovaltusExecute?: JovaltusExecuteModel;
   readonly onOpenJovaltusGraph?: () => void;
@@ -118,7 +118,7 @@ export function ComposerPanel({
   extensionDock,
   extensionDockExpanded,
   onToggleExtensionDock,
-  jovaltusMode,
+  mode,
   onToggleJovaltusMode,
   jovaltusExecute,
   onOpenJovaltusGraph,
@@ -172,7 +172,7 @@ export function ComposerPanel({
           extensionDock={extensionDock}
           extensionDockExpanded={extensionDockExpanded}
           onToggleExtensionDock={onToggleExtensionDock}
-          jovaltusMode={jovaltusMode}
+          mode={mode}
           onToggleJovaltusMode={onToggleJovaltusMode}
           jovaltusExecute={jovaltusExecute}
           onOpenJovaltusGraph={onOpenJovaltusGraph}
