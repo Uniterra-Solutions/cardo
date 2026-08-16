@@ -18,6 +18,8 @@ import type {
   TranscriptMessage,
 } from "../src/desktop-state";
 import { submitComposerToSession } from "./app-store-composer";
+// Cardo: T1 — persistent transcript structure (chunked entry) for in-place cache mutations.
+import { TranscriptCacheEntry } from "./app-store-timeline";
 import type { AppStoreInternals } from "./app-store-internals";
 import { latestSessionActivityAt, previewFromTranscript } from "./app-store-utils";
 import {
@@ -117,7 +119,8 @@ async function createChildThreadRecord(
     });
     const childRef = session.ref;
     const key = sessionKey(childRef);
-    store.sessionState.transcriptCache.set(key, []);
+    // Cardo: T1 — persistent entry instead of a plain array.
+    store.sessionState.transcriptCache.set(key, TranscriptCacheEntry.empty());
     store.sessionState.loadedTranscriptKeys.add(key);
     store.updateSessionConfig(childRef, session.config);
     await store.ensureSessionSubscription(childRef);
@@ -1084,13 +1087,16 @@ function updateThreadToolOutput(
   },
 ): void {
   const key = sessionKey(event.sessionRef);
-  const transcript = [...(store.sessionState.transcriptCache.get(key) ?? [])];
-  const index = transcript.findIndex((item) => item.kind === "tool" && item.callId === event.callId);
-  const item = transcript[index];
+  // Cardo: T1 — entry-level upsert (O(1) id lookup + O(chunk) replace, no full-array rebuild).
+  const entry = store.sessionState.transcriptCache.get(key);
+  if (!entry) {
+    return;
+  }
+  const item = entry.findById(event.callId);
   if (!item || !isTimelineToolCall(item)) {
     return;
   }
-  transcript[index] = {
+  entry.replaceById(event.callId, {
     ...item,
     status: output.status ?? item.status,
     detail: output.detail,
@@ -1103,8 +1109,7 @@ function updateThreadToolOutput(
       ],
       details: output.details,
     },
-  };
-  store.sessionState.transcriptCache.set(key, transcript);
+  });
 }
 
 function refreshParentOrchestrationEvidence(store: AppStoreInternals, parentRef: SessionRef): void {

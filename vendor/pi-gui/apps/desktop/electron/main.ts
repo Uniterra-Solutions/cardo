@@ -59,7 +59,7 @@ import {
 } from "./cardo-update-checker";
 import { ThemeManager } from "./theme-manager";
 import { TerminalService } from "./terminal-service";
-import type { AppView, DesktopAppState, ThemeMode, ThemePresetId } from "../src/desktop-state";
+import type { AppView, DesktopAppState, OrchestrationChildThread, ThemeMode, ThemePresetId } from "../src/desktop-state";
 import {
   desktopIpc,
   desktopCommands,
@@ -89,6 +89,13 @@ import {
   decideTranscriptDelivery,
   type PublishedTranscriptSnapshot,
 } from "../src/transcript-delta";
+// Cardo: state snapshot + delta delivery — full (orchestration-stripped) state
+// on session switch / first publish / recovery, changed slices afterwards.
+import {
+  decideStateDelivery,
+  stateSlicesWithoutOrchestration,
+  type PublishedStateSnapshot,
+} from "../src/state-delta";
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 const windowTestMode = resolveWindowTestMode();
@@ -123,6 +130,11 @@ const stopPublishingSelectedTranscriptByWebContentsId = new Map<number, () => vo
 // diff against it (see publishSelectedTranscriptToWindow). Deleted on renderer
 // recovery so a reloaded window always starts from a full snapshot.
 const lastPublishedTranscriptByWebContentsId = new Map<number, PublishedTranscriptSnapshot>();
+// Cardo: state snapshot + delta — last full/delta state snapshot and last
+// orchestration payload per webContents (see publishStateToWindow). Deleted on
+// renderer recovery so a reloaded window starts from a full state + resend.
+const lastPublishedStateByWebContentsId = new Map<number, PublishedStateSnapshot>();
+const lastPublishedOrchestrationByWebContentsId = new Map<number, readonly OrchestrationChildThread[]>();
 const stopTrackingWindowActivationByWebContentsId = new Map<number, () => void>();
 let stopNotifications: (() => void) | undefined;
 let stopUpdateChecker: (() => void) | undefined;
@@ -473,7 +485,35 @@ function publishStateToWindow(window: BrowserWindow, state: DesktopAppState = st
   const view = webContentsId === currentWindowScopedWebContentsId ? viewFromState(state) : viewForWebContents(webContentsId);
   const projected = projectStateForWindow(webContentsId, state, view);
   rememberWindowView(webContentsId, projected);
-  window.webContents.send(desktopIpc.stateChanged, projected);
+  // Cardo: state snapshot + delta delivery. The full (orchestration-stripped)
+  // state flows over stateChanged on session switch / first publish / renderer
+  // recovery; afterwards only changed slices flow over stateDelta. Empty
+  // deltas are skipped entirely — no payload, no renderer work.
+  const slices = stateSlicesWithoutOrchestration(projected);
+  const delivery = decideStateDelivery(lastPublishedStateByWebContentsId.get(webContentsId), slices);
+  if (delivery.kind === "full") {
+    window.webContents.send(desktopIpc.stateChanged, slices);
+  } else if (delivery.ops.length > 0) {
+    window.webContents.send(desktopIpc.stateDelta, {
+      revision: projected.revision,
+      ops: delivery.ops,
+    });
+  }
+  // Always advance the per-window last-published state so the next delta diffs
+  // against the latest (slices are reference-stable — never deep-copied).
+  lastPublishedStateByWebContentsId.set(webContentsId, {
+    revision: projected.revision,
+    slices,
+  });
+  // Cardo: orchestrationChildren (child-thread transcripts + evidence) leaves
+  // the per-push state payload and arrives on its own channel,
+  // reference-changed only.
+  if (projected.orchestrationChildren !== lastPublishedOrchestrationByWebContentsId.get(webContentsId)) {
+    window.webContents.send(desktopIpc.orchestrationChanged, {
+      orchestrationChildren: projected.orchestrationChildren,
+    });
+    lastPublishedOrchestrationByWebContentsId.set(webContentsId, projected.orchestrationChildren);
+  }
 }
 
 async function publishSelectedTranscriptToWindow(window: BrowserWindow): Promise<void> {
@@ -794,6 +834,10 @@ function attachStatePublisher(window: BrowserWindow): void {
     // Cardo: a (re)mounting renderer has no local transcript yet — force the
     // next transcript delivery to be a full snapshot, not a delta.
     lastPublishedTranscriptByWebContentsId.delete(webContentsId);
+    // Cardo: same for state + orchestration — a reloaded renderer starts from a
+    // full (orchestration-stripped) state and an orchestration resend.
+    lastPublishedStateByWebContentsId.delete(webContentsId);
+    lastPublishedOrchestrationByWebContentsId.delete(webContentsId);
     // Cardo: coalesce per-event pushes (see electron/stream-publish.ts). The driver
     // emits one event per text delta; forwarding each full state + transcript push
     // makes the renderer fall behind the backend on long tasks. Bounded to one push

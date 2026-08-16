@@ -14,6 +14,7 @@ import type {
   ForkThreadInput,
   ModelSettingsScopeMode,
   NotificationPreferences,
+  OrchestrationChildThread,
   RemoveWorktreeInput,
   SendChildThreadFollowUpInput,
   SetChildSupervisionLoopInput,
@@ -23,6 +24,7 @@ import type {
   WorkspaceSessionTarget,
 } from "./desktop-state";
 import type { TranscriptDeltaPayload } from "./transcript-delta";
+import type { StateDeltaPayload } from "./state-delta";
 
 export type DesktopNotificationPermissionStatus =
   | "granted"
@@ -62,6 +64,13 @@ export const desktopIpc = {
   // transcript still flows over selectedTranscriptChanged on session switch /
   // first publish; subsequent pushes carry only changed items.
   transcriptDelta: "pi-gui:transcript-delta",
+  // Cardo: incremental state delivery — the full (orchestration-stripped) state
+  // still flows over stateChanged on session switch / first publish / recovery;
+  // subsequent pushes carry only changed slices.
+  stateDelta: "pi-gui:state-delta",
+  // Cardo: orchestrationChildren (child-thread transcripts + evidence) leaves
+  // the per-push state payload and arrives on its own channel, changed only.
+  orchestrationChanged: "pi-gui:orchestration-changed",
   appCommand: "pi-gui:app-command",
   workspacePicked: "pi-gui:workspace-picked",
   clipboardImagePasted: "pi-gui:clipboard-image-pasted",

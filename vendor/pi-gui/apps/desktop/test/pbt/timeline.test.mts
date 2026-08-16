@@ -22,6 +22,8 @@ import {
   applyTimelineEvent,
   finalizeActiveThinking,
   timelineFromDriverTranscript,
+  // Cardo: T1 — the transcript cache value is now the persistent chunked entry.
+  TranscriptCacheEntry,
 } from "../../out-pbt/desktop/electron/app-store-timeline.js";
 import {
   arbDriverTranscriptItem,
@@ -58,8 +60,10 @@ function transcriptsEqualModuloIds(left: readonly TranscriptMessage[], right: re
   return true;
 }
 
-function transcriptOf(cache: Map<string, TranscriptMessage[]>, refOrKey: SessionRef | string): TranscriptMessage[] {
-  return cache.get(typeof refOrKey === "string" ? refOrKey : keyOf(refOrKey)) ?? [];
+// Cardo: T1 — the cache value is the persistent entry; materialize for array reads.
+function transcriptOf(cache: Map<string, TranscriptCacheEntry>, refOrKey: SessionRef | string): TranscriptMessage[] {
+  const entry = cache.get(typeof refOrKey === "string" ? refOrKey : keyOf(refOrKey));
+  return entry === undefined ? [] : [...entry.toArray()];
 }
 
 function runtimeState() {
@@ -255,12 +259,13 @@ test("appendAssistantDelta: two sequential deltas equal one combined delta (modu
       fc.string({ minLength: 0, maxLength: 40 }),
       (cache, ref, first, second) => {
         const refA = { workspaceId: ref.workspaceId, sessionId: ref.sessionId };
-        const cacheA = new Map([...cache].map(([k, v]) => [k, [...v]]));
+        // Cardo: T1 — cache values are entries; clone by re-wrapping the materialized items.
+        const cacheA = new Map([...cache].map(([k, v]) => [k, TranscriptCacheEntry.fromArray([...v])]));
         const activeA = new Map<string, string>();
         appendAssistantDelta(cacheA, activeA, refA, first);
         appendAssistantDelta(cacheA, activeA, refA, second);
 
-        const cacheB = new Map([...cache].map(([k, v]) => [k, [...v]]));
+        const cacheB = new Map([...cache].map(([k, v]) => [k, TranscriptCacheEntry.fromArray([...v])]));
         const activeB = new Map<string, string>();
         appendAssistantDelta(cacheB, activeB, refA, `${first}${second}`);
 
@@ -562,7 +567,8 @@ test("applyTimelineEvent: never throws on any SessionDriverEvent shape", () => {
       arbSessionDriverEvent(arbSessionRef()),
       arbRuntimeMaps(),
       (cache, _ref, event, runtime) => {
-        const transcriptCache = new Map([...cache].map(([k, v]) => [k, [...v]]));
+        // Cardo: T1 — cache values are entries; clone by re-wrapping the materialized items.
+        const transcriptCache = new Map([...cache].map(([k, v]) => [k, TranscriptCacheEntry.fromArray([...v])]));
         applyTimelineEvent(transcriptCache, event, runtime as never);
         return true;
       },
@@ -757,7 +763,7 @@ test("applyTimelineEvent: toolStarted on a pre-existing row with the same callId
             createdAt: "2024-01-01T00:00:00.000Z",
           },
         ];
-        const seeded = new Map([...cache, [key, transcript]]);
+        const seeded = new Map([...cache, [key, TranscriptCacheEntry.fromArray(transcript)]]);
 
         const beforeCount = transcript.filter((item) => item.kind === "tool" && (item as { callId: string }).callId === callId).length;
         assert.equal(beforeCount, 1);

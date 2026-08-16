@@ -47,6 +47,8 @@ import {
   appendThinkingDelta,
   applyTimelineEvent,
   finalizeActiveThinking,
+  // Cardo: T1 — the transcript cache value is now the persistent chunked entry.
+  type TranscriptCacheEntry,
 } from "../../out-pbt/desktop/electron/app-store-timeline.js";
 import { applySessionEventState } from "../../out-pbt/desktop/electron/app-store-session-state.js";
 import { cloneTranscriptMessage } from "../../out-pbt/desktop/electron/app-store-utils.js";
@@ -74,7 +76,8 @@ const OTHER_SESSION_REF: SessionRef = { workspaceId: TARGET_WORKSPACE_ID, sessio
 /* ── caches + the real flow driver (mirrors app-store) ──── */
 
 interface FlowCaches {
-  transcriptCache: Map<string, TranscriptMessage[]>;
+  // Cardo: T1 — persistent chunked entry instead of a plain array.
+  transcriptCache: Map<string, TranscriptCacheEntry>;
   runningSinceBySession: Map<string, string>;
   lastViewedAtBySession: Map<string, string>;
   activeAssistantMessageBySession: Map<string, string>;
@@ -247,8 +250,13 @@ const deltaEventArb: fc.Arbitrary<SessionDriverEvent> = fc.oneof(
 
 /* ── helpers ────────────────────────────────────────────── */
 
-function transcriptOf(caches: FlowCaches): TranscriptMessage[] {
-  return caches.transcriptCache.get(KEY) ?? [];
+// Cardo: T1 — the cache entry mutates IN PLACE, so publish reads must
+// materialize a snapshot (mirrors getSelectedTranscriptItemsForView → toArray()).
+// Item objects are reused across snapshots, so the reference-accelerated delta
+// diff still skips untouched items in O(1).
+function transcriptOf(caches: FlowCaches): readonly TranscriptMessage[] {
+  const entry = caches.transcriptCache.get(KEY);
+  return entry === undefined ? [] : entry.toArray();
 }
 
 function sameTranscript(a: readonly TranscriptMessage[], b: readonly TranscriptMessage[]): boolean {

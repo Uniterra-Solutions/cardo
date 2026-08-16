@@ -6,10 +6,12 @@ import type {
   QueuedComposerMessage,
   SessionExtensionDialogRecord,
   SessionExtensionUiStateRecord,
-  TranscriptMessage,
 } from "../src/desktop-state";
 import type { RunMetrics } from "./app-store-timeline";
 import type { ActiveThinkingRecord } from "./app-store-timeline";
+// Cardo: real-time streaming refactor (T1) — the transcript cache value is the
+// persistent chunked entry (TranscriptCacheEntry) instead of a plain array.
+import type { TranscriptCacheEntry } from "./app-store-timeline";
 
 export interface MutableSessionExtensionUiState extends ExtensionUiState {
   pendingDialogs: SessionExtensionDialogRecord[];
@@ -33,7 +35,8 @@ export interface QueuedComposerEditState {
  * place instead of manually repeating the list across call sites.
  */
 export class SessionStateMap {
-  readonly transcriptCache = new Map<string, TranscriptMessage[]>();
+  // Cardo: T1 — persistent transcript structure: Map<string, TranscriptCacheEntry>.
+  readonly transcriptCache = new Map<string, TranscriptCacheEntry>();
   readonly composerDraftsBySession = new Map<string, string>();
   readonly composerAttachmentsBySession = new Map<string, ComposerAttachment[]>();
   readonly queuedComposerMessagesBySession = new Map<string, QueuedComposerMessage[]>();

@@ -15,6 +15,7 @@ import {
   type TerminalSize,
 } from "../src/ipc";
 import type { TranscriptDeltaPayload } from "../src/transcript-delta";
+import type { StateDeltaPayload } from "../src/state-delta";
 import type {
   NavigateSessionTreeOptions,
   NavigateSessionTreeResult,
@@ -33,6 +34,7 @@ import type {
   DesktopAppState,
   ForkThreadInput,
   NotificationPreferences,
+  OrchestrationChildThread,
   RemoveWorktreeInput,
   SendChildThreadFollowUpInput,
   SetChildSupervisionLoopInput,
@@ -97,6 +99,15 @@ contextBridge.exposeInMainWorld("piApp", {
   // its local transcript instead of re-receiving the full array per push.
   onTranscriptDelta: (listener: (payload: TranscriptDeltaPayload) => void) =>
     subscribeIpc(desktopIpc.transcriptDelta, listener),
+  // Cardo: incremental state delivery — changed slices applied locally
+  // (revision-guarded), mirroring onTranscriptDelta.
+  onStateDelta: (listener: (payload: StateDeltaPayload) => void) =>
+    subscribeIpc(desktopIpc.stateDelta, listener),
+  // Cardo: orchestrationChildren (child-thread transcripts + evidence) arrives
+  // on its own channel, never riding the per-push state payload.
+  onOrchestrationChanged: (
+    listener: (payload: { readonly orchestrationChildren: readonly OrchestrationChildThread[] }) => void,
+  ) => subscribeIpc(desktopIpc.orchestrationChanged, listener),
   onCommand: (listener: (command: PiDesktopCommand) => void) => {
     const handle = (_event: Electron.IpcRendererEvent, command: PiDesktopCommand) => {
       listener(command);

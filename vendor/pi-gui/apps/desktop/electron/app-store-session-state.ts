@@ -1,17 +1,29 @@
 import { sessionKey } from "@pi-gui/pi-sdk-driver";
 import type { SessionDriverEvent, SessionSnapshot } from "@pi-gui/session-driver";
 import type { DesktopAppState, SessionRecord, TranscriptMessage } from "../src/desktop-state";
-import { cloneTranscriptMessage, hasUnseenSessionUpdate, previewFromTranscript } from "./app-store-utils";
+import { hasUnseenSessionUpdate, previewFromTranscript } from "./app-store-utils";
+// Cardo: T1 — the cache value is the persistent chunked entry; the fold consumes
+// it read-only (the entry is structurally assignable to readonly TranscriptMessage[]).
+import type { TranscriptCacheEntry } from "./app-store-timeline";
 
 export function applySessionEventState(
   state: DesktopAppState,
   event: SessionDriverEvent,
-  transcriptCache: Map<string, TranscriptMessage[]>,
+  transcriptCache: ReadonlyMap<string, TranscriptCacheEntry>,
   runningSinceBySession: Map<string, string>,
   lastViewedAtBySession: Map<string, string>,
 ): DesktopAppState {
   const key = sessionKey(event.sessionRef);
-  const transcript = (transcriptCache.get(key) ?? []).map(cloneTranscriptMessage);
+  // Cardo: stream-liveness — never re-copy the accumulated transcript per
+  // event. The previous `(cache ?? []).map(cloneTranscriptMessage)` pass deep-
+  // cloned the WHOLE transcript on every driver event, feeding only read-only
+  // computations (previewFromTranscript, hasUnseenSessionUpdate /
+  // latestSessionActivityAt). Cache arrays are rebuilt on mutation (never
+  // mutated in place), so read-only access is safe; SessionRecord carries no
+  // transcript. Folding one event is now O(1) in transcript length instead of
+  // O(accumulated items) — the quadratic main-process work that saturated on
+  // long tasks (locked by test/pbt/store-liveness.test.mts invariant K).
+  const transcript = transcriptCache.get(key) ?? [];
   const preview = previewFromTranscript(transcript);
   const lastViewedAt = lastViewedAtBySession.get(key);
 

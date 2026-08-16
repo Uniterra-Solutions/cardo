@@ -23,6 +23,8 @@ import type {
   WorkspaceCatalogEntry,
 } from "../../../../packages/catalogs/dist/index.js";
 import { sessionKey } from "../../../../packages/pi-sdk-driver/dist/index.js";
+// Cardo: T1 — persistent chunked transcript entry (cache value type).
+import { TranscriptCacheEntry } from "../../out-pbt/desktop/electron/app-store-timeline.js";
 
 /* ── primitives ─────────────────────────────────────────── */
 
@@ -106,10 +108,13 @@ export const arbTranscriptMessageItem = (): fc.Arbitrary<TranscriptMessage> =>
 export const arbTranscript = (): fc.Arbitrary<TranscriptMessage[]> =>
   fc.array(arbTranscriptMessageItem(), { maxLength: 6 });
 
-export const arbTranscriptCache = (): fc.Arbitrary<Map<string, TranscriptMessage[]>> =>
+// Cardo: T1 — the transcript cache value is now the persistent chunked entry
+// (TranscriptCacheEntry); the arbitrary builds entry-valued maps so the timeline
+// unit/PBT lanes exercise the real cache type.
+export const arbTranscriptCache = (): fc.Arbitrary<Map<string, TranscriptCacheEntry>> =>
   fc
     .array(fc.tuple(fc.string({ minLength: 1, maxLength: 20 }), arbTranscript()), { maxLength: 4 })
-    .map((pairs) => new Map(pairs));
+    .map((pairs) => new Map(pairs.map(([key, items]) => [key, TranscriptCacheEntry.fromArray(items)])));
 
 /* ── driver transcript items (input to timelineFromDriverTranscript) ── */
 

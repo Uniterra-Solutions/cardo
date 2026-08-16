@@ -54,6 +54,8 @@ import {
   appendThinkingDelta,
   applyTimelineEvent,
   finalizeActiveThinking,
+  // Cardo: T1 — the transcript cache value is now the persistent chunked entry.
+  type TranscriptCacheEntry,
 } from "../../out-pbt/desktop/electron/app-store-timeline.js";
 import { applySessionEventState } from "../../out-pbt/desktop/electron/app-store-session-state.js";
 import { cloneTranscriptMessage } from "../../out-pbt/desktop/electron/app-store-utils.js";
@@ -74,7 +76,8 @@ const KEY = sessionKey(TARGET_SESSION_REF);
 /* ── caches + the real flow driver (mirrors app-store) ──── */
 
 interface FlowCaches {
-  transcriptCache: Map<string, TranscriptMessage[]>;
+  // Cardo: T1 — persistent chunked entry instead of a plain array.
+  transcriptCache: Map<string, TranscriptCacheEntry>;
   runningSinceBySession: Map<string, string>;
   lastViewedAtBySession: Map<string, string>;
   activeAssistantMessageBySession: Map<string, string>;
@@ -247,8 +250,11 @@ const syncEventArb: fc.Arbitrary<SessionDriverEvent> = fc.oneof(
 
 /* ── transcript helpers ─────────────────────────────────── */
 
-function transcriptOf(caches: FlowCaches): TranscriptMessage[] {
-  return caches.transcriptCache.get(KEY) ?? [];
+// Cardo: T1 — the cache entry mutates IN PLACE; reads materialize a snapshot
+// (mirrors the main-process publish path → toArray()).
+function transcriptOf(caches: FlowCaches): readonly TranscriptMessage[] {
+  const entry = caches.transcriptCache.get(KEY);
+  return entry === undefined ? [] : entry.toArray();
 }
 
 function assistantTextTotal(transcript: readonly TranscriptMessage[]): number {

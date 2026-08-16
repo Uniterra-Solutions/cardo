@@ -22,7 +22,9 @@ export function buildWorkspaceRecords(
   workspaces: readonly WorkspaceCatalogEntry[],
   worktrees: readonly WorktreeCatalogEntry[],
   sessions: readonly SessionCatalogEntry[],
-  transcriptCache: Map<string, TranscriptMessage[]>,
+  // Cardo: T1 — accepts BOTH the persistent entry map (Map<string, TranscriptCacheEntry>)
+  // and plain transcript maps (the entry is structurally assignable to readonly TranscriptMessage[]).
+  transcriptCache: ReadonlyMap<string, readonly TranscriptMessage[]>,
   runningSinceBySession: Map<string, string>,
   sessionConfigBySession: Map<string, SessionConfig>,
   lastViewedAtBySession: Map<string, string>,
@@ -202,7 +204,8 @@ function linkedWorktreeBranchName(
 
 function buildSessionRecord(
   session: SessionCatalogEntry,
-  transcriptCache: Map<string, TranscriptMessage[]>,
+  // Cardo: T1 — see buildWorkspaceRecords: accepts the entry map and plain maps.
+  transcriptCache: ReadonlyMap<string, readonly TranscriptMessage[]>,
   runningSinceBySession: Map<string, string>,
   sessionConfigBySession: Map<string, SessionConfig>,
   lastViewedAtBySession: Map<string, string>,

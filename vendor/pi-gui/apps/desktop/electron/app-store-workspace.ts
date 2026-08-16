@@ -1,6 +1,8 @@
 import { sessionKey } from "@pi-gui/pi-sdk-driver";
 import type { CreateSessionInput, DesktopAppState, WorkspaceSessionTarget } from "../src/desktop-state";
 import { toSessionRef } from "./app-store-utils";
+// Cardo: T1 — persistent transcript structure (chunked entry).
+import { TranscriptCacheEntry } from "./app-store-timeline";
 import type { AppStoreInternals, RefreshStateOptions } from "./app-store-internals";
 import { NEW_THREAD_PLACEHOLDER_TITLE } from "./thread-title-constants";
 
@@ -248,7 +250,8 @@ export async function createSession(store: AppStoreInternals, input: CreateSessi
       title: input.title?.trim() || NEW_THREAD_PLACEHOLDER_TITLE,
     });
     const key = sessionKey(snapshot.ref);
-    store.sessionState.transcriptCache.set(key, []);
+    // Cardo: T1 — persistent entry instead of a plain array.
+    store.sessionState.transcriptCache.set(key, TranscriptCacheEntry.empty());
     store.sessionState.loadedTranscriptKeys.add(key);
     store.updateSessionConfig(snapshot.ref, snapshot.config);
     store.state = {

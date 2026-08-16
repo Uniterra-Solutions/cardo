@@ -68,6 +68,8 @@ import {
   clearActiveAssistantMessage,
   finalizeActiveThinking,
   timelineFromDriverTranscript,
+  // Cardo: T1 — persistent transcript structure (chunked entry) wraps driver transcripts at set time.
+  TranscriptCacheEntry,
 } from "./app-store-timeline";
 import { applySessionEventState, updateSessionRecord } from "./app-store-session-state";
 import type { AppStoreInternals, RefreshStateOptions } from "./app-store-internals";
@@ -276,7 +278,9 @@ export class DesktopAppStore implements AppStoreInternals {
       return null;
     }
     await this.ensureTranscriptLoaded(sessionRef);
-    const items = this.sessionState.transcriptCache.get(sessionKey(sessionRef)) ?? [];
+    // Cardo: T1 — materialize the persistent entry (O(n) at publish rate; unchanged
+    // items keep object identity so the transcript-delta diff stays reference-accelerated).
+    const items = this.sessionState.transcriptCache.get(sessionKey(sessionRef))?.toArray() ?? [];
     return {
       workspaceId: sessionRef.workspaceId,
       sessionId: sessionRef.sessionId,
@@ -309,7 +313,9 @@ export class DesktopAppStore implements AppStoreInternals {
     const sidebarCollapsed = view.sidebarCollapsed ?? state.sidebarCollapsed;
 
     return {
-      ...structuredClone(state),
+      // Cardo: T1 — no per-push deep clone: projected slices keep object identity
+      // (the reference-accelerated state delta in T2 depends on this).
+      ...state,
       selectedWorkspaceId,
       selectedSessionId,
       activeView,
@@ -1494,7 +1500,8 @@ export class DesktopAppStore implements AppStoreInternals {
 
     const transcript = timelineFromDriverTranscript(await this.driver.getTranscript(sessionRef));
     this.sessionState.loadedTranscriptKeys.add(key);
-    this.sessionState.transcriptCache.set(key, transcript);
+    // Cardo: T1 — wrap the driver transcript in the persistent chunked entry.
+    this.sessionState.transcriptCache.set(key, TranscriptCacheEntry.fromArray(transcript));
     await this.recordSelectedTranscriptFileStat(sessionRef);
   }
 
@@ -1502,7 +1509,8 @@ export class DesktopAppStore implements AppStoreInternals {
     const key = sessionKey(sessionRef);
     const transcript = timelineFromDriverTranscript(await this.driver.getTranscript(sessionRef));
     this.sessionState.loadedTranscriptKeys.add(key);
-    this.sessionState.transcriptCache.set(key, transcript);
+    // Cardo: T1 — wrap the driver transcript in the persistent chunked entry.
+    this.sessionState.transcriptCache.set(key, TranscriptCacheEntry.fromArray(transcript));
     await this.recordSelectedTranscriptFileStat(sessionRef);
     this.publishSelectedTranscriptFor(sessionRef);
   }
@@ -2682,7 +2690,8 @@ export class DesktopAppStore implements AppStoreInternals {
     return {
       workspaceId: sessionRef.workspaceId,
       sessionId: sessionRef.sessionId,
-      transcript: (this.sessionState.transcriptCache.get(sessionKey(sessionRef)) ?? []).map(cloneTranscriptMessage),
+      // Cardo: T1 — materialize the persistent entry at publish/hydration rate (O(n), never per event).
+      transcript: (this.sessionState.transcriptCache.get(sessionKey(sessionRef))?.toArray() ?? []).map(cloneTranscriptMessage),
       ...(schemaInfo ? { schemaInfo } : {}),
     };
   }
@@ -3155,7 +3164,8 @@ export class DesktopAppStore implements AppStoreInternals {
     runtimeByWorkspace?: Record<string, RuntimeSnapshot>,
   ): DesktopAppState {
     const key = sessionKey(sessionRef);
-    const transcript = (this.sessionState.transcriptCache.get(key) ?? []).map(cloneTranscriptMessage);
+    // Cardo: T1 — materialize the persistent entry at hydration rate (O(n), never per event).
+    const transcript = (this.sessionState.transcriptCache.get(key)?.toArray() ?? []).map(cloneTranscriptMessage);
     const preview = previewFromTranscript(transcript);
     const lastViewedAt = this.sessionState.lastViewedAtBySession.get(key);
     const nextState = {

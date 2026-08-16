@@ -10,7 +10,8 @@ import {
   parseComposerCommand,
   resolveRuntimeSlashCommand,
 } from "../src/composer-commands";
-import { appendQueuedUserMessage, appendUserMessage, clearActiveAssistantMessage } from "./app-store-timeline";
+// Cardo: T1 — persistent transcript structure (chunked entry) for in-place cache mutations.
+import { TranscriptCacheEntry, appendQueuedUserMessage, appendUserMessage, clearActiveAssistantMessage } from "./app-store-timeline";
 import {
   cloneComposerAttachments,
   makeActivityItem,
@@ -508,11 +509,8 @@ export async function sendMessageToSession(
     });
   } catch (error) {
     if (rollbackOptimisticMessageOnError && optimisticMessageId !== undefined) {
-      const transcript = store.sessionState.transcriptCache.get(key) ?? [];
-      store.sessionState.transcriptCache.set(
-        key,
-        transcript.filter((message) => message.id !== optimisticMessageId),
-      );
+      // Cardo: T1 — entry-level removal (persistent structure — no full-array rebuild).
+      store.sessionState.transcriptCache.get(key)?.removeById(optimisticMessageId);
       store.publishSelectedTranscriptFor(sessionRef);
     }
     throw error;
@@ -550,11 +548,8 @@ function removeOptimisticQueuedUserMessage(
   messageId: string,
 ): void {
   const key = sessionKey(sessionRef);
-  const transcript = store.sessionState.transcriptCache.get(key) ?? [];
-  store.sessionState.transcriptCache.set(
-    key,
-    transcript.filter((message) => message.id !== messageId),
-  );
+  // Cardo: T1 — entry-level removal (persistent structure — no full-array rebuild).
+  store.sessionState.transcriptCache.get(key)?.removeById(messageId);
   store.publishSelectedTranscriptFor(sessionRef);
 }
 
@@ -642,9 +637,13 @@ async function runComposerCommand(
 
 function appendLocalActivity(store: AppStoreInternals, sessionRef: SessionRef, label: string): void {
   const key = sessionKey(sessionRef);
-  const transcript = [...(store.sessionState.transcriptCache.get(key) ?? [])];
-  transcript.push(makeActivityItem(label));
-  store.sessionState.transcriptCache.set(key, transcript);
+  // Cardo: T1 — append in place on the persistent entry (Map.set only on first touch).
+  let entry = store.sessionState.transcriptCache.get(key);
+  if (!entry) {
+    entry = TranscriptCacheEntry.empty();
+    store.sessionState.transcriptCache.set(key, entry);
+  }
+  entry.append(makeActivityItem(label));
 }
 
 function finishComposerCommand(
