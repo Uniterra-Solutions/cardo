@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DesktopAppState, OrchestrationChildThread, SelectedTranscriptRecord } from "../desktop-state";
 import { applyTranscriptDelta } from "../transcript-delta";
-import { applyStateDelta, type StateSlices } from "../state-delta";
+import { applyStateDelta, type StateDeltaPayload, type StateSlices } from "../state-delta";
 
 export function useDesktopAppState() {
   const [snapshot, setSnapshot] = useState<DesktopAppState | null>(null);
@@ -14,6 +14,30 @@ export function useDesktopAppState() {
   // orchestration-changed channel; slices-only pushes are completed from it so
   // the renderer's final DesktopAppState always carries the slice.
   const orchestrationRef = useRef<readonly OrchestrationChildThread[] | null>(null);
+  // Cardo: true once a full DesktopAppState has flowed through the setter
+  // (the getState() seed or an IPC response). The pre-seed buffer/drain
+  // decision keys off THIS, never off `orchestrationRef === null` —
+  // orchestration-changed can arrive pre-seed and set the ref to a non-null
+  // value, which would let a stale equal-revision seed overwrite a pushed
+  // full (renderer-wiring W-CONV).
+  const hasFullStateRef = useRef(false);
+  // Cardo: a pushed full state (state-changed) that arrives BEFORE the
+  // getState() response cannot be completed yet (the orchestration ref is
+  // unseeded), so the latest one is BUFFERED instead of dropped. Otherwise a
+  // stale seed response — built at mount time, before the first events —
+  // strands the renderer at an older revision until the next push, which
+  // never comes if that event was the last one (PBT renderer-wiring.test.mts
+  // W-CONV counterexample: pushed rev 1 dropped, stale seed rev 0 applied →
+  // permanent divergence). The buffer is drained by the first full state
+  // (seed or later pushed full) that is at least as new.
+  // NOTE: these refs live at hook top level (rules-of-hooks); the
+  // pre-seed buffer is only written while the mount effect is live.
+  const pendingFullRef = useRef<StateSlices | null>(null);
+  // Cardo: pre-seed state-deltas are relative to the buffered full's state;
+  // they are buffered in order and replayed after the seed + full drain
+  // (a delta arriving before any snapshot used to be dropped, stranding the
+  // renderer one revision behind the store forever — same W-CONV class).
+  const pendingDeltaRef = useRef<StateDeltaPayload[]>([]);
 
   // Cardo: the hook's setSnapshot is the single write path for BOTH the pushed
   // channels (state-changed / state-delta / orchestration-changed) and the
@@ -22,9 +46,21 @@ export function useDesktopAppState() {
   // merges the CURRENT orchestrationChildren.
   const setSnapshotWithOrchestration = useCallback(
     (action: SetStateAction<DesktopAppState | null>) => {
+      // A plain VALUE action is a full DesktopAppState (the getState() seed or
+      // an IPC response); pushed channels always pass function updaters. This
+      // is the ONLY reliable "the renderer has seen a full state" signal —
+      // orchestration-changed can arrive pre-seed and must not count.
+      if (typeof action !== "function") {
+        hasFullStateRef.current = true;
+      }
       setSnapshot((current) => {
         const next = typeof action === "function" ? action(current) : action;
-        if (next) {
+        if (next && orchestrationRef.current === null) {
+          // Only the FIRST full state seeds the ref. Never regress it: a
+          // stale seed/response whose orchestration predates a processed
+          // orchestration-changed must not overwrite the fresher children
+          // (renderer-wiring W-CONV); the orchestration-changed channel keeps
+          // the ref current thereafter.
           orchestrationRef.current = next.orchestrationChildren;
         }
         return next;
@@ -46,8 +82,43 @@ export function useDesktopAppState() {
     const applyState = (incoming: StateSlices | DesktopAppState) => {
       if ("orchestrationChildren" in incoming) {
         // Full DesktopAppState (IPC responses): the revision guard lives in
-        // applySnapshotIfNewer; the setter syncs the orchestration ref.
+        // applySnapshotIfNewer. Then re-merge the freshest orchestration (a
+        // stale seed's children must not regress the ref or the snapshot) and
+        // drain any buffered pre-seed full — it reflects LATER main-process
+        // state than the mount-time seed even at equal revision (session
+        // switches are projections that do not bump revision).
         applySnapshotIfNewer(setSnapshotWithOrchestration, incoming);
+        setSnapshotWithOrchestration((current) => {
+          if (!current) {
+            return current;
+          }
+          const pending = pendingFullRef.current;
+          const latestOrchestration = orchestrationRef.current ?? current.orchestrationChildren;
+          let next: DesktopAppState = current;
+          if (pending !== null && pending.revision >= current.revision) {
+            pendingFullRef.current = null;
+            next = { ...pending, orchestrationChildren: latestOrchestration };
+          } else if (pending !== null) {
+            pendingFullRef.current = null; // stale pending superseded by the seed
+          } else if (current.orchestrationChildren !== latestOrchestration) {
+            next = { ...current, orchestrationChildren: latestOrchestration };
+          }
+          // Replay any pre-seed state-deltas in order; a delta that is NOT
+          // newer than the already-applied state is stale (its changes are
+          // already inside a buffered full published later) and must skip —
+          // the pure applyStateDelta has no revision guard of its own.
+          if (pendingDeltaRef.current.length > 0) {
+            const buffered = pendingDeltaRef.current;
+            pendingDeltaRef.current = [];
+            for (const payload of buffered) {
+              if (payload.revision <= next.revision) {
+                continue;
+              }
+              next = applyStateDelta(next, payload.ops);
+            }
+          }
+          return next === current ? current : next;
+        });
         return;
       }
       // Cardo: pushed full state (state-changed) arrives orchestration-stripped
@@ -56,13 +127,23 @@ export function useDesktopAppState() {
         if (current && incoming.revision < current.revision) {
           return current;
         }
-        const latestOrchestration = orchestrationRef.current;
-        if (latestOrchestration === null) {
-          // No full state has arrived yet (the in-flight getState() response
-          // seeds the ref) — a slices-only push cannot be completed, so drop it.
+        if (pendingFullRef.current !== null && incoming.revision >= pendingFullRef.current.revision) {
+          pendingFullRef.current = null; // applied or superseded — no longer needed
+        }
+        if (!hasFullStateRef.current) {
+          // No full DesktopAppState has arrived yet (the in-flight getState()
+          // response seeds it) — buffer the latest pushed full instead of
+          // dropping it, so a stale seed cannot strand the renderer (above).
+          pendingFullRef.current = incoming;
           return current;
         }
-        return { ...incoming, orchestrationChildren: latestOrchestration };
+        if (!current) {
+          // Defensive: the flag is only set when a full flowed through and
+          // set the snapshot, so this cannot happen — but never merge into null.
+          pendingFullRef.current = incoming;
+          return current;
+        }
+        return { ...incoming, orchestrationChildren: orchestrationRef.current ?? current.orchestrationChildren };
       });
     };
 
@@ -125,7 +206,13 @@ export function useDesktopAppState() {
         return;
       }
       setSnapshotWithOrchestration((current) => {
-        if (!current || payload.revision <= current.revision) {
+        if (!current || !hasFullStateRef.current) {
+          // Cardo: pre-seed delta — buffer it (relative to the buffered
+          // full's state); replayed by the seed drain so it is never lost.
+          pendingDeltaRef.current.push(payload);
+          return current;
+        }
+        if (payload.revision <= current.revision) {
           return current;
         }
         return applyStateDelta(current, payload.ops);
