@@ -42,6 +42,12 @@ function runtimeDeps() {
     'dsh-lan-gateway': '0.2.1',
     'dsh-find-plugin': '0.3.6',
     'dsh-subagent-model-picker': '0.1.1',
+    // Vendored (non-npm) plugins: file: refs pull them into the hoisted
+    // tree so the dsh loader can resolve the profile bundles from the
+    // runtime alone (no pnpm install at app runtime).
+    'deep-whale-day-night-theme': `file:${path.join(root, 'vendor', 'dsh-plugins', 'deep-whale-day-night-theme')}`,
+    'dsh-subagent-monitor': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-subagent-monitor')}`,
+    'dsh-thinking-effort': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-thinking-effort')}`,
   };
 }
 
@@ -58,7 +64,9 @@ writeFileSync(
   }, null, 2)}\n`,
 );
 // pnpm 11 reads non-auth settings from pnpm-workspace.yaml (not .npmrc).
-writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'nodeLinker: hoisted\n');
+// autoInstallPeers: false — some vendored plugins declare peers that only
+// exist in the dsh source workspace (not npm); the host tree provides them.
+writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'nodeLinker: hoisted\nautoInstallPeers: false\n');
 
 execFileSync('pnpm', ['install', '--dir', tmp, '--ignore-scripts'], {
   env: { ...process.env, CI: 'true' },

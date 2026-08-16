@@ -7,24 +7,19 @@ files:
   - dist/**/*
   - package.json
   - node_modules/@cardo/cardo-updater/**/*
-extraResources:
-  - from: ../../vendor/dsh-plugins
-    to: vendor/dsh-plugins
-  - from: ../../vendor/dsh-runtime
-    to: dsh-runtime
-    filter:
-      - node_modules/**/*
-      - package.json
+# The whole source tree is embedded as Resources/src by the cardo CLI at
+# install time (`cardo setup` passes -c.extraResources.0.from=<src> -c.extraResources.0.to=src);
+# the app resolves the bundled dsh CLI, vendored plugins, and skills from there.
+extraResources: []
 mac:
   target:
     - zip
   category: public.app-category.developer-tools
   hardenedRuntime: false
   identity: null
-# The dsh runtime (native deps included) is pre-built by prepare-runtime.mjs
-# into resources/dsh-runtime; electron-builder must not try to reinstall the
-# workspace (which would run the root husky prepare and fail). beforeBuild
-# returning false marks node_modules as handled externally.
+# The source tree the CLI extracted already has its node_modules installed;
+# electron-builder must not reinstall it (the root husky prepare would fail).
+# beforeBuild returning false marks node_modules as handled externally.
 npmRebuild: false
 nodeGypRebuild: false
 beforeBuild: ./scripts/electron-before-build.cjs

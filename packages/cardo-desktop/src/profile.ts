@@ -1,19 +1,8 @@
 /**
- * Cardo desktop profile bootstrap.
- *
- * The cardo desktop app runs a bundled DeepSeek Harness (dsh) runtime under
- * its OWN data home (Electron userData dir), never the user's personal
- * `~/.dsh`. On first launch it scaffolds a `cardo` profile there — the
- * official bundles (`dsh-base` + `dsh-web-app`) resolve from the bundled dsh
- * CLI's dependency tree, and the pinned community plugins are registered as
- * bundles so `dsh plugin` installs their node_modules into the profile.
- *
- * This module is pure fs work, testable without Electron.
+ * Cardo desktop profile bootstrap — the bundle-row manifest constants the
+ * desktop resolves against. This module is pure data, testable without
+ * Electron. (Provisioning of the built-ins themselves lives in builtin.ts.)
  */
-
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
 
 /** The npm-published community plugins the cardo profile mounts, in add order. */
 export const PROFILE_PLUGINS: readonly string[] = [
@@ -84,67 +73,4 @@ export function profilePnpmWorkspace(): string {
   }
   lines.push('minimumReleaseAge: 0', '');
   return lines.join('\n');
-}
-
-/**
- * Scaffold the cardo dsh profile under `dshHome/profiles/cardo` if it does
- * not exist yet, then install the pinned plugins with the bundled dsh CLI.
- * Idempotent: an existing profile (user's edits, sessions) is never touched.
- *
- * @param dshHome the app-owned DSH_HOME directory.
- * @param dshCli absolute path to the bundled dsh CLI entry (lib/bin.js).
- * @param nodeExec the node executable to run it with (process.execPath under
- *   Electron is the Electron binary; ELECTRON_RUN_AS_NODE=1 makes it a node).
- * @param vendorRoot absolute path to the vendored plugins dir
- *   (`vendor/dsh-plugins`); used to install the non-npm plugins.
- */
-export function ensureCardoProfile(
-  dshHome: string,
-  dshCli: string,
-  nodeExec: string,
-  vendorRoot: string,
-): void {
-  const profileDir = join(dshHome, 'profiles', 'cardo');
-  if (profileExists(profileDir)) {
-    return;
-  }
-  mkdirSync(profileDir, { recursive: true });
-  writeFileSync(join(profileDir, 'package.json'), `${profileManifest()}\n`, 'utf8');
-  writeFileSync(join(profileDir, 'cordis.yml'), '[]\n', 'utf8');
-  writeFileSync(join(profileDir, 'cordis.patch.yml'), '[]\n', 'utf8');
-  writeFileSync(join(profileDir, 'pnpm-workspace.yaml'), profilePnpmWorkspace(), 'utf8');
-
-  const baseEnv = { ...process.env, DSH_HOME: dshHome, ELECTRON_RUN_AS_NODE: '1' };
-  for (const plugin of PROFILE_PLUGINS) {
-    execFileSync(nodeExec, [dshCli, 'plugin', '--profile', 'cardo', 'add', plugin], {
-      env: baseEnv,
-      stdio: 'inherit',
-    });
-  }
-  for (const dir of VENDOR_PLUGIN_DIRS) {
-    execFileSync(nodeExec, [dshCli, 'plugin', '--profile', 'cardo', 'add', join(vendorRoot, dir)], {
-      env: baseEnv,
-      stdio: 'inherit',
-    });
-  }
-}
-
-function profileExists(profileDir: string): boolean {
-  try {
-    return (
-      readFileSync(join(profileDir, 'package.json'), 'utf8').includes('dsh-profile-cardo') &&
-      exists(join(profileDir, 'cordis.patch.yml'))
-    );
-  } catch {
-    return false;
-  }
-}
-
-function exists(p: string): boolean {
-  try {
-    readFileSync(p, 'utf8');
-    return true;
-  } catch {
-    return false;
-  }
 }
