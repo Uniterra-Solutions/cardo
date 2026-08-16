@@ -1,6 +1,6 @@
 {
   "name": "@uniterra-solutions/cardo",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Cardo desktop app installer: one-command setup and update for the Cardo macOS app.",
   "license": "MIT",
   "repository": {
@@ -29,6 +29,7 @@
     "prepack": "pnpm run build"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "fast-check": "^4.9.0"
   }
 }

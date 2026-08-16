@@ -1,27 +1,44 @@
 #!/usr/bin/env node
+/**
+ * Cardo desktop installer CLI.
+ *
+ * `cardo setup` builds the desktop app ON THE USER'S MACHINE from the
+ * release's source archive:
+ *   1. Fetch the latest release, download its auto-generated source tarball.
+ *   2. Extract it, `pnpm install --frozen-lockfile`, `pnpm run build`.
+ *   3. Package the Electron .app with the whole source tree under
+ *      `Contents/Resources/src` — the app resolves the bundled dsh CLI,
+ *      vendored plugins, and skills from there at runtime, and ensures the
+ *      built-ins into the user's normal dsh profile (~/.dsh).
+ *   4. Install the .app to ~/Applications and launch.
+ *
+ * No pre-built binary is downloaded: the source is the artifact, exactly as
+ * the repo ships it, which is what makes Windows packaging natural later.
+ */
+
 import { execFile, type ExecFileException } from 'node:child_process';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { fileURLToPath } from 'node:url';
 import { stopRunningAppInstances, type ProcessOps } from './stop-app.js';
+import {
+  REPO,
+  findBuiltApp,
+  findSourceRoot,
+  parseArgs,
+  readVersion,
+  sourceArchiveUrl,
+} from './install-logic.js';
 
-const REPO = process.env.CARDO_GITHUB_REPO ?? 'Uniterra-Solutions/cardo';
 const PACKAGE_NAME = '@uniterra-solutions/cardo';
 const APP_INSTALL_DIR_NAME = 'Applications';
-const MAX_BUFFER_BYTES = 20 * 1024 * 1024;
-
-interface ReleaseAsset {
-  readonly name: string;
-  readonly browser_download_url: string;
-}
+const MAX_BUFFER_BYTES = 50 * 1024 * 1024;
 
 interface LatestRelease {
   readonly tag_name: string;
-  readonly assets: readonly ReleaseAsset[];
 }
 
 interface RunResult {
@@ -29,12 +46,16 @@ interface RunResult {
   readonly stderr: string;
 }
 
-function run(file: string, args: readonly string[]): Promise<RunResult> {
+function run(
+  file: string,
+  args: readonly string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
+): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     execFile(
       file,
       [...args],
-      { encoding: 'utf8', maxBuffer: MAX_BUFFER_BYTES },
+      { encoding: 'utf8', maxBuffer: MAX_BUFFER_BYTES, cwd: options.cwd, env: options.env },
       (error: ExecFileException | null, stdout: string, stderr: string) => {
         if (error !== null) {
           reject(new Error(error.message));
@@ -46,30 +67,8 @@ function run(file: string, args: readonly string[]): Promise<RunResult> {
   });
 }
 
-/**
- * The release-asset suffix for one platform/arch pair. The desktop build
- * (electron-builder) names macOS artifacts `<name>-<version>-<arch>-mac.zip`
- * and Windows artifacts `<name>-<version>-<arch>-win.zip` (planned). Keeping
- * this platform-driven instead of a hard-coded macOS suffix is what lets the
- * CLI install Windows builds later.
- */
-export function assetSuffixFor(platform: NodeJS.Platform, arch: string): string {
-  if (platform === 'darwin') {
-    return `-${arch}-mac.zip`;
-  }
-  if (platform === 'win32') {
-    return `-${arch}-win.zip`;
-  }
-  throw new Error(`cardo does not yet support ${platform} (only darwin/win32)`);
-}
-
-function currentArch(): string {
-  if (process.arch === 'arm64' || process.arch === 'x64') {
-    return process.arch;
-  }
-  throw new Error(`Unsupported CPU architecture: ${process.arch} (only arm64/x64 is supported)`);
-}
-
+/** Fetch the latest release tag, falling back to the newest release when
+ * `/releases/latest` 404s (prerelease-only repositories). */
 async function fetchLatestRelease(): Promise<LatestRelease> {
   const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'cardo-cli' };
   const latestResponse = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
@@ -103,27 +102,6 @@ async function fetchLatestRelease(): Promise<LatestRelease> {
   );
 }
 
-/**
- * Select the release asset for the current platform/arch. Uses the
- * platform-driven suffix (macOS `-<arch>-mac.zip`, Windows `-<arch>-win.zip`)
- * so a Windows release can install the Windows build when it exists.
- */
-export function findZipAsset(
-  release: LatestRelease,
-  arch: string,
-  platform: NodeJS.Platform = process.platform,
-): ReleaseAsset {
-  const suffix = assetSuffixFor(platform, arch);
-  const asset = release.assets.find((candidate) => candidate.name.endsWith(suffix));
-  if (asset === undefined) {
-    throw new Error(
-      `No ${suffix} asset in release ${release.tag_name}; available assets: ` +
-        release.assets.map((candidate) => candidate.name).join(', '),
-    );
-  }
-  return asset;
-}
-
 async function downloadFile(url: string, dest: string): Promise<void> {
   const response = await fetch(url, { redirect: 'follow' });
   if (!response.ok) {
@@ -135,34 +113,12 @@ async function downloadFile(url: string, dest: string): Promise<void> {
   await pipeline(Readable.fromWeb(response.body), createWriteStream(dest));
 }
 
-async function extractZip(
-  zipPath: string,
-  destDir: string,
-  platform: NodeJS.Platform = process.platform,
-): Promise<void> {
-  if (platform === 'darwin') {
-    // ditto is the macOS-native zip extractor; it also preserves the .app
-    // bundle's symlinks and permissions.
-    await run('/usr/bin/ditto', ['-x', '-k', zipPath, destDir]);
-    return;
-  }
-  if (platform === 'win32') {
-    throw new Error(
-      'Windows installation is not implemented yet — the Windows release asset exists, but extraction is not wired up.',
-    );
-  }
-  throw new Error(`cardo does not yet support ${platform} (only darwin/win32)`);
+async function extractTarGz(tarPath: string, destDir: string): Promise<void> {
+  await mkdir(destDir, { recursive: true });
+  await run('/usr/bin/tar', ['-xzf', tarPath, '-C', destDir]);
 }
 
-async function findAppBundle(dir: string): Promise<string> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const appEntry = entries.find((entry) => entry.isDirectory() && entry.name.endsWith('.app'));
-  if (appEntry === undefined) {
-    throw new Error(`No .app bundle found inside the release archive (${dir})`);
-  }
-  return join(dir, appEntry.name);
-}
-
+/** The single extracted source root (GitHub names it `<repo>-<tag>`). */
 async function installApp(appPath: string): Promise<string> {
   const targetDir = join(homedir(), APP_INSTALL_DIR_NAME);
   await mkdir(targetDir, { recursive: true });
@@ -184,30 +140,56 @@ interface InstallOptions {
   readonly dryRun: boolean;
 }
 
+/**
+ * The full install: fetch source, build, package the .app with the source
+ * tree in Resources/src, install, and (optionally) launch.
+ */
 async function installDesktopApp(options: InstallOptions): Promise<void> {
   const release = await fetchLatestRelease();
-  const asset = findZipAsset(release, currentArch());
+  const url = sourceArchiveUrl(release.tag_name);
 
-  process.stdout.write(`Downloading ${asset.name} (${release.tag_name})...\n`);
+  process.stdout.write(`Downloading source ${release.tag_name}...\n`);
 
   const tmpRoot = await mkdtemp(join(tmpdir(), 'cardo-'));
   try {
-    const zipPath = join(tmpRoot, asset.name);
-    await downloadFile(asset.browser_download_url, zipPath);
+    const tarPath = join(tmpRoot, 'source.tar.gz');
+    await downloadFile(url, tarPath);
 
-    const extractDir = join(tmpRoot, 'extract');
-    await mkdir(extractDir, { recursive: true });
-    await extractZip(zipPath, extractDir);
-
-    const appPath = await findAppBundle(extractDir);
-    const target = join(homedir(), APP_INSTALL_DIR_NAME, basename(appPath));
+    const extractDir = join(tmpRoot, 'src');
+    await extractTarGz(tarPath, extractDir);
+    const src = await findSourceRoot(extractDir);
 
     if (options.dryRun) {
-      process.stdout.write(`[dry-run] Would install ${basename(appPath)} to ${target}\n`);
+      process.stdout.write(`[dry-run] Would build from ${src} and install to ~/Applications\n`);
       return;
     }
 
-    const installed = await installApp(appPath);
+    process.stdout.write('Installing dependencies...\n');
+    // CI=true: without a TTY (the app launches `cardo update` detached) pnpm
+    // aborts the install with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY.
+    await run('pnpm', ['install', '--frozen-lockfile'], {
+      cwd: src,
+      env: { ...process.env, CI: 'true' },
+    });
+    process.stdout.write('Building packages...\n');
+    await run('pnpm', ['run', 'build'], { cwd: src });
+
+    process.stdout.write('Packaging the desktop app...\n');
+    await packageApp(src, release.tag_name);
+
+    // Move the packaged .app OUT of the source tree (electron-builder writes
+    // it under <src>/packages/cardo-desktop/dist), then embed the source as
+    // Resources/src — copying src into its own subdirectory is not allowed,
+    // so the .app must leave the tree first.
+    const appPath = await findBuiltApp(src);
+    const outDir = join(tmpRoot, 'out');
+    await mkdir(outDir, { recursive: true });
+    const stagedApp = join(outDir, basename(appPath));
+    await run('/bin/mv', [appPath, stagedApp]);
+    const resourcesSrc = join(stagedApp, 'Contents', 'Resources', 'src');
+    await run('/bin/cp', ['-R', src, resourcesSrc]);
+
+    const installed = await installApp(stagedApp);
     process.stdout.write(`Installed ${installed}\n`);
     if (options.open) {
       await openApp(installed);
@@ -215,6 +197,24 @@ async function installDesktopApp(options: InstallOptions): Promise<void> {
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
+}
+
+/** Package the Electron app; the source is embedded afterwards by the caller. */
+async function packageApp(src: string, tag: string): Promise<void> {
+  const desktopDir = join(src, 'packages', 'cardo-desktop');
+  const version = tag.replace(/^v/, '');
+  await run(
+    'pnpm',
+    [
+      'exec',
+      'electron-builder',
+      '--mac',
+      '--publish',
+      'never',
+      `-c.extraMetadata.version=${version}`,
+    ],
+    { cwd: desktopDir },
+  );
 }
 
 function realProcessOps(): ProcessOps {
@@ -265,24 +265,14 @@ async function updateCli(): Promise<void> {
   }
 }
 
-async function readVersion(): Promise<string> {
-  const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
-  const content = await readFile(pkgPath, 'utf8');
-  const match = /^\s*"version"\s*:\s*"([^"]+)"/m.exec(content);
-  if (match === null || match[1] === undefined) {
-    throw new Error(`Unable to read version from ${pkgPath}`);
-  }
-  return match[1];
-}
-
 function printHelp(): void {
   process.stdout.write(
     [
       'cardo — Cardo desktop app installer',
       '',
       'Usage:',
-      '  cardo setup [--no-open] [--dry-run]   Download and install the latest Cardo desktop app',
-      '  cardo update [--no-open] [--dry-run]  Update the CLI and reinstall the latest app',
+      '  cardo setup [--no-open] [--dry-run]   Build and install the latest Cardo desktop app from source',
+      '  cardo update [--no-open] [--dry-run]  Update the CLI and rebuild/install the latest app',
       '  cardo --version                        Print the CLI version',
       '  cardo --help                           Print this help',
       '',
@@ -290,38 +280,6 @@ function printHelp(): void {
       '',
     ].join('\n'),
   );
-}
-
-interface ParsedArgs {
-  readonly command: 'setup' | 'update' | 'version' | 'help';
-  readonly open: boolean;
-  readonly dryRun: boolean;
-}
-
-function parseArgs(args: readonly string[]): ParsedArgs {
-  let open = true;
-  let dryRun = false;
-  const positional: string[] = [];
-  for (const arg of args) {
-    if (arg === '--no-open') {
-      open = false;
-    } else if (arg === '--dry-run') {
-      dryRun = true;
-    } else {
-      positional.push(arg);
-    }
-  }
-  if (positional.some((arg) => arg === '--version' || arg === '-v')) {
-    return { command: 'version', open, dryRun };
-  }
-  const command = positional[0];
-  if (command === undefined || command === '--help' || command === '-h') {
-    return { command: 'help', open, dryRun };
-  }
-  if (command === 'setup' || command === 'update') {
-    return { command, open, dryRun };
-  }
-  throw new Error(`Unknown command: ${command} (run "cardo --help" for usage)`);
 }
 
 async function main(): Promise<void> {
