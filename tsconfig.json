@@ -5,6 +5,7 @@
     { "path": "./packages/cardo-skills" },
     { "path": "./packages/cardo-cli" },
     { "path": "./packages/cardo-desktop" },
-    { "path": "./packages/cardo-updater" }
+    { "path": "./packages/cardo-updater" },
+    { "path": "./packages/cardo-provider" }
   ]
 }
