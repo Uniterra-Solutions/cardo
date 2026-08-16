@@ -253,17 +253,19 @@ async function runCardoStartupUpdateCheck(): Promise<void> {
     type: 'info',
     title: 'Cardo',
     message: `Cardo ${result.latestVersion} is available.`,
-    detail: `You have ${result.currentVersion}.`,
+    detail: `You have ${result.currentVersion}. Update Now rebuilds and reinstalls the app from the latest source ('cardo setup') — it may take a few minutes. The CLI itself is updated separately with 'cardo update'.`,
     buttons: ['Update Now', 'Later', 'Skip This Version'],
     defaultId: 0,
     cancelId: 1,
   });
   if (response === 0) {
+    // The desktop app is rebuilt from source; the CLI-only update lives in
+    // `cardo update`. CARDO_UPDATE_COMMAND overrides the binary, args fixed.
     const command = envOrDefault('CARDO_UPDATE_COMMAND', 'cardo');
     const { spawn } = await import('node:child_process');
-    const child = spawn(command, ['update'], { detached: true, stdio: 'ignore' });
+    const child = spawn(command, ['setup'], { detached: true, stdio: 'ignore' });
     child.once('error', (error: Error) => {
-      console.error('[cardo] failed to launch the updater:', error);
+      console.error('[cardo] failed to launch the installer:', error);
       void shell.openExternal(envOrDefault('CARDO_UPDATE_RELEASES_PAGE', DEFAULT_RELEASES_PAGE));
     });
     child.unref();
