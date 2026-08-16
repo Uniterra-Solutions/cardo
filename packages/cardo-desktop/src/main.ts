@@ -1,60 +1,114 @@
 /**
- * Cardo desktop main — Electron shell over a bundled DeepSeek Harness.
+ * Cardo desktop main — Electron shell over DeepSeek Harness.
+ *
+ * Cardo IS the dsh desktop surface: it runs the bundled dsh CLI against the
+ * user's normal dsh configuration (`~/.dsh`, the default DSH_HOME). The user
+ * configures providers/plugins in the app exactly as in dsh — no separate
+ * app-owned home, no seeding, no profile scaffolding.
  *
  * Startup sequence:
- *   1. Single-instance lock (second launch focuses the existing window).
- *   2. Own DSH_HOME = the app's userData dir (never ~/.dsh).
- *   3. Scaffold the `cardo` profile (bundles + pinned plugins) on first run.
- *   4. Spawn the bundled dsh CLI (`node lib/bin.js --profile cardo`), wait
- *      for its readiness URL.
- *   5. Open a BrowserWindow on that URL; window close shuts dsh down.
- *   6. Crash-restart the runtime with a bounded backoff.
+ *   1. Single-instance lock.
+ *   2. Spawn the bundled dsh CLI (`node lib/bin.js --profile web`), wait for
+ *      its readiness URL.
+ *   3. Open a BrowserWindow on that URL; window close shuts dsh down.
+ *   4. Crash-restart the runtime with a bounded backoff.
  */
 
 import { app, BrowserWindow, dialog, shell } from 'electron';
-import { statSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureCardoProfile } from './profile.js';
 import { startDsh, stopDsh, type DshRuntimeHandle } from './dsh-process.js';
+import { ensureBuiltinPlugins } from './builtin.js';
 import { resolveCardoUpdateStatus, shouldPromptForUpdate } from '@cardo/cardo-updater';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..', '..', '..');
 
-function pathExists(p: string): boolean {
-  try {
-    statSync(p);
-    return true;
-  } catch {
-    return false;
+/**
+ * The bundled source tree the app was built from. `cardo setup` embeds the
+ * extracted release source under `Contents/Resources/src`; the app resolves
+ * the dsh CLI, vendored plugins, and skills from there. In dev the app runs
+ * from the monorepo, so the source root is the repo root.
+ */
+function bundledSrcRoot(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'src');
   }
+  return path.resolve(here, '..', '..', '..');
 }
 
-/** Where the self-contained dsh runtime lives (flat node_modules). */
-function dshRuntimeRoot(): string {
-  // Packaged: resources/dsh-runtime. Dev: vendor/dsh-runtime (prepared by
-  // scripts/prepare-runtime.mjs — run `pnpm --filter @cardo/cardo-desktop run prepare`).
-  const packaged = path.join(process.resourcesPath, 'dsh-runtime');
-  if (pathExists(path.join(packaged, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) {
-    return packaged;
-  }
-  return path.resolve(root, 'vendor', 'dsh-runtime');
-}
-
-/** Resolve the bundled dsh CLI entry from the self-contained runtime. */
+/** Resolve the bundled dsh CLI entry from the source tree. In the pnpm
+ * workspace `@deepseek-ai/dsh` is a devDependency of the cardo-desktop
+ * package, so pnpm links it under `packages/cardo-desktop/node_modules`
+ * (never the workspace root). Dev and packaged both resolve it there. */
 function dshCliPath(): string {
-  return path.join(dshRuntimeRoot(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+  return path.join(
+    bundledSrcRoot(),
+    'packages',
+    'cardo-desktop',
+    'node_modules',
+    '@deepseek-ai',
+    'dsh',
+    'lib',
+    'bin.js',
+  );
 }
 
-/** Where the vendored community plugins live at runtime. */
+/** Vendored (non-npm) plugin sources inside the source tree. */
 function vendorPluginsRoot(): string {
-  // Packaged: resources/vendor/dsh-plugins. Dev: the monorepo checkout.
-  const packaged = path.join(process.resourcesPath, 'vendor', 'dsh-plugins');
-  if (pathExists(packaged)) {
-    return packaged;
+  return path.join(bundledSrcRoot(), 'vendor', 'dsh-plugins');
+}
+
+/** Bundled company skills inside the source tree. */
+function skillsDir(): string {
+  return path.join(bundledSrcRoot(), 'packages', 'cardo-skills', 'src', 'skills');
+}
+
+// ── dev test home ─────────────────────────────────────────────────────────
+
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+
+/** The user's real dsh home (~/.dsh). */
+function realDshHome(): string {
+  return path.join(homedir(), '.dsh');
+}
+
+/** The dev test home: a copy of ~/.dsh so dev runs never touch the real one. */
+function devTestHome(): string {
+  return path.join(app.getPath('userData'), 'dsh-test-home');
+}
+
+/** Sync ~/.dsh → dev test home (config only; node_modules excluded so the
+ * copy stays small and fast). Called on dev startup so the test home tracks
+ * the user's provider/plugin configuration edits. */
+function syncDevTestHome(): void {
+  const src = realDshHome();
+  const dst = devTestHome();
+  if (!existsSync(src)) {
+    return; // no real home yet — nothing to mirror
   }
-  return path.resolve(root, 'vendor', 'dsh-plugins');
+  mkdirSync(dst, { recursive: true });
+  copyTree(src, dst, new Set());
+}
+
+function copyTree(src: string, dst: string, skipDirs: ReadonlySet<string>): void {
+  const entries = readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || skipDirs.has(entry.name)) {
+      continue;
+    }
+    const from = path.join(src, entry.name);
+    const to = path.join(dst, entry.name);
+    if (entry.isDirectory()) {
+      rmSync(to, { recursive: true, force: true });
+      mkdirSync(to, { recursive: true });
+      copyTree(from, to, skipDirs);
+    } else {
+      mkdirSync(path.dirname(to), { recursive: true });
+      cpSync(from, to);
+    }
+  }
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -148,9 +202,13 @@ async function fetchInstalledCliVersion(): Promise<string | undefined> {
   }
 }
 
-function readSkippedVersion(dshHome: string): string | undefined {
+function updateStatePath(): string {
+  return path.join(app.getPath('userData'), UPDATE_STATE_FILE);
+}
+
+function readSkippedVersion(): string | undefined {
   try {
-    const file = path.join(dshHome, UPDATE_STATE_FILE);
+    const file = updateStatePath();
     const parsed = JSON.parse(readFileSync(file, 'utf8')) as { skippedVersion?: unknown };
     const skipped = parsed.skippedVersion;
     return typeof skipped === 'string' && skipped.length > 0 ? skipped : undefined;
@@ -159,12 +217,9 @@ function readSkippedVersion(dshHome: string): string | undefined {
   }
 }
 
-function writeSkippedVersion(dshHome: string, version: string): void {
+function writeSkippedVersion(version: string): void {
   try {
-    writeFileSync(
-      path.join(dshHome, UPDATE_STATE_FILE),
-      `${JSON.stringify({ skippedVersion: version }, null, 2)}\n`,
-    );
+    writeFileSync(updateStatePath(), `${JSON.stringify({ skippedVersion: version }, null, 2)}\n`);
   } catch (error) {
     console.warn('[cardo] failed to persist skipped version:', error);
   }
@@ -184,12 +239,12 @@ async function checkForCardoUpdate(): Promise<ReturnType<typeof resolveCardoUpda
   });
 }
 
-async function runCardoStartupUpdateCheck(dshHome: string): Promise<void> {
+async function runCardoStartupUpdateCheck(): Promise<void> {
   const result = await checkForCardoUpdate();
   if (result.status === 'error' || result.status === 'up-to-date') {
     return;
   }
-  const skippedVersion = readSkippedVersion(dshHome);
+  const skippedVersion = readSkippedVersion();
   if (!shouldPromptForUpdate(result.latestVersion, skippedVersion)) {
     return;
   }
@@ -214,15 +269,15 @@ async function runCardoStartupUpdateCheck(dshHome: string): Promise<void> {
     child.unref();
     app.quit();
   } else if (response === 2) {
-    writeSkippedVersion(dshHome, result.latestVersion);
+    writeSkippedVersion(result.latestVersion);
   }
 }
 
-function initUpdateChecker(dshHome: string): () => void {
+function initUpdateChecker(): () => void {
   const delay = Number.parseInt(process.env.CARDO_UPDATE_DELAY_MS ?? '', 10);
   const timeout = setTimeout(
     () => {
-      void runCardoStartupUpdateCheck(dshHome).catch((err: unknown) => {
+      void runCardoStartupUpdateCheck().catch((err: unknown) => {
         console.warn('[cardo] update check failed:', err);
       });
     },
@@ -254,15 +309,32 @@ function createWindow(url: string): BrowserWindow {
 }
 
 async function boot(): Promise<void> {
-  const dshHome = app.getPath('userData');
-  ensureCardoProfile(dshHome, dshCliPath(), process.execPath, vendorPluginsRoot());
-  initUpdateChecker(dshHome);
+  // Cardo IS the dsh desktop surface: it runs against the user's dsh config.
+  // Dev uses a mirrored test home (never touches the real ~/.dsh); the
+  // packaged app uses the default DSH_HOME (~/.dsh) with the `web` profile.
+  const dev = !app.isPackaged;
+  const dshHome = dev ? devTestHome() : undefined;
+  if (dev) {
+    syncDevTestHome();
+  }
 
+  // Ensure the company built-ins are present in the profile this run uses.
+  // Both the vendored plugins and the bundled skills come from the source
+  // tree the app was built from (dev: the monorepo; packaged: Resources/src).
+  const profile = 'web';
+  const effectiveHome = dshHome ?? realDshHome();
+  ensureBuiltinPlugins(effectiveHome, profile, dshCliPath(), process.execPath, vendorPluginsRoot());
+
+  // Bundled skills ride the DSH_BUNDLED_SKILL_DIR provider.
+  const skills = skillsDir();
+
+  initUpdateChecker();
   const handle = await startDsh({
     cli: dshCliPath(),
     nodeExec: process.execPath,
-    dshHome,
-    profile: 'cardo',
+    ...(dshHome === undefined ? {} : { dshHome }),
+    profile,
+    ...(existsSync(skills) ? { dshBundledSkillDir: skills } : {}),
   });
   runtime = handle;
   restarts = 0;

@@ -15,8 +15,11 @@ export interface DshRuntimeOptions {
   readonly cli: string;
   /** Node executable to run the CLI with. */
   readonly nodeExec: string;
-  /** The app-owned DSH_HOME. */
-  readonly dshHome: string;
+  /** DSH_HOME to run under. Omitted in the packaged app so dsh uses the
+   * user's default ~/.dsh; dev passes the mirrored test home. */
+  readonly dshHome?: string;
+  /** DSH_BUNDLED_SKILL_DIR for the rank-600 bundled skills provider. */
+  readonly dshBundledSkillDir?: string;
   /** The profile name to boot (cardo). */
   readonly profile: string;
   /** Optional explicit port; defaults to the CLI's own (3080). */
@@ -42,7 +45,13 @@ export function awaitReadiness(stdout: Readable, timeoutMs = 60_000): Promise<st
 
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString();
-      const match = /http:\/\/127\.0\.0\.1:\d+/.exec(buffer);
+      // The port must be COMPLETE before we resolve — a chunk boundary inside
+      // the port digits (e.g. "...:3" then "080") must not yield a truncated
+      // URL. dsh prints `dsh web: http://127.0.0.1:<port> (LAN: ...)`, so the
+      // port is always followed by a non-digit terminator. `(?=[^0-9])` — note
+      // NOT `(?=.)`, which in JS excludes newlines — requires the terminator
+      // to have actually arrived, so the end-of-buffer case keeps waiting.
+      const match = /http:\/\/127\.0\.0\.1:\d+(?=[^0-9])/.exec(buffer);
       if (match !== null) {
         cleanup();
         resolve(match[0]);
@@ -72,7 +81,10 @@ export async function startDsh(options: DshRuntimeOptions): Promise<DshRuntimeHa
   const child = spawn(options.nodeExec, [options.cli, ...args], {
     env: {
       ...process.env,
-      DSH_HOME: options.dshHome,
+      ...(options.dshHome === undefined ? {} : { DSH_HOME: options.dshHome }),
+      ...(options.dshBundledSkillDir === undefined
+        ? {}
+        : { DSH_BUNDLED_SKILL_DIR: options.dshBundledSkillDir }),
       ELECTRON_RUN_AS_NODE: '1',
       NO_COLOR: '1',
     },
