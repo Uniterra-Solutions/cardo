@@ -10,7 +10,7 @@ copy for every checkout, with no build-time GitHub dependency.
 
 | Directory | Upstream | Pinned commit | Notes |
 |---|---|---|---|
-| `deep-whale-day-night-theme` | `GGBond2424648901/deep-whale-day-night-theme` | `4833f4f4dd582ead0a23fec59256e652830ca0ac` | Whale-maid skin. Trimmed to runtime files (`lib/` + `package.json` + `cordis.patch.yml` + `skin.json` + license); `assets/`/`src/`/`screenshots` are source artwork, not runtime. CC BY-NC-SA 4.0 — non-commercial only. |
+| `dsh-deep-whale` | `Small-tailqwq/dsh-deep-whale` | `873f5c6d7f52aa4e4283a5ffd5598229595184da` | Whale-maid skin, **standalone distribution** (`maid-atelier/` package). Chosen over the GGBond `deep-whale-day-night-theme` builtin-row distribution, which depends on `dsh-client-ui-theme-plugins` / `dsh-host-theme-catalog` (absent in the pinned rc.6 family) and so silently never loaded. This copy self-inserts its `ui-skin-maid-atelier` row, ships a no-op host (`apply` is empty, art embedded as data URIs) and needs only `@deepseek-ai/cordis`. Trimmed to runtime files (`lib/` + `package.json` + `cordis.patch.yml` + `skin.json` + `preview/` + license/NOTICE/README); `src/`/`assets/`/`build/`/`tests/` are source/build, not runtime. Package name: `@dsh-external/dsh-client-ui-skin-maid-atelier`. CC BY-NC-SA 4.0 — non-commercial only. |
 | `dsh-subagent-monitor` | `Mombrane/dsh-subagent-monitor` | `5f7f026f877b127c53d4205aeec2cca94e316bcc` | npm package name: `@leetoners/dsh-ui-subagent-monitor` |
 | `dsh-thinking-effort` | `hytime/dsh-thinking-effort` | `b2f5c54f1a0743114ece8c6de6334a7ae652b436` | Custom-provider reasoning-effort GUI |
 
@@ -26,7 +26,7 @@ To bump one plugin:
 ## Install (in a cardo profile)
 
 ```sh
-dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/deep-whale-day-night-theme
+dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-deep-whale
 dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-subagent-monitor
 dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-thinking-effort
 ```

@@ -28,7 +28,7 @@
 - `packages/*` — pnpm workspace packages
 - `packages/cardo-systemprompt/` — pi-agent extension: app-wide working rules (no emoji, concise replies, no over-engineering, minimal code, verify external APIs, tests per business logic, reply in the user's language) appended to every agent turn's system prompt via a `before_agent_start` handler. Entry `src/index.ts` must stay a **default-exported factory function** (pi's loader contract — see below)
 - `packages/cardo-skills/` — built-in skill registry: bundles the company-standard skills (cardo-planmode pipeline, cardo-pbt-debugging, qa, project-documentation, create-skill, manage-agents-md, manage-git-repo) in `src/skills/*` and copies them to `dist/skills/` via `scripts/copy-skills.mjs` during build. `provisionBuiltinSkills()` provisions them into an agent skills directory at startup; idempotent — existing skills are never clobbered. In the dsh runtime these ship as the rank-600 bundled provider via `DSH_BUNDLED_SKILL_DIR`
-- `packages/cardo-desktop/` — Electron shell over the bundled dsh CLI. Resolves `@deepseek-ai/dsh` from `packages/cardo-desktop/node_modules` (pnpm links the desktop devDependency there — never the workspace root; see `dshCliPath()` in `src/main.ts`). Built-ins are ensured at startup into the profile the run uses (`src/builtin.ts`: 6 npm plugins via `dsh plugin add`, 3 vendored plugins copied under their package names, bundled skills via `DSH_BUNDLED_SKILL_DIR`). Packaged: resolves everything from the source tree embedded as `Contents/Resources/src`; dev: from the monorepo
+- `packages/cardo-desktop/` — Electron shell over the bundled dsh CLI. Resolves `@deepseek-ai/dsh` from `packages/cardo-desktop/node_modules` (pnpm links the desktop devDependency there — never the workspace root; see `dshCliPath()` in `src/main.ts`). Built-ins are ensured at startup into the profile the run uses (`src/builtin.ts`: 6 npm plugins via `dsh plugin add`, 3 vendored plugins copied under their package names, bundled skills via `DSH_BUNDLED_SKILL_DIR`). The vendored copy is re-provisioned when the installed copy's `version` no longer matches the vendored source (`vendoredPluginsStale()`), so swapping a built-in distribution heals existing profiles whose bundle row is already present. Packaged: resolves everything from the source tree embedded as `Contents/Resources/src`; dev: from the monorepo
 - `packages/cardo-cli/` — public npm installer (`@uniterra-solutions/cardo`, bin `cardo`): one-command macOS app setup/update. `cardo setup` downloads the release's auto-generated source tarball, `pnpm install --frozen-lockfile` (with `CI=true` — pnpm 11 aborts without a TTY), `pnpm run build`, electron-builder `--mac`, embeds the whole source tree under `Contents/Resources/src`, installs to `~/Applications`. `cardo update` updates the CLI ONLY (never rebuilds/reinstalls the app — that is `cardo setup`'s job). No Apple signing needed (no quarantine). Root `prepare: "husky || true"` — GitHub source tarballs have no `.git`, so husky must tolerate absence. Published via `.github/workflows/release.yml` with npm trusted publishing (OIDC) on `v*` tag pushes — CI publishes the CLI only; the source archive IS the desktop artifact
 - `vendor/dsh-plugins/` — pinned community dsh plugins not published to npm (vendored at fixed commits; see `VENDOR.md` pin ledger)
 - `scripts/verify-cli-container/` — Docker harness that replays the `cardo setup` flow in a clean container (`run.sh`; the CLI-flow regression net)
@@ -43,7 +43,7 @@
 - Never commit TypeScript files failing ESLint with warnings — pre-commit hook runs `lint-staged` with `--max-warnings 0` at `.husky/pre-commit`
 - Never bump Node below 22 — pinned in `.nvmrc` and `package.json`
 - Never add default exports — only named exports. **Single platform exception:** the pi extension entry file (`packages/cardo-systemprompt/src/index.ts`) is a default-exported factory because pi's extension loader requires it (see Project Structure)
-- Never edit `vendor/` code outside the minimal, commented cardo patches (subtree merges will otherwise conflict); never run the vendored root's composite scripts (`pnpm --dir vendor/pi-gui …`) — cardo's root is the workspace root
+- Never edit `vendor/dsh-plugins/` — these are pinned upstream copies; bump them via the `VENDOR.md` update policy instead of hand-editing
 - Never point `@cardo/*` package exports at `./src` when the desktop app consumes them — Node cannot load TS source as an externalized dependency; exports point at built `dist`
 - dsh migration: lock all `@deepseek-ai/*` dependencies at exact versions (no caret) — dsh is a developer preview with breaking changes; `npm view X version` returns the stale `latest` tag (the current family is the `next` tag)
 
@@ -61,7 +61,6 @@
 
 - Adding new dependencies to `package.json`
 - Changing eslint / prettier / tsconfig rules — they encode the company standard
-- Updating the vendored pi-gui subtree (only relevant until the dsh migration removes it)
 
 **Never:**
 
