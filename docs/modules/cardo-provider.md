@@ -87,7 +87,7 @@ Locked by `test/reasoning-preservation.test.mjs` (per-shape regressions + seeded
 
 - Every non-empty reasoning/text/tool-call fragment the wire emits reaches the harness — **no loss, no duplication** — across every wire shape real gateways use.
 - Shapes covered — Chat: `delta.reasoning_content` (DeepSeek/Qwen/GLM), `delta.reasoning` (OpenRouter), terminal `message.reasoning_content/reasoning/content/tool_calls` replay (DashScope/buffered), with no duplication of already-streamed deltas. Responses: `reasoning_summary_text.delta`, complete `reasoning` items, `content_part` reasoning parts, `response.completed/incomplete` output arrays, `reasoning_summary_part.done`, buffered `function_call`, with no duplication.
-- Agent-loop round-trip: assistant reasoning serializes as a Responses `reasoning` item (`content` + `summary` — OpenAI requires `summary`, DeepSeek merges `content`); Chat replays `reasoning_content` on tool-call turns only.
+- Agent-loop round-trip: every assistant turn's reasoning serializes as a Responses `reasoning` item (`content` + `summary` — OpenAI requires `summary`, DeepSeek merges `content`), emitted BEFORE `function_call` items on tool-call turns because DeepSeek's Responses API in thinking mode rejects a multi-turn tool-call continuation without the prior turn's `reasoning_text`; Chat replays `reasoning_content` on tool-call turns only (the only turns DeepSeek's Chat API requires it on).
 
 Other locked behaviors: empty tool output → `'(no output)'`; text-less turns send `""` never `null`; `stream_options.include_usage: true` / `store: false`; cache-hit tokens subtracted for disjoint `inputTokens`; image content rejected (`UNSUPPORTED_CONTENT`).
 
