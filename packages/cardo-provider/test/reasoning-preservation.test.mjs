@@ -551,6 +551,85 @@ test('agent-loop: Chat serialization replays reasoning_content on tool-call turn
   ]);
 });
 
+test('agent-loop: Responses serialization replays reasoning on tool-call turns', () => {
+  // DeepSeek's Responses API in thinking mode rejects a multi-turn tool-call
+  // continuation with "The `reasoning_text` … must be passed back to the API"
+  // unless the prior turn's chain-of-thought is replayed as a `reasoning`
+  // input item BEFORE the function_call items. The adapter must not drop it.
+  const wire = serializeResponsesRequest({
+    model: 'm1',
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'solve' }] },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'reasoning', text: 'think' },
+          { type: 'tool-call', id: 'c1', name: 'f', arguments: '{}' },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: 'ok' }] },
+        ],
+      },
+    ],
+  });
+  assert.deepEqual(wire.input, [
+    { role: 'user', content: [{ type: 'input_text', text: 'solve' }] },
+    {
+      type: 'reasoning',
+      id: 'reasoning_1',
+      content: [{ type: 'reasoning_text', text: 'think' }],
+      summary: [{ type: 'summary_text', text: 'think' }],
+    },
+    { type: 'function_call', call_id: 'c1', name: 'f', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'c1', output: 'ok' },
+  ]);
+});
+
+test('property: Responses serialization never drops assistant reasoning', () => {
+  const rand = mulberry32(0x5eed);
+  const pick = (items) => items[Math.floor(rand() * items.length)];
+
+  for (let run = 0; run < 300; run += 1) {
+    const messages = [];
+    const expectedReasoning = [];
+    const turnCount = 1 + Math.floor(rand() * 6);
+    for (let turn = 0; turn < turnCount; turn += 1) {
+      const content = [];
+      if (rand() < 0.7) {
+        const text = pick(['r1', 'r2', 'r3', 'r4']);
+        content.push({ type: 'reasoning', text });
+        expectedReasoning.push(text);
+      }
+      if (rand() < 0.4) content.push({ type: 'text', text: pick(['a1', 'a2']) });
+      const toolCall = rand() < 0.6;
+      if (toolCall) content.push({ type: 'tool-call', id: `c${turn}`, name: 'f', arguments: '{}' });
+      messages.push({ role: 'assistant', content });
+      if (toolCall) {
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'tool-result', toolCallId: `c${turn}`, content: [{ type: 'text', text: 'ok' }] },
+          ],
+        });
+      }
+    }
+
+    const wire = serializeResponsesRequest({ model: 'm1', messages });
+    const wireReasoning = wire.input
+      .filter((item) => item.type === 'reasoning')
+      .flatMap((item) => item.content.map((part) => part.text));
+
+    assert.deepEqual(
+      wireReasoning,
+      expectedReasoning,
+      `run ${run}: assistant reasoning lost or duplicated across a tool-call turn`,
+    );
+  }
+});
+
 // ── Seeded randomized properties ───────────────────────────────────────────
 
 test('property: chat translation never drops or duplicates wire content', async () => {
