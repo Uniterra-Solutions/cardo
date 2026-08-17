@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-17
+
 ### Changed
 
 - Split the `cardo-planmode` skill into four pipeline skills: `cardo-plan` (clarify → PRD/design subagents → execution-plan.json with an explicit per-task `requirements` list → approval), `cardo-implement` (PBT-first: simple tasks inline — invariants → failing property tests → code; complex tasks write ALL failing property tests then run a batched/full-parallel dynamic workflow chosen by task overlap), and `cardo-simplify` / `cardo-review` (scope-bound fix ↔ review loops — each usable standalone with just an explicit review scope). `provisionBuiltinSkills()` now removes the retired `cardo-planmode` from already-provisioned skill dirs.
