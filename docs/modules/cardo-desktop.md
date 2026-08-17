@@ -70,7 +70,7 @@ Source: `packages/cardo-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.ts`
 - `profile.ts` is legacy: `PROFILE_PLUGINS` lists 7 specs incl. `dsh-lan-gateway` (live list: 10, no lan-gateway); `profileManifest()` still has the scoped-name split bug `p.split('@')[0]` that `builtinPackageName` fixes. Do not use as a source of truth.
 - `scripts/prepare-runtime.mjs` is orphaned (the 0.5.0 `vendor/dsh-runtime` model); its plugin list is inconsistent with `builtin.ts`. `vendor/dsh-runtime/` itself is a legacy snapshot not on the current boot path.
 - No Apple code signing (`hardenedRuntime: false`, `identity: null`) — no quarantine needed (macOS); Windows ships unsigned unpacked binaries.
-- On Windows the CLI probe and Update Now spawn `cardo` (npm's `cardo.cmd`); Node ≥ 20.12.2 resolves `.cmd` shims via PATHEXT without a shell — no `shell: true` needed.
+- On Windows the CLI probe and Update Now spawn `cardo` (npm's `cardo.cmd`) with `shell: process.platform === 'win32'` — execFile cannot launch `.cmd` shims directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT (args are fixed, no quoting risk).
 
 ## Decisions
 

@@ -56,7 +56,7 @@ Platform notes:
 
 - macOS tools are absolute `/usr/bin` paths; Windows tools (`tar`, `robocopy`, `powershell`) resolve from PATH.
 - `robocopy` exit codes 0–7 are success (bitmask); `run()` is bypassed for it — a non-zero code is not a failure.
-- Node ≥ 20.12.2 resolves `.cmd` shims (`pnpm`, `npm`) via PATHEXT without a shell — no `shell: true` anywhere.
+- `run()` on Windows uses `shell: true` (args quoted for cmd.exe via `cmdQuote`): npm/pnpm/cardo ship as `.cmd` shims that execFile cannot launch directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT. `.exe` tools (`tar`, `robocopy`, `powershell`) would resolve either way.
 - `.app` discovery accepts any `mac-*` dir (host arch chosen by electron-builder `[INFERRED]`); Windows expects `win-unpacked/` with an `.exe` (any name).
 
 ## Decisions
@@ -81,7 +81,7 @@ Platform notes:
 
 ## Patterns & Gotchas
 
-- macOS subprocesses use absolute `/usr/bin` paths — never rely on PATH there; Windows relies on PATH + PATHEXT.
+- macOS subprocesses use absolute `/usr/bin` paths — never rely on PATH there; Windows resolves tools from PATH (`.exe` directly, `.cmd` shims through `shell: true` + PATHEXT).
 - PBT (`test/pbt.test.mts`) locks arg parsing (`--source` consumption included), `.app` + `win-unpacked` discovery, install destinations, builder args, and shortcut script quoting.
 - `prepack` runs `pnpm run build` so npm ships a freshly compiled `dist/`.
 
