@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-08-18
+
+### Added
+
+- `cardo setup` now downloads the release's prebuilt source asset (`cardo-src-<tag>.tar.gz`) when the release carries one — the release workflow builds the workspace on Linux (tsc/esbuild output is platform-independent, so one asset serves macOS and Windows) and uploads it. When the source carries the `.cardo-prebuilt` marker, the CLI skips `pnpm run build`, cutting install time; releases without the asset fall back to the auto-generated archive and build as before.
+- pnpm self-provisioning: when `pnpm` is not on `PATH`, the CLI fetches the exact version pinned by the source tree's `packageManager` field via `npx pnpm@<pin>`, so installs no longer fail on machines without a global pnpm.
+
+### Changed
+
+- A downloaded Windows source is embedded into the packaged app via a same-volume rename (instant, with a `robocopy` fallback on `EXDEV`/`EPERM`) instead of a full `robocopy` copy; `--source` checkouts are still copied and never moved away from the user's tree.
+
+### Fixed
+
+- Subprocess failures now surface their stderr and exit code (e.g. electron-builder's binary-download error) instead of only "Command failed: …", which hid the real reason a `cardo setup` failed.
+
 ## [0.8.0] — 2026-08-17
 
 ### Changed

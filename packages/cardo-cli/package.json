@@ -1,6 +1,6 @@
 {
   "name": "@uniterra-solutions/cardo",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Cardo desktop app installer: one-command setup and update for the Cardo desktop app (macOS and Windows).",
   "license": "MIT",
   "repository": {
