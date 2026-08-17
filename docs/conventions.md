@@ -1,66 +1,70 @@
 # Conventions
 
-Enforced by tooling (`eslint`, `prettier`, `tsc`); documented here because they are the project standard and must not be silently changed.
+Company-standard rules from `AGENTS.md`, `eslint.config.mjs`, `tsconfig.base.json`. Every rule is falsifiable against the code.
 
-## Code Conventions
+## Language / Module System
 
-| Convention                                       | Rule                                                                                                                 | Enforced by                   |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Internal imports carry `.js` extension           | Required by NodeNext ESM resolution — never remove                                                                   | tsc (error if missing)        |
-| No `any`                                         | `no-explicit-any: error`                                                                                             | ESLint                        |
-| Named exports only                               | **Single exception:** `packages/jovaltus/src/index.ts` default-exported factory (pi loader contract)                 | AGENTS.md (not lint-enforced) |
-| No unused vars/params                            | `noUnusedLocals`, `noUnusedParameters`, `no-unused-vars`                                                             | tsc + ESLint                  |
-| Strict null/index checks                         | `strict`, `noUncheckedIndexedAccess`                                                                                 | tsc                           |
-| Explicit function return types                   | `explicit-function-return-type: error`                                                                               | ESLint                        |
-| No floating promises / misused promises          | `no-floating-promises`, `no-misused-promises`                                                                        | ESLint                        |
-| Prefer `readonly`                                | `prefer-readonly: error`                                                                                             | ESLint                        |
-| Exhaustive switches                              | `switch-exhaustiveness-check: error`                                                                                 | ESLint                        |
-| Single quotes, trailing commas, 100 width, LF    | Prettier                                                                                                             | prettier + husky              |
-| `void x;` to discard intentionally unused values | Required to satisfy no-unused-vars with `^_` ignore patterns                                                         | ESLint                        |
-| App-consumed packages export built `dist`        | `@cardo/runtime` / `@cardo/jovaltus` exports point at `./dist/*` — Node cannot load TS source as an externalized dep | AGENTS.md (not lint-enforced) |
+| Rule                                                                                       | Enforcement                                                                                                                                             |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node ≥ 22 (`.nvmrc` / `engines`)                                                           | Manual                                                                                                                                                  |
+| NodeNext ESM: internal imports carry `.js` extensions                                      | Node runtime failure                                                                                                                                    |
+| Named exports only; no default exports                                                     | Manual (AGENTS.md rule); single platform exception: `packages/cardo-systemprompt/src/index.ts` default-exports a factory (pi extension loader contract) |
+| No `any`                                                                                   | ESLint `no-explicit-any: error`                                                                                                                         |
+| Explicit function return types                                                             | ESLint `explicit-function-return-type: error`                                                                                                           |
+| Readonly-by-default (`prefer-readonly`), exhaustive switches, no floating/misused promises | ESLint strictTypeChecked + extra rules                                                                                                                  |
 
-## Style Conventions
+## TypeScript Config (shared)
 
-| Convention                                   | Rule                                                                                                                                                                                                                                                                                                                                                                               |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Comments explain "why", not "what"           | Match existing module docstrings: intent, contract, port provenance                                                                                                                                                                                                                                                                                                                |
-| Ported code keeps provenance note            | Modules state "Ported from the Hermes plugin's `src/jovaltus/<file>`"                                                                                                                                                                                                                                                                                                              |
-| No default exports except the pi entry       | All other modules export named symbols only                                                                                                                                                                                                                                                                                                                                        |
-| Cardo patches in `vendor/` are marked        | `// Cardo:` comment on each minimal change; keep them small for subtree merges                                                                                                                                                                                                                                                                                                     |
-| Desktop relayout DOM moves are in scope      | The 2026-08-16 relayout may move DOM (e.g. sidebar nav to the footer) and bucket threads (Today/Earlier) for demo parity — e2e must locate by role/text, not fixed position                                                                                                                                                                                                        |
-| Composer two-state is a shared contract      | `ComposerSurface` owns the `composer__surface--wrapped` toggle (scrollHeight > 36px or `\n` in draft); wrapped rules are scoped in `new-thread.css` and only the first trailing control gets `margin-left: auto` — keep the plan-mode button from splitting the free space                                                                                                         |
-| Streaming window delivery is coalesced       | The driver emits one event per text delta; window pushes go through `electron/stream-publish.ts` (`createCoalescedPublisher`, ≤ 1 per `STREAM_PUBLISH_INTERVAL_MS`) — leading edge for isolated updates, trailing edge always carrying the latest state. Timeline rows memoize by content fingerprint (`conversation-timeline.tsx`), so each snapshot re-renders only changed rows |
-| Plan-mode UI is a structured widget protocol | `execute_plan` streams `STATUS/MODE/STEP/BATCH/AGENT` lines via `ctx.ui.setWidget("jovaltus-execute", …)`; values never contain `                                                                                                                                                                                                                                                  | `. The desktop renders the panel + graph natively from those lines (`jovaltus-ui.tsx`) — never parses mermaid or free text. Mermaid (when shown) is always generated from the execution JSON (`planToMermaid`), never parsed from it |
+`tsconfig.base.json`: `strict`, `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `noFallthroughCasesInSwitch`, `module/moduleResolution: NodeNext`, `target/lib: ES2022`, `isolatedModules`, `rootDir: ${configDir}/src`, `outDir: ${configDir}/dist`. Every package extends it.
 
-## Vendored code conventions (`vendor/pi-gui`)
+## Dependencies
 
-- `vendor/` is upstream-managed via `git subtree` — cardo only makes minimal, `// Cardo:`-marked patches (integration seams, pi version alignment). Never run the vendored root's own `pnpm` scripts (`pnpm --dir vendor/pi-gui …`) — cardo's root is the single workspace root; run `pnpm --filter @pi-gui/…` from the repo root instead.
-- pi-coding-agent must stay version-aligned between `packages/*` and `vendor/pi-gui` (currently both `^0.84.1`); the driver port lives in the subtree and must be re-applied on subtree updates if upstream still targets older pi.
-- `eslint`/`prettier` ignore `vendor/` — upstream code is not subject to cardo's stricter rules.
+| Rule                                                                                     | Reason                                                                                                                                      |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pin all `@deepseek-ai/*` at exact versions (no caret)                                    | dsh is a developer preview with breaking changes; `npm view X version` returns the stale `latest` tag — current family is on the `next` tag |
+| `pnpm install --frozen-lockfile` in CI (never bare `pnpm install`)                       | Reproducible installs                                                                                                                       |
+| `@cardo/*` exports point at built `dist` (never `./src`)                                 | Desktop consumes them as externalized deps; Node cannot load TS source                                                                      |
+| Exception: `@cardo/cardo-provider` exports point at `lib/` (esbuild bundle), not `dist/` | Self-contained host bundle ships into the profile; `eslint.config.mjs` ignores `**/lib/` alongside `**/dist/`                               |
+| Ask before adding new dependencies / changing lint or tsconfig rules                     | They encode the company standard                                                                                                            |
 
-## Testing Conventions
+## Formatting (Prettier)
 
-- No test framework installed (see `testing.md`).
-- Any manual verification scripts must be hermetic: no real pi runtime, no LLM, no network.
-- State-machine logic must be testable with an in-memory or temp-dir agent path; never write to the real `~/.pi/agent/jovaltus.sqlite` in tests.
-- Session-store business logic (lifecycle, supersede, interrupt, resume) must be covered by the model-based invariants in `test/pbt/state-machine.test.mts`; new lifecycle semantics get a deterministic regression test too.
-- Plan-mode business logic (execution-plan parsing, steps/mermaid/progress derivation, widget protocol, mode gating) is locked as invariants in `test/pbt/plan-*.test.mts`; hostile inputs (arbitrary prompt text, `|` in labels) are property-tested, never assumed safe.
+Single quotes, trailing commas, print width 100, LF line endings. Run `pnpm format`; CI-adjacent gate is `pnpm format:check`.
 
-## Commit Conventions
+## Git / Commits
 
-- Gate before commit: `pnpm run lint` + `pnpm run typecheck` (AGENTS.md).
-- Pre-commit runs `lint-staged`: prettier + eslint `--max-warnings 0` — any warning blocks the commit.
-- Commit units are coherent (code / docs separated); see repo history for the established pattern.
-- The vendored subtree has its own commits from `git subtree add/pull`; cardo changes to `vendor/` are committed separately from cardo package changes.
+- Commit messages: imperative subject line; Conventional-Commit style used in practice (`feat:`, `fix:`, `chore(release):` — see `CHANGELOG.md`).
+- Pre-commit: `.husky/pre-commit` runs `lint-staged` — `*.{ts,tsx}` → `prettier --write` + `eslint --fix --max-warnings 0`; `*.{json,md,yaml,yml}` → `prettier --write`. Any ESLint warning/error blocks the commit.
+- Never commit `.env` files or secrets; never edit `generated/` or `node_modules/`.
+- Never edit `vendor/dsh-plugins/` in place — bump via the `VENDOR.md` update policy.
+- Root `prepare` script is `husky || true` — GitHub source tarballs ship no `.git`, so husky must tolerate absence.
 
-## Security Rules
+## Testing
 
-- Never commit `.env` files or secrets (`.gitignore`).
-- Extensions run with full system permissions — only install trusted sources (pi docs warning).
-- State store `~/.pi/agent/jovaltus.sqlite` may contain repo paths — do not commit or print.
-- `vendor/pi-gui` is MIT third-party code — keep the license attribution; review upstream changes on subtree pulls.
+| Rule                     | Detail                                                                                                                                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tests per business logic | Every business-logic change ships with tests; property-based tests (fast-check) pin invariants                                                                                                                             |
+| Test lanes per package   | `pnpm --filter <pkg> test` builds first, then runs `node --test` on the compiled output                                                                                                                                    |
+| Hermetic verification    | `scripts/verify-cli-container/run.sh` replays the installer flow in Docker (no macOS runner needed); Windows branches are exercised by `scripts/verify-windows-install/verify.ps1` on windows-latest — both gate a release |
+| PBT-first bug fixes      | See [modules/cardo-skills.md](modules/cardo-skills.md#cardo-pbt-debugging) and [workflows.md](workflows.md#debug-a-bug-pbt-first)                                                                                          |
+
+## Build / Distribution
+
+| Rule                                                        | Detail                                                                                                                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop resolves consumed packages via their `dist` exports | After changing `cardo-systemprompt`, `cardo-skills`, or `cardo-updater` source, run `pnpm run build`                                                                 |
+| Provider ships via `lib/`                                   | After changing `cardo-provider` source, run `pnpm run build` (tsc + esbuild) or the profile ships a stale plugin                                                     |
+| Skills refresh via `copy-skills.mjs`                        | After changing `src/skills/*`, run `pnpm run build`; stale entries are removed so deleted skills stop shipping                                                       |
+| Installer-flow changes                                      | After changing `cardo setup` flow or root scripts, run `scripts/verify-cli-container/run.sh`; Windows branches are re-verified by the release gate on windows-latest |
 
 ## How to Update
 
-- Tooling rules changed → update the "Enforced by" column; keep this file in sync with `eslint.config.mjs` / `tsconfig.base.json`.
-- New convention → add a falsifiable row an agent can check against code.
+- New convention adopted → add a row to the matching table here and to `AGENTS.md` (AGENTS.md is the rulebook; this file mirrors the falsifiable subset).
+- ESLint/Prettier/tsconfig change → ask first, then update this file and the tool config together.
+
+## Find It Fast
+
+```bash
+grep -n '"@deepseek-ai/' packages/*/package.json   # exact-version pin check
+grep -rn 'no-explicit-any' eslint.config.mjs       # any-ban rule
+```

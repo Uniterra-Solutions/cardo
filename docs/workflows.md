@@ -1,72 +1,75 @@
 # Workflows
 
-Task recipes for agents working in this repo.
+Task recipes. Each links to the module/skill that owns the details.
 
-## Add a New Pipeline Tool
+## Develop a Feature (company standard)
 
-1. Add handler in `src/index.ts` (validate args → `startPipeline` → dispatch phases → finish).
-2. Register with `pi.registerTool({ name, label, description, promptGuidelines, parameters: Type.Object(...), execute })`.
-3. If the tool has phases: add chain edges to `src/chain.ts` `CHAIN` + `docs/modules/chain.md`.
-4. If it uses a phase prompt: add `src/prompts/<name>.md` + `PROMPT_NAMES` + `docs/modules/prompts.md`.
-5. If it needs state fields: extend `PipelineState` + `SessionRow` + `rowToPipeline` + `insertRow`/`persistLive` + `docs/modules/state.md`.
-6. If it changes session lifecycle semantics (supersede / interrupt / resume): update the model-based property in `test/pbt/state-machine.test.mts` and add a deterministic regression for the new edge.
-7. Run `pnpm run typecheck && pnpm run lint && pnpm run format:check`.
-8. Run the jovaltus PBT suite (`pnpm --filter @cardo/jovaltus test:pbt`) — it encodes invariants over the state machine / chains / prompts / dispatch and fails on drift (e.g. a tool whose first phase no longer matches `CHAIN`, or a prompt with an unsubstituted token). A failing property on a real bug → fix source + add a deterministic regression test.
-9. Verify registration via the jiti stub (see `docs/testing.md`).
+1. Load the `cardo-planmode` skill; clarify ≤5 open questions; write `<repo>/.plan/<YYYYMMDD>/<name>/clarify.md`.
+2. Dispatch PRD → Design subagents via a `workflow` script; artifacts `prd.md` / `design.md`.
+3. Write failing property-based tests (red phase) at the project's test location.
+4. Write `execution-plan.json` (`serial` / `batched` / `parallel`); present for approval.
+5. Execute with a `workflow` script mirroring the batches; run the fix ↔ review loop to `verdict: pass`.
+   Details: [modules/cardo-skills.md](modules/cardo-skills.md#cardo-planmode).
 
-## Add a New Phase to an Existing Chain
+## Debug a Bug (PBT-first)
 
-1. Create `src/prompts/<phase>.md` (copy a sibling's structure; keep `[[token]]` placeholders + the pipeline marker).
-2. Add to `PROMPT_NAMES` + `PHASE_PROMPTS` in `src/prompts.ts`.
-3. Wire the edge in `src/chain.ts` `CHAIN` (and the waiting/re-dispatch loop if it is a reviewer phase).
-4. Update `docs/modules/chain.md` + `docs/modules/prompts.md` tables.
-5. Run `pnpm --filter @cardo/jovaltus test:pbt` — the prompt/marker/chain invariants lock the new phase; waiting phases must NOT get a prompt file (they are never dispatched).
+1. Load the `cardo-pbt-debugging` skill; read the business logic, find its invariants.
+2. Encode the invariants as a fast-check property; run it — it must FAIL (the counterexample is the reproduction). Refine until it fails.
+3. Fix the root cause; the PBT goes green; add a unit regression test for the concrete case; run the full suite.
+   Details: [modules/cardo-skills.md](modules/cardo-skills.md#cardo-pbt-debugging).
 
-## Run a Plan Pipeline End-to-End
+## Add a Bundled Skill
 
-1. `pi -e packages/jovaltus/src/index.ts` (or install the package).
-2. Turn plan mode on: `/planmode` (TUI: shift+P; desktop: shift+tab or the mode button in the composer). `plan` and `execute_plan` appear in the tool list.
-3. `plan` with `user_requirements`. Inside the tool call the pipeline runs `prd` → `design` (clarifying requirements first when the host has a UI), then parks in `plan_waiting`. Watch `.plan/<date>/<name>/` fill with `prd.md` → `clarify.md` (optional) → `design.md`.
-4. The main agent writes the implementation spec: failing PBTs with business logic as invariants (see `docs/testing.md`) plus `execution-plan.json` (batch-major JSON — see `docs/modules/plan.md`). `agent_settled` validates the JSON; on success the plan is marked `done` and is ready to execute.
-5. `execute_plan <plan_id>` (id or run directory; plan-mode-only) dispatches the plan's subagents — batches serial, agents within a batch parallel — streaming the execute panel to the desktop (spinner → green light, graph popup). Changes are left uncommitted.
-6. `review` / `simplify` on the uncommitted diff; on `fix` the main agent applies findings and the reviewer re-runs until `pass`.
+1. Create `packages/cardo-skills/src/skills/<name>/SKILL.md` (use the `create-skill` skill).
+2. Add the name to `SKILL_NAMES` in `packages/cardo-skills/src/index.ts`.
+3. `pnpm run build` (copy-skills refreshes `dist/skills/`).
+4. Extend `packages/cardo-skills/test/provision.test.mts`.
 
-## Toggle Plan Mode
+## Bump a Vendored Plugin
 
-1. Toggle with `/planmode` (any host), shift+P (TUI — bare shift+p, since shift+tab is taken by `app.thinking.cycle`), or shift+tab / the mode button (desktop composer).
-2. Mode ON adds `plan` + `execute_plan` to the active tools and a `[JOVALTUS PLAN MODE]` system note to every agent turn; OFF removes them and the `tool_call` gate blocks direct calls with an actionable reason.
-3. The mode is persisted via `pi.appendEntry` and restored on `session_start`/resume, so it survives restarts. The desktop button reads the live `jovaltus-mode` status.
+1. `git -C vendor/dsh-plugins/<name> fetch --depth 1 origin`; checkout the new commit.
+2. Verify dsh-family compatibility (0.1.0-rc.6 / cordis 4.0.1); re-run the smoke test.
+3. Update the pin-ledger row in `vendor/dsh-plugins/VENDOR.md`.
+   Details: [modules/vendor-plugins.md](modules/vendor-plugins.md).
 
-## Debug a Failed Phase
+## Add a Built-in npm Plugin
 
-1. Check `list_sessions` (or `~/.pi/agent/jovaltus.sqlite`) for the run's `status`/`error`. An `interrupted` run (abort/session-end/crash) can be continued with `resume_session`; a `failed` run records the error.
-2. Run the child invocation manually with the same flags (see `docs/modules/dispatch.md`) to see the raw error.
-3. Verify pi auth: `pi --list-models` must not print "No models available".
-4. Confirm the run dir exists and `verdict.json` (review phases) was written.
+1. Add the pinned spec to `BUILTIN_NPM_PLUGINS` in `packages/cardo-desktop/src/builtin.ts`.
+2. Add it to the root `pnpm-workspace.yaml` `minimumReleaseAgeExclude`.
+3. Extend `packages/cardo-desktop/test/builtin-pbt.test.mjs` and update [modules/vendor-plugins.md](modules/vendor-plugins.md).
 
-## Resume an Interrupted Pipeline
+## Change the Provider
 
-1. `list_sessions(status="interrupted")` (or filter `failed`) to find the
-   session — note its `id` or `run_dir`.
-2. `resume_session(session_id="<id>")` — accepts the id or the run
-   directory. A session parked in a fix round (`review_waiting` /
-   `simplify_waiting`) falls back to the reviewer phase and re-checks the
-   current diff; any other session re-runs its interrupted phase with a
-   resume note (reuse artifacts, continue the working tree).
-3. A `failed` session is resumable too (it re-attempts from its phase); a
-   `running` or `done` session is refused — finish or list first.
-4. Interrupted sessions are also auto-recovered: a `running` row left by a
-   crashed process is swept to `interrupted` on the next store access, so a
-   direct resume after a crash works without any manual cleanup.
+1. Edit `packages/cardo-provider/src/` (translators, adapter, or settings page).
+2. New wire shape → per-shape regression + seeded property in `test/reasoning-preservation.test.mjs`.
+3. `pnpm --filter @cardo/cardo-provider test`, then root `pnpm run build` — the desktop provisions the built `lib/`.
 
-## Port a Change from the Hermes Plugin
+## Change an Installer/Desktop Behaviour
 
-1. Locate the source in `Uniterra-Solutions/jovaltus` (`src/jovaltus/{tools,hooks,state}.py`, `prompts/*.md`).
-2. Map APIs: `subagent_lifecycle` → child process (`dispatch.ts`); `pre_llm_call` → `before_agent_start`; `post_llm_call` → `agent_settled`; completion queue → `ctx.ui.notify` + `pi.sendUserMessage`.
-3. Keep prompts verbatim except tool names (`read_file`→`read`, `search_files`→`grep`, `terminal`→`bash`) and delegation references (pi children have no delegation tool).
-4. Preserve the `[jovaltus-pipeline:TOOL:PHASE]` marker as provenance metadata.
+1. Edit `packages/cardo-cli` or `packages/cardo-desktop`; extend the PBT lanes (platform branches included).
+2. `pnpm run build && pnpm run lint && pnpm run typecheck`; per-package tests.
+3. Installer/root-script changes additionally: `scripts/verify-cli-container/run.sh` (clean-container replay); Windows branches are exercised by `scripts/verify-windows-install/verify.ps1` in the release gate (windows-latest).
+
+## Release a Version
+
+1. Bump `packages/cardo-cli/package.json` + `packages/cardo-desktop/package.json` versions (+ `CHANGELOG.md` entry), commit, push.
+2. Push tag `v<version>` — `release.yml` gates the publish on the full matrix (CI lint/typecheck/tests + clean-container installer replay + windows-latest install verification, all via `needs`); on success it publishes the CLI via npm trusted publishing and creates the GitHub Release (the source archive IS the desktop artifact).
+3. Version mismatch between tag and `packages/cardo-cli/package.json` fails the release.
+   Details: [modules/cardo-cli.md](modules/cardo-cli.md), [modules/cardo-updater.md](modules/cardo-updater.md).
+
+## Regenerate Documentation
+
+1. Load the `project-documentation` skill (SCAN → ANALYZE → GENERATE → VERIFY).
+2. Generate in dependency order; `docs/README.md` LAST; then sync the root README.
+3. Run the 5-dimension audit (coverage, links, freshness, quality, diagrams).
 
 ## How to Update
 
-- New common task → add a recipe following the numbered-step format.
-- Changed pipeline semantics → update the affected recipes (especially "Run a Plan Pipeline").
+- Recipe becomes stale → update the steps and re-check the linked module doc.
+- New common task → add a recipe here.
+
+## Find It Fast
+
+```bash
+ls packages/cardo-skills/src/skills/   # skills referenced above
+```

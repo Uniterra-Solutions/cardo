@@ -1,126 +1,114 @@
 # Architecture
 
-## System Context (C4 L1)
+Cardo is a thin desktop shell over the bundled DeepSeek Harness (dsh) agent runtime. The Electron main process boots the dsh CLI as a child, provisions built-in plugins + skills into the user's dsh profile, and hosts dsh's Web UI in a BrowserWindow. No app-owned state: everything the agent uses lives in the user's normal dsh home.
+
+## System Context (C4 Level 1)
 
 ```mermaid
 graph TD
-  User["User"] -->|"prompts / approves plans"| Pi["pi CLI (host)<br/>@earendil-works/pi-coding-agent"]
-  User -->|"desktop workspace"| App["pi-gui desktop app<br/>vendor/pi-gui (Electron)"]
-  Pi -->|"loads extension via jiti<br/>(default-exported factory)"| Jov["Jovaltus extension<br/>packages/jovaltus"]
-  Pi -->|"loads extension via jiti<br/>(default-exported factory)"| Gen["General extension<br/>packages/general"]
-  App -->|"built-in factories via<br/>packages/runtime"| Jov
-  App -->|"built-in factories via<br/>packages/runtime"| Gen
-  App -->|"in-process SDK<br/>createAgentSessionRuntime"| PiCore["pi-coding-agent core"]
-  Jov -->|"spawns phase subagents<br/>pi --mode json -p --no-session --no-extensions"| Child["Child pi processes"]
-  Child -->|"LLM calls"| Provider["Model providers<br/>(anthropic / openai / custom)"]
-  Jov -->|"persists sessions<br/>(SQLite)"| StateFile["~/.pi/agent/jovaltus.sqlite"]
-  Jov -->|"writes artifacts"| PlanDir["<cwd>/.plan/<date>/<name>/"]
+    User[macOS / Windows user] -->|drives agent, installs plugins| Cardo[Cardo desktop app]
+    Dev[Developer] -->|cardo setup / cardo update| Cardo
+    Cardo -->|LLM requests| Gateway[Upstream LLM gateways<br/>any OpenAI-compatible endpoint]
+    Cardo -->|model metadata| ModelsDev[models.dev API]
+    Cardo -->|plugin installs| Npm[npm registry]
+    Cardo -->|source archive, update probes| GitHub[GitHub Releases]
+    Cardo -->|vendored plugin sources| Vendor[vendor/dsh-plugins<br/>pinned commits]
 ```
 
-## Container Diagram (C4 L2)
+| Node                  | Type              | Notes                                                     |
+| --------------------- | ----------------- | --------------------------------------------------------- |
+| macOS / Windows user  | person            | Runs the app; uses dsh's Web UI + plugins                 |
+| Developer             | person            | Installs/updates via the `cardo` CLI                      |
+| Cardo                 | system            | Electron shell + bundled dsh runtime + built-ins          |
+| Upstream LLM gateways | external          | Chat Completions and/or Responses API                     |
+| models.dev API        | external          | Context/output/reasoning metadata per model               |
+| npm registry          | external          | CLI distribution, `dsh plugin add`, dshmarket             |
+| GitHub Releases       | external          | Source archive for `cardo setup`; `releases/latest` probe |
+| vendor/dsh-plugins    | external (pinned) | Community plugins vendored at fixed commits               |
+
+## Containers (C4 Level 2)
 
 ```mermaid
 graph TD
-  subgraph Jovaltus extension
-    Index["index.ts<br/>entry factory"]
-    State["state.ts<br/>pipeline state machine"]
-    Chain["chain.ts<br/>CHAIN tables + verdict readers"]
-    Dispatch["dispatch.ts<br/>child process runner"]
-    Prompts["prompts.ts<br/>prompt loader + token renderer"]
-    PromptFiles["prompts/*.md<br/>5 phase goal docs"]
-    PlanModel["plan.ts / plan-json.ts / plan-mermaid.ts / plan-progress.ts<br/>execution-plan model + artifacts"]
-    Mode["plan-mode.ts<br/>tool gating + /planmode + shift+p"]
-  end
-  subgraph Desktop app (vendor/pi-gui)
-    Main["Electron main<br/>main.ts + app-store.ts"]
-    Driver["@pi-gui/pi-sdk-driver<br/>adapter over pi SDK"]
-    Renderer["React renderer<br/>timeline / composer / settings"]
-    Runtime["@cardo/runtime<br/>built-in extension registry"]
-  end
-  Pi["pi CLI host"]
-  Index -->|"pi.registerTool ×6<br/>plan/execute_plan/simplify/review/list_sessions/resume_session"| Pi
-  Index -->|"pi.on('before_agent_start')<br/>pi.on('agent_settled')<br/>pi.on('session_start')"| Pi
-  Mode -->|"pi.setActiveTools / setStatus / setWidget<br/>registerCommand/Shortcut/Flag"| Pi
-  Index --> Mode
-  Index --> PlanModel
-  PlanModel -->|"reads execution-plan.json"| PlanDir
-  Main -->|"extensionFactories spread<br/>@cardo/runtime"| Driver
-  Runtime -->|"imports jovaltus factory"| Index
-  Driver -->|"createAgentSessionRuntime<br/>ModelRuntime (pi 0.84.1)"| PiCore["pi-coding-agent SDK"]
-  Index --> State
-  Index --> Chain
-  Index --> Dispatch
-  Dispatch -->|"renders prompt<br/>via [[token]] substitution"| Prompts
-  Prompts --> PromptFiles
-  Chain -->|"reads verdict.json"| PlanDir
-  State -->|"read/write"| StateFile
-  Dispatch -->|"spawn child (PI_CLI_PATH<br/>+ ELECTRON_RUN_AS_NODE in app)"| ChildPi["child pi processes"]
+    subgraph Cardo
+        Main[Electron main process<br/>main.ts]
+        Dsh[dsh CLI child process<br/>bundled runtime]
+        UI[BrowserWindow<br/>dsh Web UI loopback]
+        Profile[~/.dsh profiles/web<br/>bundles + node_modules + skills]
+        Adapter[cardo-provider plugin<br/>llm-cardo adapter]
+    end
+    Main -->|spawn node dsh/bin.js --profile web| Dsh
+    Main -->|ensureBuiltinPlugins + DSH_BUNDLED_SKILL_DIR| Profile
+    Main -->|loads readiness URL| UI
+    Dsh -->|serves SPA on 127.0.0.1:port| UI
+    Dsh -->|llm route| Adapter
+    Adapter -->|POST /chat/completions or /responses (SSE)| Gateway[Upstream LLM gateways]
+    Adapter -->|api.json download| ModelsDev[models.dev API]
 ```
 
-## Data Flow — one tool invocation
+| Container      | Technology                       | Responsibility                                                        |
+| -------------- | -------------------------------- | --------------------------------------------------------------------- |
+| Electron main  | Electron 37, Node 22             | Boot, supervision, built-in provisioning, update check, crash restart |
+| dsh CLI child  | @deepseek-ai/dsh 0.1.0-rc.6      | Agent runtime: agent loop, skills, plugin loader, web server          |
+| BrowserWindow  | Chromium, sandboxed              | dsh Web UI on a loopback origin                                       |
+| Profile        | ~/.dsh/profiles/web              | User's dsh config + plugin bundles + provisioned skills               |
+| cardo-provider | in-house plugin (esbuild bundle) | LLM adapter: dual-protocol serialize/translate, models.dev lookup     |
 
-1. User calls a tool (`plan` / `execute_plan` / `simplify` / `review` — plus `list_sessions` / `resume_session`) in the pi session (CLI) or via the desktop app's agent. `plan` and `execute_plan` are only active in plan mode.
-2. `index.ts` handler validates args, computes the run directory (`<cwd>/.plan/<date>/<slug>/`), and calls `startPipeline` (`state.ts`) — persisted as a session row in `~/.pi/agent/jovaltus.sqlite`.
-3. For each phase in the chain (`chain.ts` CHAIN table), `dispatchPhase` renders the phase prompt (`prompts.ts` → `prompts/<phase>.md` with `[[token]]` substitution) and spawns an isolated child `pi --mode json -p --no-session --no-extensions` process (`dispatch.ts`).
-4. In the desktop app the child is launched through `PI_CLI_PATH` (resolved to the bundled `pi-coding-agent/dist/cli.js`) under `ELECTRON_RUN_AS_NODE`; in the CLI it uses the running pi binary.
-5. The child runs with coding built-ins only (`read,bash,edit,write,grep,find,ls`), inheriting the parent's model/thinking level; its stdout JSONL is parsed for the final assistant text.
-6. `plan` runs prd → design inside the tool call (asking the user to clarify requirements first when the host has a UI), then parks in `plan_waiting` with a handoff instructing the main agent to write failing PBTs + `execution-plan.json`. `agent_settled` validates the JSON: valid → `done`, missing/invalid → `failed` (the run can be resumed after the artifact is written). `execute_plan` resolves a done plan session, parses its `execution-plan.json`, and dispatches the plan's subagents (batches serial, agents within a batch parallel) — leaving changes uncommitted.
-7. `simplify`/`review` read the child-written `verdict.json`: `pass` → finish pipeline, `done`; `fix` → park in `*_waiting`, surface findings to the main agent. `agent_settled` re-dispatches the reviewer after the fixing turn; on another `fix` it wakes the main agent with `pi.sendUserMessage(findings)`. Loop continues until `pass` (no cap).
+## Data Flow
 
-## Desktop app integration (cardo → pi-gui)
+### Boot
 
-- pi-gui is vendored via `git subtree` under `vendor/pi-gui` (MIT, upstream tag `v0.1.0-beta.33`); cardo's `pnpm-workspace.yaml` includes `vendor/pi-gui/apps/*` and `vendor/pi-gui/packages/*`.
-- `packages/runtime` (`@cardo/runtime`) exports `builtinExtensionFactories` (general + jovaltus factories) + `builtinExtensionMetadata` (display names); `vendor/pi-gui/apps/desktop/electron/main.ts` spreads both into the driver's `extensionFactories` / `inlineExtensionMetadata` seams. `General` runs first in the chain, so its working rules precede Jovaltus's pipeline status in the assembled system prompt.
-- `@cardo/*` exports point at built `dist` (Node 22 `require(ESM)`); pi-coding-agent stays external (its exports are ESM-only — do not bundle it into the CJS main bundle).
-- The vendored `@pi-gui/pi-sdk-driver` was ported from pi 0.80.6 to 0.84.1: `AuthStorage`/`ModelRegistry` replaced by `ModelRuntime`, constructors async, login via `AuthInteraction`.
+1. Single-instance lock → resolve dev/packaged paths (`bundledSrcRoot`, `dshCliPath`).
+2. Dev: mirror `~/.dsh` → `userData/dsh-test-home` (config only). Packaged: real `~/.dsh`.
+3. `ensureBuiltinPlugins` — no-op if fresh; else `dsh plugin add` npm built-ins + copy vendored/workspace built-ins + bundle rows.
+4. `startDsh({ profile: 'web', dshBundledSkillDir })` → spawn → `awaitReadiness` (60 s) → URL.
+5. `createWindow(url)`; schedule update check (5 s delay); wire crash backoff.
 
-## Jovaltus plan mode
+### One agent turn
 
-Plan mode is a per-session toggle that gates the plan-mode pipeline tools (`plan`, `execute_plan`) and redefines what `plan` produces:
+1. User prompt → dsh Web UI (loopback) → dsh runtime agent loop.
+2. LLM call → cardo-provider adapter → protocol resolved per model (`chat-completions` | `responses`).
+3. Serialize harness messages → wire body → POST to the configured gateway → parse SSE → translate to harness chunks (no loss / no duplication of reasoning).
+4. Agent loop continues with tools/skills; skills resolved from `DSH_BUNDLED_SKILL_DIR` (bundled, rank 600) and the user's own skills dir.
 
-1. **prd** child writes `prd.md`; the main agent clarifies requirements with the user (`ctx.ui.input` — only when the host has a UI; skipped if `clarify.md` exists or the user declines) — the clarification note lands in `clarify.md`.
-2. **design** child researches the design + external libraries (goal: minimize development complexity) and writes `design.md`.
-3. The pipeline parks in **plan_waiting**: the handoff text instructs the main agent to write failing PBTs (business logic as invariants — the implementation spec, expected red) and `execution-plan.json` (batch-major JSON; see `docs/modules/plan.md`). `agent_settled` validates the JSON — valid → `done` (executable), invalid → `failed` with the parse reason.
-4. **execute_plan `<plan_id>`** (plan-mode-exclusive) resolves the done plan session and dispatches its subagents: batches serial, agents within a batch parallel, each child = `execute-agent.md` role prompt + `[[task_prompt]]` + auto-injected PRD/design context. `simplify`/`review` are intentionally not chained after execute.
-5. The desktop surfaces execution live: `ctx.ui.setWidget("jovaltus-execute", …)` streams `STATUS|MODE|STEP|BATCH|AGENT` lines that the execute panel (spinner → green light → 3s auto-fade) and the right-side graph popup render natively — same JSON the plan was parsed from, never mermaid/free text.
+### Install / update
 
-Mode toggle: `/planmode` command, `shift+p` shortcut (TUI — bare shift+p since shift+tab is taken by `app.thinking.cycle`), and the desktop composer's shift+tab + mode button (submits `/planmode`). The desktop new-thread page also exposes a standard/plan picker, so a conversation can start in plan mode — `startThread` (electron/app-store-worktree.ts) runs `/planmode` before the first message. Mode state persists via `pi.appendEntry` and restores on `session_start` (also via the `--plan-mode` flag).
+- `cardo setup`: GitHub source archive (or `--source` checkout) → pnpm install → build → electron-builder `--mac` / `--win --dir` → embed source (`Contents/Resources/src` / `resources/src`) → install (`~/Applications/Cardo.app` / `%LOCALAPPDATA%\Programs\Cardo` + Start Menu shortcut).
+- Update check probes GitHub release + npm dist-tag; Update Now = `cardo setup`; CLI = `cardo update`; Skip persists to `userData/cardo-update-state.json`.
 
-## Desktop timeline — reasoning streaming and tool-batch collapsing
+## Key Decisions
 
-Two cardo patches shape the vendored conversation timeline (all marked `// Cardo:`):
-
-- **Reasoning streaming + collapse.** pi's `thinking_delta` agent events become a new `assistantThinkingDelta` driver event (session-driver types + pi-sdk-driver mapping); the app-store accumulates them into a live thinking block (`appendThinkingDelta`) and stamps `endedAt` when text/tools take over or the run ends (`finalizeActiveThinking`). The renderer shows the text live under a "Thinking…" header inside a **fixed-height window** — no surface box, muted 11px mono — that pins to the newest content on every streamed chunk (a `useLayoutEffect` scrolls the body to the bottom, so past text scrolls up and out of view while the model is still thinking), then collapses to a clickable "Thought for Ns" row. Persisted thinking from the session file carries `endedAt = createdAt` so reloaded sessions always render collapsed (no fabricated duration).
-- **Tool-batch collapsing.** The renderer's `buildDisplayTimelineItems` groups the consecutive tool calls of one request into a derived `TimelineToolGroup` ("Used N tools") instead of spamming individual rows; a lone tool call stays a plain row. A group auto-expands while any call is still running and collapses when the batch settles; clicking expands the individual calls and their results.
-- **Stable expand-state pruning.** `pruneExpandState` (in `timeline-turns.ts`, shared by the tool/group/thinking collapse toggles) returns the _same_ `Set` reference whenever pruning changes nothing — React's `setState` bail-out (`Object.is`) then skips re-rendering. The renderer runs the pruner on every transcript change (i.e. every streamed character), so returning fresh `Set` instances per call caused three spurious re-renders per character and visible flicker while tool results and streaming agent output coexisted. The reference-stability contract is locked by PBT invariants (see `testing.md`).
-- **Coalesced window delivery.** The driver emits one event per text delta; forwarding every event as a full state + transcript IPC push made the renderer fall irrecoverably behind the backend on long tasks (the agent finished while the UI still replayed the backlog). Cardo fixes this at the delivery boundary: `electron/stream-publish.ts` coalesces window pushes to at most one per `STREAM_PUBLISH_INTERVAL_MS` (80ms) — leading edge for isolated updates (selection changes, run completion), trailing edge always carrying the latest state — and `conversation-timeline.tsx` memoizes timeline rows by content fingerprint so each snapshot re-renders only the changed rows. The contract (content accounting, item-identity stability, payload monotonicity, liveness) is locked by `test/pbt/streaming-sync.test.mts` (see `testing.md`).
-
-- **State snapshot + delta channel (2026-08).** The transcript delta fixed what ships for the conversation view, but the per-push STATE payload was still the whole `DesktopAppState` (deep-cloned per push) — including `orchestrationChildren` (complete child-thread transcripts + evidence). Cardo now delivers the state channel the same way as the transcript: full (orchestration-stripped) once per session selection / renderer recovery, then only CHANGED slices over a new `pi-gui:state-delta` channel; `orchestrationChildren` leaves the per-push payload and arrives on `pi-gui:orchestration-changed` (reference-changed only). The pure decision/diff/apply logic lives in `src/state-delta.ts` (`decideStateDelivery` / `computeStateDelta` / `applyStateDelta` / `stateSlicesWithoutOrchestration`) and is reference-accelerated: T1 removed the per-push `structuredClone` from `projectStateForView`, so projected slices keep object identity and the diff skips unchanged slices in O(1). The renderer (`src/app/desktop-app-state.ts`) applies ops locally under a revision guard and keeps untouched slices reference-identical (memo short-circuit); `orchestrationChildren` is merged from a local ref. Contracts locked by `test/pbt/state-delta.test.mts` + `test/pbt/store-liveness.test.mts` (see `testing.md`).
-- **Persistent transcript structure (2026-08).** The store fold itself was quadratic: every driver event rebuilt the whole transcript array (`[...transcript]`) and `applySessionEventState` deep-cloned it for read-only derivations. The cache value is now a persistent chunked `TranscriptCacheEntry` (chunk 64, O(1) id index, streaming active-message/thinking as a parts list with a rope-cached join materialized at finalize), so the fold is linear — per-event work no longer grows with transcript length (3000 events ≈ 3.4 µs/event; was ~46 µs/event before the fix).
-
-## Key Architectural Decisions
-
-| Decision                                                                                   | Rationale                                                                                                                                                                                                         | Status |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| Child pi process per phase (not in-process SDK session)                                    | Official subagent example pattern; isolates context windows; `--no-extensions` prevents recursive extension load                                                                                                  | Active |
-| Default-exported entry factory                                                             | pi loader contract: `jiti.import(path, { default: true })` then `typeof factory === "function"` — the single exception to the repo's named-exports rule                                                           | Active |
-| Sessions persisted to `~/.pi/agent/jovaltus.sqlite` (one row per run)                      | Cross-session resume; every run is listed (`list_sessions`) and resumable (`resume_session`); crashes sweep to `interrupted` (pid ownership)                                                                      | Active |
-| No delegation tool in children                                                             | pi children have no `delegate_task`; execute-plan agents complete their own task_prompt instead of dispatching workers (see `src/prompts/execute-agent.md`)                                                       | Active |
-| Execution plan is batch-major JSON; mermaid generated, never parsed                        | `execution_mode` constrains batch shape so the whole graph derives from the JSON; `planToMermaid` synthesizes the mermaid (frontend renders the graph natively from the widget instead of parsing mermaid source) | Active |
-| Plan mode = per-session tool gating                                                        | `setActiveTools` hides plan-mode tools when off + a `tool_call` gate blocks direct calls with an actionable reason; mode persisted via `pi.appendEntry`                                                           | Active |
-| `execute_plan` replaces `execute` and does not chain into simplify/review                  | The new pipeline stops at a done plan; execute dispatch is a separate user-approved step; simplify/review still run on the uncommitted diff at the user's request                                                 | Active |
-| `agent_settled` + `pi.sendUserMessage()` replace Hermes `post_llm_call` + completion queue | pi's event model: settled fires after the agent's run ends; sendUserMessage wakes a new turn                                                                                                                      | Active |
-| Vendor pi-gui via git subtree, not copy/fork                                               | Code lives in-repo while `git subtree pull` keeps upstream merges semi-automated; MIT with attribution                                                                                                            | Active |
-| Built-in extensions via `extensionFactories` seam                                          | `@cardo/runtime` supplies factories + metadata; app packages extensions inside the installer instead of external install                                                                                          | Active |
-| Port vendored driver to pi 0.84.1 instead of downgrading cardo                             | Cardo standard is 0.84.1; one pi version everywhere (dual versions would split typebox/ExtensionAPI)                                                                                                              | Active |
-| `@cardo/*` exports point to dist; pi-coding-agent stays external                           | Node cannot load TS source as externalized dep; pi 0.84.1 exports are ESM-only so bundling it into the CJS main bundle is avoided                                                                                 | Active |
-| Child dispatch via `PI_CLI_PATH` + `ELECTRON_RUN_AS_NODE` in the app                       | Electron main's `process.execPath` is the app binary, not node; bundled `cli.js` + node mode keeps the child-process isolation model                                                                              | Active |
+| Decision                                                                                            | Rationale                                                                                                      | Status |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------ |
+| Thin shell: Electron hosts the bundled dsh CLI instead of reimplementing                            | Cardo IS the dsh desktop surface; user's normal dsh config, no app-owned home                                  | Active |
+| Source is the artifact: build the app on the user's machine, no CI-built binaries                   | Reproducible from the release archive; future cross-platform packaging                                         | Active |
+| Whole source tree embedded under the app resources dir (`Contents/Resources/src` / `resources/src`) | Packaged app resolves CLI/skills/vendors from the embedded source; `process.resourcesPath` is platform-neutral | Active |
+| Dual-protocol provider plugin with per-model `api` override                                         | Gateways mix protocols per model; one adapter covers both wire shapes                                          | Active |
+| Built-ins ensured idempotently into the user's profile                                              | User-installed plugins and edits are never touched; missing/stale built-ins heal on next launch                | Active |
+| Vendored plugins pinned at commits (copied, not pnpm-installed)                                     | No version-lock surprise; peers not on npm                                                                     | Active |
+| Content-identity staleness (version compare), not bundle-list                                       | A fixed distribution can ship under the same package name                                                      | Active |
+| Skills ship as bundled provider (`DSH_BUNDLED_SKILL_DIR`) + pi-agent provisioning                   | Company workflow skills available to every session; user edits survive                                         | Active |
+| Dev mirrors `~/.dsh` to a test home                                                                 | Dev never touches the real user config                                                                         | Active |
+| PBT-first: business logic pinned as properties before fix/dev                                       | Bugs become machine-search problems; regressions locked                                                        | Active |
 
 ## Deployment Topology
 
-No server component. The extension is loaded by pi at runtime via auto-discovery (`~/.pi/agent/extensions/`, `.pi/extensions/`, or `pi install`) or by the desktop app as a built-in. The desktop app is packaged with electron-builder (macOS target in the vendored config; signing/notarization required for distribution — see `setup.md`). There is no Docker, CI, or server component.
+| Environment            | Shape                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User machine (macOS)   | `~/Applications/Cardo.app` — Electron + embedded source + `~/.dsh` profile with built-ins                                                                                                      |
+| User machine (Windows) | `%LOCALAPPDATA%\Programs\Cardo\Cardo.exe` — `win-unpacked` + embedded source + Start Menu shortcut + `~/.dsh` profile                                                                          |
+| npm                    | `@uniterra-solutions/cardo` CLI (trusted publishing, OIDC provenance)                                                                                                                          |
+| GitHub                 | Release per `v*` tag; auto-generated source archive is the desktop artifact                                                                                                                    |
+| Verification           | `scripts/verify-cli-container` replays the setup flow in a clean Docker container; `scripts/verify-windows-install` replays the real Windows install on windows-latest — both gate the release |
 
 ## How to Update
 
-- New phase/tool or changed data flow → update diagrams + Data Flow section.
-- New architectural decision → add row to the decisions table; mark inference with `[INFERRED]`.
+- Structural change (new process, new external dependency, new decision) → update the matching diagram/table in the same commit as the code.
+- Boot or data-flow change → update the Data Flow section.
+
+## Find It Fast
+
+```bash
+grep -n 'async function boot' packages/cardo-desktop/src/main.ts  # boot order
+grep -n 'ensureBuiltinPlugins' packages/cardo-desktop/src/builtin.ts
+```

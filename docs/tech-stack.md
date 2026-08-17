@@ -1,36 +1,105 @@
 # Tech Stack
 
-| Component           | Version       | Purpose                              | Notes                                                                                                                                                                                                |
-| ------------------- | ------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js             | >= 22         | Runtime                              | Pinned in `.nvmrc` / `engines`; ESM (`"type": "module"`)                                                                                                                                             |
-| TypeScript          | ~5.9          | Language                             | Strict mode, NodeNext module resolution, project references (`tsc -b`)                                                                                                                               |
-| pnpm                | 11.17.0       | Package manager                      | `pnpm-workspace.yaml`; `pnpm-lock.yaml`                                                                                                                                                              |
-| pi-agent            | ^0.84.1       | Extension host + SDK                 | `@earendil-works/pi-coding-agent` — CLI (jiti extension loader) and in-process SDK (`createAgentSessionRuntime`, `ModelRuntime`)                                                                     |
-| pi-ai               | ^0.84.1       | Model/auth types for the driver port | `@earendil-works/pi-ai` — `AuthInteraction`, `AuthPrompt`, `AuthEvent`, `CredentialInfo`                                                                                                             |
-| typebox             | ^1.3.7        | Tool schema                          | `Type.Object` parameter schemas for `pi.registerTool()`                                                                                                                                              |
-| pi-gui (vendored)   | 0.1.0-beta.33 | Desktop app shell                    | `vendor/pi-gui` — git subtree (MIT); Electron + `@pi-gui/pi-sdk-driver` + `@pi-gui/session-driver` + `@pi-gui/catalogs`; renderer styles are token-driven (see [design-system.md](design-system.md)) |
-| Electron            | 37.10.3       | Desktop runtime (vendored)           | electron-vite build; main/preload/renderer; node-pty, photon-node (wasm) native deps                                                                                                                 |
-| ESLint              | ^9.34         | Linter                               | `typescript-eslint` strictTypeChecked + extra strict rules; `vendor/` ignored                                                                                                                        |
-| Prettier            | ^3.6          | Formatter                            | Single quotes, trailing commas, 100 width, LF; `vendor/` ignored                                                                                                                                     |
-| husky + lint-staged | ^9 / ^16      | Pre-commit                           | `prettier --write` + `eslint --fix --max-warnings 0` on staged files                                                                                                                                 |
+All versions are the spec ranges from `package.json` / `pnpm-workspace.yaml`; the lockfile (`pnpm-lock.yaml`) is authoritative for installs.
 
-## Verified imports
+## Runtime
 
-- `@earendil-works/pi-coding-agent` — `packages/jovaltus/src/index.ts:29` (`ExtensionAPI`, `ExtensionContext`), `src/state.ts:30` (`getAgentDir`); `packages/runtime/src/index.ts` (`ExtensionFactory` type)
-- `@earendil-works/pi-ai` — `vendor/pi-gui/packages/pi-sdk-driver/src/runtime-supervisor.ts` (`AuthEvent`, `AuthInteraction`, `AuthPrompt`)
-- `typebox` — `packages/jovaltus/src/index.ts:32` (`Type`)
-- Node built-ins only elsewhere: `node:fs`, `node:path`, `node:child_process`, `node:os`, `node:url`, `node:module`, `node:sqlite`, `node:crypto`
+| Component           | Version                      | Purpose                                                                         |
+| ------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
+| Node.js             | ≥ 22 (`.nvmrc`: 22)          | All packages; electron-builder packaging                                        |
+| pnpm                | 11.17.0 (`packageManager`)   | Workspace + profile plugin installs (`allowBuilds` / `minimumReleaseAge` gates) |
+| Electron            | ^37.10.3                     | Desktop shell (main process) hosting the dsh Web UI                             |
+| @deepseek-ai/dsh    | 0.1.0-rc.6 (exact, no caret) | DeepSeek Harness agent runtime — bundled CLI + web app                          |
+| @deepseek-ai/cordis | 4.0.1 (exact)                | dsh plugin/service container                                                    |
+| React               | ^18.2.0                      | Client-side settings UI of `@cardo/cardo-provider`                              |
 
-## Not present
+## Language / Module System
 
-- No web framework, no external database driver, no test framework (see `testing.md`), no CI config yet, no Docker. The jovaltus session store uses Node's built-in `node:sqlite` (`DatabaseSync`), so no database dependency is added.
-- The vendored app brings its own toolchain (electron-vite, playwright, electron-builder) inside `vendor/pi-gui` — not cardo root deps.
+| Component  | Version  | Notes                                                                  |
+| ---------- | -------- | ---------------------------------------------------------------------- |
+| TypeScript | ~5.9.0   | Every package; `tsc -b` project references                             |
+| ESM        | NodeNext | `"type": "module"` everywhere; internal imports require `.js` suffixes |
 
-## Version alignment
+## Workspace Packages
 
-- pi-coding-agent must stay aligned between `packages/*` and `vendor/pi-gui` (both `^0.84.1`). After a `git subtree pull`, re-check; a split means two typebox/ExtensionAPI versions in the app process.
+| Package                   | Version | Purpose                                                        |
+| ------------------------- | ------- | -------------------------------------------------------------- |
+| @cardo/cardo-desktop      | 0.7.0   | Electron shell over the bundled dsh CLI; built-in provisioning |
+| @uniterra-solutions/cardo | 0.7.0   | Public npm installer CLI (bin `cardo`)                         |
+| @cardo/cardo-provider     | 0.1.1   | In-house dual-protocol LLM provider plugin                     |
+| @cardo/cardo-skills       | 0.5.0   | Built-in skill registry (7 company skills)                     |
+| @cardo/cardo-systemprompt | 0.5.0   | pi-agent extension: app-wide working rules                     |
+| @cardo/cardo-updater      | 0.5.0   | Update-check decision logic (pure, no Electron)                |
+
+## dsh Client Peer Packages (cardo-provider)
+
+All pinned exact at 0.1.0-rc.6 — see `packages/cardo-provider/package.json` `peerDependencies`:
+
+`@deepseek-ai/dsh-client-connection`, `@deepseek-ai/dsh-client-locale`, `@deepseek-ai/dsh-client-runtime`, `@deepseek-ai/dsh-client-ui-settings`, `@deepseek-ai/dsh-client-ui-slots` (dev), `@deepseek-ai/dsh-credentials`, `@deepseek-ai/dsh-launch-environment`, `@deepseek-ai/dsh-llm`, `@deepseek-ai/dsh-settings`, `@deepseek-ai/dsh-timeout`, plus `@deepseek-ai/schemastery` ^3.18.1.
+
+## Third-Party Libraries
+
+| Library                         | Version | Used By            | Purpose                                                |
+| ------------------------------- | ------- | ------------------ | ------------------------------------------------------ |
+| eventsource-parser              | ^3.1.0  | cardo-provider     | SSE stream parsing                                     |
+| undici                          | ^7      | cardo-provider     | HTTP client for upstream gateways                      |
+| @earendil-works/pi-coding-agent | ^0.84.1 | cardo-systemprompt | pi-agent extension runtime (`before_agent_start` hook) |
+
+## Tooling
+
+| Tool             | Version                             | Purpose                                                                                        |
+| ---------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| esbuild          | ^0.25.0                             | cardo-provider host/client bundling (deps inlined, peers external)                             |
+| electron-builder | ^25.1.8                             | Packaging: `--mac` → `Cardo.app` / `--win --dir` → `win-unpacked` (source embedded afterwards) |
+| ESLint           | ^9.34.0 + typescript-eslint ^8.46.0 | `strictTypeChecked` + extra strict rules                                                       |
+| Prettier         | ^3.6.2                              | Formatting (single quotes, trailing commas, width 100, LF)                                     |
+| husky            | ^9.1.7                              | Pre-commit hook (`prepare` tolerates missing `.git` in source tarballs)                        |
+| lint-staged      | ^16.1.2                             | `prettier --write` + `eslint --fix --max-warnings 0` on staged files                           |
+
+## Testing
+
+| Tool       | Version            | Purpose                                                                                              |
+| ---------- | ------------------ | ---------------------------------------------------------------------------------------------------- |
+| node:test  | built-in (Node 22) | All test suites                                                                                      |
+| fast-check | ^4.9.0             | Property-based tests (desktop built-ins, CLI install logic, updater decision, provider wire shapes)  |
+| Docker     | —                  | `scripts/verify-cli-container` clean-room CLI-flow replay (optional, no macOS runner needed)         |
+| Windows CI | —                  | `scripts/verify-windows-install/verify.ps1` on windows-latest: real install + `Cardo.exe` boot smoke |
+
+## Built-in dsh Plugins
+
+Provisioned into the user's dsh profile at startup — see [modules/vendor-plugins.md](modules/vendor-plugins.md) and `packages/cardo-desktop/src/builtin.ts`.
+
+| Source                           | Plugins                                                                                                                                                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| npm (pinned exact)               | dshmarket 1.9.0, dsh-notifier 0.6.2, dsh-better-sidebar 0.12.2, dsh-file-upload 0.4.2, dsh-find-plugin 0.3.6, dsh-subagent-model-picker 0.1.1, dsh-hotkeys 0.1.1, dsh-tool-git 0.1.3, dsh-browser-playwright 0.1.1, dsh-computer-use 0.1.0 |
+| vendored (`vendor/dsh-plugins/`) | dsh-deep-whale (skin), dsh-subagent-monitor, dsh-thinking-effort, dsh-shortcuts, dsh-git-graph                                                                                                                                             |
+| workspace built-in               | @cardo/cardo-provider                                                                                                                                                                                                                      |
+
+## External Services
+
+| Service               | Used By                                        | Purpose                                                                   |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
+| npm registry          | cardo-cli publish, `dsh plugin add`, dshmarket | Installer distribution + plugin installs                                  |
+| GitHub Releases       | cardo-cli, cardo-updater                       | Source-archive artifact (`cardo setup`), `releases/latest` update probe   |
+| models.dev API        | cardo-provider                                 | Context-window / output-token / reasoning-effort auto-detection per model |
+| Upstream LLM gateways | cardo-provider                                 | Any OpenAI-compatible endpoint (chat completions and/or Responses API)    |
+
+## CI/CD
+
+| System                         | Purpose                                                                                                                                                                                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub Actions (`ci.yml`)      | Every PR: parallel lint / typecheck / tests (also callable from the release workflow)                                                                                                                                                   |
+| GitHub Actions (`release.yml`) | On `v*` tag: publish is gated on ci + clean-container installer replay + windows-latest install verification (all via `needs`); then npm trusted publishing (OIDC) of the CLI → GitHub Release (source archive is the desktop artifact) |
 
 ## How to Update
 
-- New dependency → add row + verify the import actually appears in `src/` (config alone is not truth).
-- Version bump → update the version column and the lockfile.
+- Dependency added/removed/upgraded → update the corresponding table (keep exact pins for `@deepseek-ai/*`).
+- New built-in plugin → update the Built-in dsh Plugins table and `vendor/dsh-plugins/VENDOR.md`.
+- Node/Electron/pnpm bump → update here, `.nvmrc`, and `engines`.
+
+## Find It Fast
+
+```bash
+grep -h '"@deepseek-ai/dsh"\|"electron"' packages/*/package.json    # pinned runtime versions
+grep -n 'BUILTIN_NPM_PLUGINS' packages/cardo-desktop/src/builtin.ts # npm built-in list
+```

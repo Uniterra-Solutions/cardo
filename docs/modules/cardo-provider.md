@@ -1,62 +1,124 @@
-# Module: cardo-provider (`packages/cardo-provider/`)
+# Module: cardo-provider
 
-**Purpose:** In-house dual-protocol LLM provider plugin (`@cardo/cardo-provider`): OpenAI Chat Completions **and** Responses API over any OpenAI-compatible gateway, with models.dev context/output/reasoning-effort auto-detection and a Web settings page. Ships as a workspace built-in; the desktop provisions the built `lib/` into the dsh profile (see `BUILTIN_WORKSPACE_PLUGINS` / `workspacePluginsStale()` in `packages/cardo-desktop/src/builtin.ts`).
+**Purpose:** In-house dual-protocol LLM provider plugin for DeepSeek Harness (`@cardo/cardo-provider`, route `llm-cardo`): OpenAI chat completions AND Responses API over any OpenAI-compatible gateway, with models.dev context/output/reasoning auto-detection and a Web settings page. Ships as a workspace built-in.
 
-Sources: `src/adapter.ts` (routing, discovery, error mapping), `src/serialize-chat.ts` + `src/serialize-response.ts` (request builders), `src/translate-chat.ts` + `src/translate-response.ts` (SSE → `StreamChunk`), `src/types.ts` (wire types), `src/sse.ts` (protocol-neutral SSE framing), `src/index.ts` (plugin registration).
+Source: `packages/cardo-provider/src/`; tests `test/*.mjs`; build `scripts/build-*.mjs`.
 
-## Protocol selection
+## Files
 
-| Field                           | Meaning                                                                       |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| connection-level `api`          | Default wire protocol for models that do not pin one                          |
-| per-model catalog row `api`     | Overrides the connection default (`'chat-completions' \| 'responses'`)        |
-| `protocolOf(connection, model)` | Resolves the per-request protocol; selects serializer + endpoint + translator |
+| File                                          | Responsibility                                                                                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`                                | Plugin entry: `apply(ctx, config)` registers adapter route, model discovery, models.dev RPC channel, settings section; defines `Config` schema |
+| `src/adapter.ts`                              | `CardoAdapter extends LlmAdapter`: per-model protocol routing, stream/request path, `GET /models` discovery, models.dev fetch + matching       |
+| `src/types.ts`                                | Wire-format types only (Chat Completions + Responses + models.dev)                                                                             |
+| `src/sse.ts`                                  | SSE byte-stream → data payload decoding (`parseSse`, `DONE = '[DONE]'`)                                                                        |
+| `src/serialize-chat.ts`                       | Harness messages → Chat Completions request body                                                                                               |
+| `src/serialize-response.ts`                   | Harness messages → Responses API `input` items                                                                                                 |
+| `src/translate-chat.ts`                       | Chat SSE → harness `StreamChunk`s (`[DONE]`-terminated)                                                                                        |
+| `src/translate-response.ts`                   | Responses SSE events → harness `StreamChunk`s (terminal event, no `[DONE]`)                                                                    |
+| `src/client/*`                                | Browser half: settings page React component, locale, models.dev params UI                                                                      |
+| `scripts/build-host.mjs` / `build-client.mjs` | esbuild → self-contained `lib/index.js` (ESM, deps inlined) / `lib/client.js` (`window.__ModuleLoader__` factory)                              |
 
-| Protocol           | Endpoint                     | Terminal condition                                               |
-| ------------------ | ---------------------------- | ---------------------------------------------------------------- |
-| `chat-completions` | `{baseURL}/chat/completions` | `[DONE]` SSE sentinel                                            |
-| `responses`        | `{baseURL}/responses`        | `response.completed` / `response.incomplete` / `response.failed` |
+## Plugin Registration
 
-## Reasoning preservation invariant
+| Fact          | Value                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host entry    | `name = 'llm-cardo'`, `inject = ['llm']`, `apply(ctx, config)` (`src/index.ts:64-65, 276`)                                                               |
+| Bundle patch  | `cordis.patch.yml` inserts `{ id: llm-cardo, name: '@cardo/cardo-provider' }` into profile composition                                                   |
+| Client inject | `dsh.client = { platform: 'web', inject: ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-ui-settings'] }` |
 
-One invariant rules both translators: **every non-empty reasoning fragment the wire emits reaches a harness `reasoning` block exactly once, and previous turns' reasoning is replayed on the wire**. Loss and duplication are both violations; the randomized property tests generate arbitrary interleavings of every shape below and assert the translated blocks equal the wire content exactly.
+## Public API (host)
 
-### Chat Completions — consumed shapes
+| Symbol                                               | Signature                                                                                                                                                                                                        | Description                                               |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `apply`                                              | `(ctx: Context, config: Config) => void`                                                                                                                                                                         | Registers adapter route, discovery, RPC, settings section |
+| `Config`                                             | schemastery schema                                                                                                                                                                                               | Validated plugin config (below)                           |
+| `resolveAdapterOptions`                              | `(config, environment?) => CardoConnectionOptions`                                                                                                                                                               | Raw config → validated connection facts                   |
+| `CardoAdapter`                                       | `class extends LlmAdapter`                                                                                                                                                                                       | Dual-protocol gateway adapter                             |
+| `normalizeBaseUrl`                                   | `(raw: string) => string`                                                                                                                                                                                        | Trim, drop trailing slashes, require http(s)              |
+| `matchModelsDev`                                     | `(api: ModelsDevApi, id, hints?) => ModelsDevMatch[]`                                                                                                                                                            | Catalog lookup for a gateway id, official provider first  |
+| `httpErrorCode`                                      | `(status: number, error?) => string`                                                                                                                                                                             | HTTP status → stable `LlmError` code                      |
+| `serializeChatRequest` / `serializeResponsesRequest` | `(GenerateOptions) => ChatRequest \| ResponsesRequest`                                                                                                                                                           | Request serialization per protocol                        |
+| `translateChat` / `translateResponses`               | `(payloads: AsyncIterable<string>) => AsyncGenerator<StreamChunk>`                                                                                                                                               | Wire → harness chunk translation                          |
+| `parseSse`                                           | `(stream, onComment?) => AsyncGenerator<string>`                                                                                                                                                                 | SSE decoding                                              |
+| Constants                                            | `DEFAULT_BASE_URL`, `DEFAULT_PROXY_URL`, `DEFAULT_CONTEXT_WINDOW` (128 000), `DEFAULT_STREAM_IDLE_TIMEOUT_MS` (300 000), `DEFAULT_MODEL_EXCLUDE_PATTERNS`, `DEFAULT_PROVIDER_HINTS`, `MODELS_DEV_API_URL`, `PKG` | Adapter defaults                                          |
 
-| Shape                                                                            | Gateway                                      |
-| -------------------------------------------------------------------------------- | -------------------------------------------- |
-| `delta.reasoning_content`                                                        | DeepSeek, Qwen, GLM                          |
-| `delta.reasoning`                                                                | OpenRouter and aggregator gateways           |
-| `message.reasoning_content` / `message.reasoning` (terminal chunk, empty deltas) | DashScope compatible mode (full-text replay) |
-| `message.content` / `message.tool_calls` (terminal chunk, empty deltas)          | buffered gateways                            |
+## Config
 
-Dedup rule: each replay is appended only when nothing of that kind streamed via deltas (`sawDeltaReasoning` / `sawDeltaText` / per-index tool-call blocks). A reasoning replay with no streamed deltas is presented **before** the answer text block.
+| Field                  | Type / default                                                   | Notes                                                                                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseURL`              | `string` (fallback `$CARDO_BASE_URL` → default)                  | Gateway base incl. `/v1`                                                                                                                                                   |
+| `api`                  | `'chat-completions' \| 'responses'` (default `chat-completions`) | Default protocol for un-pinned models                                                                                                                                      |
+| `models`               | `CardoCatalogModel[]`                                            | Advisory catalog; per-row `id`, `name`, `description`, `contextWindow`, `maxTokens`, `api` (**per-model protocol override**), `reasoningEfforts`, `defaultReasoningEffort` |
+| `modelExcludePatterns` | `string[]` (default `['embed','rerank','ranker']`)               | Substrings excluded from discovery                                                                                                                                         |
+| `defaultContextWindow` | `number` (default 128000)                                        | Fallback when the model has no exact value                                                                                                                                 |
+| `maxTokens`            | `number`?                                                        | Default per-request output cap                                                                                                                                             |
+| `streamIdleTimeoutMs`  | `number` (default 300000)                                        | Idle watchdog budget                                                                                                                                                       |
+| `proxy`                | `{ enabled, url }`                                               | Forward proxy for the models.dev download                                                                                                                                  |
+| `providerHints`        | `{ defaults, models }`                                           | models.dev match-shaping hints                                                                                                                                             |
+| `retryPolicy`          | schema                                                           | Provider-owned request retry policy                                                                                                                                        |
 
-### Responses API — consumed shapes
+Protocol resolution: `protocolOf = models.find(id)?.api ?? connection.api` (`adapter.ts:342-345`).
 
-| Shape                                                                              | Gateway                                     |
-| ---------------------------------------------------------------------------------- | ------------------------------------------- |
-| `response.reasoning_text.delta` / `.done`                                          | DeepSeek Responses, OpenAI (`include` path) |
-| `response.reasoning_summary_text.delta` / `.done`                                  | OpenAI o-series (default summary streaming) |
-| `response.reasoning_summary_part.done`                                             | summary delivered as a completed part       |
-| `response.output_item.done` with a `reasoning` item (`content` + `summary` parts)  | whole-item delivery, no deltas              |
-| `response.content_part.added` / `.done` with `reasoning_text` parts                | part-framed reasoning                       |
-| `response.completed` / `response.incomplete` `response.output` array               | authoritative terminal fallback             |
-| `response.output_text.done`, `content_part.done` `output_text` part, message items | text equivalents (same no-loss/no-dup rule) |
+## Data Flow (one LLM request)
 
-Dedup rule: item ids that already streamed incrementally (`streamedReasoning` / `streamedText` sets) skip any whole-item or done-event replay.
+1. Resolve facts per request: `config.options()`, API key via credentials seam (ref `cardo`), abort-signal union, idle watchdog.
+2. Pick protocol by model (`protocolOf`).
+3. Serialize: `serializeResponses(options)` or `serializeChat(options)` → JSON body.
+4. HTTP POST `{baseURL}/chat/completions` or `{baseURL}/responses` (Bearer auth, `accept: text/event-stream`).
+5. Parse SSE (`parseSse`); Chat stops at `[DONE]`, Responses passes terminal events through.
+6. Translate back to harness `StreamChunk`s (block-start/delta/block-end/usage/finish).
 
-### Round-trip (agent loop)
+models.dev lookup is NOT in the request path — it is an on-demand RPC from the settings page: `/llm-cardo` → `models-dev-params` → host downloads `https://models.dev/api.json` (via proxy if enabled) and maps per gateway id:
 
-- Chat: assistant messages on tool-call turns replay `reasoning_content` (DeepSeek rejects tool-call turns without it). Non-tool turns deliberately omit it — DeepSeek does not require it and strict-gateway tolerance of the extension field is unverified.
-- Responses: assistant messages without tool calls emit a `reasoning` input item (`content` + `summary`) before the message — OpenAI requires `summary` on input reasoning items; DeepSeek merges plain-text `content` into the adjacent assistant message and ignores `summary`.
+| models.dev field                          | Used as                  |
+| ----------------------------------------- | ------------------------ |
+| `entry.limit.context`                     | context window           |
+| `entry.limit.output`                      | output tokens            |
+| `entry.reasoning_options` (type `effort`) | reasoning-effort choices |
 
-## Tests
+## Settings Page
 
-- `test/smoke.test.mjs` — plugin composition through cordis, dual-protocol serialize/translate, discovery, credentials, settings validation, models.dev matching.
-- `test/reasoning-preservation.test.mjs` — one deterministic regression per wire shape plus two seeded randomized properties (chat + responses, 300 runs each) asserting no loss and no duplication.
+Registered as `settings.section` slot (`id: 'cardo'`, order 15). Provides: API-key input (credentials seam), gateway base URL, default protocol select, model catalog editor (per-model context window / maxTokens / protocol override / default reasoning effort), "Fetch models" (discovers via `GET /models`, adopt-selected merges without overwriting tuned rows), proxy config, and a "Update model info" models.dev panel (overwrite-existing or fill-blank-only). Locale: zh (primary) + en.
+
+## Wire Invariants (tested)
+
+Locked by `test/reasoning-preservation.test.mjs` (per-shape regressions + seeded randomized properties, 300 runs):
+
+- Every non-empty reasoning/text/tool-call fragment the wire emits reaches the harness — **no loss, no duplication** — across every wire shape real gateways use.
+- Shapes covered — Chat: `delta.reasoning_content` (DeepSeek/Qwen/GLM), `delta.reasoning` (OpenRouter), terminal `message.reasoning_content/reasoning/content/tool_calls` replay (DashScope/buffered), with no duplication of already-streamed deltas. Responses: `reasoning_summary_text.delta`, complete `reasoning` items, `content_part` reasoning parts, `response.completed/incomplete` output arrays, `reasoning_summary_part.done`, buffered `function_call`, with no duplication.
+- Agent-loop round-trip: assistant reasoning serializes as a Responses `reasoning` item (`content` + `summary` — OpenAI requires `summary`, DeepSeek merges `content`); Chat replays `reasoning_content` on tool-call turns only.
+
+Other locked behaviors: empty tool output → `'(no output)'`; text-less turns send `""` never `null`; `stream_options.include_usage: true` / `store: false`; cache-hit tokens subtracted for disjoint `inputTokens`; image content rejected (`UNSUPPORTED_CONTENT`).
+
+## Build / Packaging
+
+- Host: esbuild `lib/index.js` (ESM, node22) — `eventsource-parser` + `undici` inlined, `@deepseek-ai/*`/`cordis`/`schemastery`/`react` external; `createRequire` banner for inlined CJS undici; `.ts` → `.js` specifier rewrite in the `.d.ts` emit.
+- Client: esbuild `lib/client.js` (CJS, browser, es2022) wrapped as `window.__ModuleLoader__.load({ id: '@cardo/cardo-provider', factory })`.
+- Profile provisioning copies `package.json` + `lib/` + `cordis.patch.yml` — no pnpm install (self-contained).
 
 ## Dependencies
 
-- Inbound: `packages/cardo-desktop/src/builtin.ts` (provisioning), harness `ctx.llm` registration.
-- Outbound: `@deepseek-ai/dsh-llm` (adapter base, `StreamChunk` vocabulary), `@deepseek-ai/dsh-timeout` (idle watchdog), `undici` (proxy `ProxyAgent` for the models.dev download), `eventsource-parser` (SSE framing). Runtime deps are inlined by esbuild; only `@deepseek-ai/*` peers stay external.
+- Outbound (peers, all exact `@deepseek-ai/*@0.1.0-rc.6` + cordis 4.0.1): dsh-llm, dsh-credentials, dsh-settings, dsh-launch-environment, dsh-timeout, dsh-client-* (client half); schemastery, react.
+- Runtime deps: eventsource-parser, undici (inlined at build).
+- Inbound: `packages/cardo-desktop` provisions it as `BUILTIN_WORKSPACE_PLUGINS`.
+
+## Patterns & Gotchas
+
+- Proxy must ride undici's own `fetch` — Node's global fetch brand-checks `dispatcher` and rejects an npm-minted `ProxyAgent` (`adapter.ts:492-499`).
+- Last-good config retained when a settings edit is invalid — a bad edit never breaks the next request.
+- Retry-policy change re-registers the route in place (the one registration-captured fact).
+- API key only via the credentials seam, never env (`MISSING_CREDENTIAL` otherwise).
+
+## How to Update
+
+- New wire shape supported → extend the translator + add a per-shape regression + seeded property in `test/reasoning-preservation.test.mjs`.
+- Config field added → update `Config` schema, the settings page, and this file's Config table.
+- Source changed → run `pnpm run build` — the desktop provisions the built `lib/`; a stale bundle ships a stale plugin.
+
+## Find It Fast
+
+```bash
+grep -n 'protocolOf' packages/cardo-provider/src/adapter.ts          # per-model protocol routing
+grep -n 'no loss\|no duplication' packages/cardo-provider/README.md   # invariant statement
+```

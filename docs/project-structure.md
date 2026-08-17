@@ -1,52 +1,72 @@
 # Project Structure
 
-| Directory / File                 | Responsibility                               | Key Files                                                                                                                                                          |
-| -------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/general/`              | App-wide working-rules extension             | `src/index.ts` (factory + `before_agent_start` append)                                                                                                             |
-| `packages/jovaltus/src/`         | Jovaltus pipeline extension (all logic)      | `index.ts`, `state.ts`, `chain.ts`, `dispatch.ts`, `prompts.ts`, `plan.ts`, `plan-json.ts`, `plan-mermaid.ts`, `plan-progress.ts`, `plan-steps.ts`, `plan-mode.ts` |
-| `packages/jovaltus/src/prompts/` | Phase goal documents for pipeline subagents  | `prd.md`, `design.md`, `execute-agent.md`, `simplify-review.md`, `review.md`                                                                                       |
-| `packages/jovaltus/`             | Package manifest + pi entry declaration      | `package.json` (`"pi": {"extensions": ["./src/index.ts"]}`; `exports` → `dist`)                                                                                    |
-| `packages/general/`              | Package manifest + pi entry declaration      | `package.json` (`"pi": {"extensions": ["./src/index.ts"]}`; `exports` → `dist`)                                                                                    |
-| `packages/runtime/`              | Desktop runtime: built-in extension registry | `src/index.ts` (`builtinExtensionFactories`, `builtinExtensionMetadata`)                                                                                           |
-| `vendor/pi-gui/`                 | Vendored desktop app (git subtree)           | `apps/desktop/` (Electron shell), `packages/pi-sdk-driver/`, `packages/session-driver/`, `packages/catalogs/`                                                      |
-| Root (`.`)                       | Shared tooling + workspace wiring only       | `package.json`, `tsconfig.json`, `tsconfig.base.json`, `eslint.config.mjs`, `.prettierrc`, `.husky/`, `pnpm-workspace.yaml`                                        |
-| `docs/`                          | Project documentation (this tree)            | `README.md` hub, `architecture.md`, `modules/*.md`                                                                                                                 |
+Directory map for the cardo monorepo. Locate code by task, not by grepping.
 
-## Module map (`packages/jovaltus/src/`)
+## Root
 
-| Module             | LOC | Public API                                                                                                                                                                                        |
-| ------------------ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `index.ts`         | 927 | `default` factory (entry) — registers 6 tools + 5 events; `runPlanPipeline`, `runPlanExecution`, `execute_plan` handler                                                                           |
-| `state.ts`         | 584 | `PipelineState`, `PHASES`, `STATUSES`, `getPipeline`, `startPipeline`, `setPhase`, `setVerdict`, `finishPipeline`, `markInterrupted`, `listSessions`, `getSession`, `resumeSession`, `statusText` |
-| `dispatch.ts`      | 211 | `PhaseResult`, `runPhase`                                                                                                                                                                         |
-| `chain.ts`         | 87  | `CHAIN`, `WAITING_PHASES`, `waitingPhase`, `readVerdict`, `readFindings`                                                                                                                          |
-| `prompts.ts`       | 125 | `PROMPT_NAMES`, `loadPrompt`, `renderPrompt`, `renderAgentPrompt`, `buildContext`                                                                                                                 |
-| `plan.ts`          | 97  | `ExecutionPlan`, `parseExecutionPlan`                                                                                                                                                             |
-| `plan-json.ts`     | 56  | `readExecutionPlan`, `readRunDoc`, `readPlanContext`                                                                                                                                              |
-| `plan-mermaid.ts`  | 60  | `planToMermaid`                                                                                                                                                                                   |
-| `plan-progress.ts` | 92  | `PlanProgress`, `createProgress`, `agentsToRun`, `startRunning`, `markDone`, `isComplete`                                                                                                         |
-| `plan-steps.ts`    | 23  | `deriveExecutionSteps`                                                                                                                                                                            |
-| `plan-mode.ts`     | 221 | `registerPlanMode`, `PLAN_MODE_TOOLS`, widget protocol helpers                                                                                                                                    |
+| Path                                                         | Responsibility                                                                                                                                                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/*`                                                 | pnpm workspace packages (6 packages, see below)                                                                                                                 |
+| `vendor/dsh-plugins/`                                        | Pinned community dsh plugins not on npm (5 plugins; `VENDOR.md` pin ledger)                                                                                     |
+| `vendor/dsh-runtime/`                                        | LEGACY 0.5.0 runtime snapshot — not on the current boot path (the app resolves the dsh CLI from `packages/cardo-desktop/node_modules`); keep for reference only |
+| `scripts/verify-cli-container/`                              | Docker harness replaying the `cardo setup` flow in a clean container                                                                                            |
+| `scripts/verify-windows-install/`                            | PowerShell harness: real `cardo setup --source` + `Cardo.exe` boot smoke on windows-latest (release gate)                                                       |
+| `AGENTS.md`                                                  | Company-standard agent rules (the coding rulebook)                                                                                                              |
+| `CHANGELOG.md`                                               | Keep a Changelog + SemVer                                                                                                                                       |
+| `eslint.config.mjs` / `tsconfig.base.json` / `tsconfig.json` | Shared lint / compile rules; every package extends them                                                                                                         |
+| `.github/workflows/ci.yml`                                   | PR regression net: parallel lint / typecheck / tests; callable from the release workflow                                                                        |
+| `.github/workflows/release.yml`                              | `v*` tag release: gates publish on ci + container + windows verification, then CLI npm publish (OIDC) + GitHub Release                                          |
 
-## Module map (`packages/general/src/`)
+## Workspace Packages
 
-| Module     | Public API                                                                                     |
-| ---------- | ---------------------------------------------------------------------------------------------- |
-| `index.ts` | `default` factory (entry) — registers `before_agent_start` to append `WORKING_RULES` (8 rules) |
+| Package                       | Responsibility                                                                 | Key files                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `packages/cardo-desktop`      | Electron shell: boots the bundled dsh CLI, hosts its Web UI, ensures built-ins | `src/main.ts`, `src/dsh-process.ts`, `src/profile.ts`, `src/builtin.ts`, `scripts/prepare-runtime.mjs` |
+| `packages/cardo-provider`     | In-house dual-protocol LLM provider plugin (chat completions + Responses API)  | `src/index.ts`, `src/adapter.ts`, `src/serialize-*.ts`, `src/translate-*.ts`, `src/client/*`           |
+| `packages/cardo-cli`          | Public npm installer (`cardo` bin): `setup` / `update` — macOS + Windows       | `src/cli.ts`, `src/install-logic.ts`                                                                   |
+| `packages/cardo-updater`      | Pure update-check decision logic (no Electron imports)                         | `src/index.ts`, `src/decision.ts`                                                                      |
+| `packages/cardo-skills`       | Built-in skill registry (7 company skills) + provisioning                      | `src/index.ts`, `src/skills/*/SKILL.md`, `scripts/copy-skills.mjs`                                     |
+| `packages/cardo-systemprompt` | pi-agent extension appending app-wide working rules to every turn              | `src/index.ts`                                                                                         |
 
-## Module map (`packages/runtime/src/`)
+## Built-in Skills (`packages/cardo-skills/src/skills/`)
 
-| Module     | Public API                                              |
-| ---------- | ------------------------------------------------------- |
-| `index.ts` | `builtinExtensionFactories`, `builtinExtensionMetadata` |
+| Skill dir               | Purpose                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `cardo-planmode`        | TDD-style development pipeline: plan → clarify → PRD/design → failing PBTs → execution-plan.json → execute → review |
+| `cardo-pbt-debugging`   | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests     |
+| `project-documentation` | Generate/maintain the structured `docs/` tree                                                                       |
+| `qa`                    | PRD-driven acceptance testing across app types                                                                      |
+| `create-skill`          | Scaffold a new agent skill                                                                                          |
+| `manage-agents-md`      | Create/audit agent spec files (AGENTS.md etc.)                                                                      |
+| `manage-git-repo`       | Commit, version, release, PR workflows                                                                              |
 
-## Vendored desktop app (`vendor/pi-gui`)
+## Vendored Plugins (`vendor/dsh-plugins/`)
 
-- `apps/desktop/` — Electron app: `electron/main.ts` (cardo integration seam: `extensionFactories` + `inlineExtensionMetadata` spreads, `PI_CLI_PATH` bootstrap), `electron/app-store.ts` (async `create`), React renderer.
-- `packages/pi-sdk-driver/` — adapter over `@earendil-works/pi-coding-agent` (ported to pi 0.84.1 `ModelRuntime`).
-- Cardo patches inside `vendor/` are minimal and marked with `// Cardo:` comments; everything else is upstream-managed via `git subtree pull`.
+| Dir                    | Package name                                  | Purpose                                                 |
+| ---------------------- | --------------------------------------------- | ------------------------------------------------------- |
+| `dsh-deep-whale`       | @dsh-external/dsh-client-ui-skin-maid-atelier | Whale-maid UI skin (standalone distribution)            |
+| `dsh-subagent-monitor` | @leetoners/dsh-ui-subagent-monitor            | Live subagent run monitor                               |
+| `dsh-thinking-effort`  | dsh-thinking-effort                           | Reasoning-effort level editor for third-party models    |
+| `dsh-shortcuts`        | dsh-shortcuts                                 | 34 keyboard shortcuts, one-click recording, macOS-first |
+| `dsh-git-graph`        | dsh-git-graph                                 | Embedded git repo graph visualizer                      |
+
+## Build Outputs (gitignored)
+
+| Path                                 | Produced By                                             | Consumed By                                                    |
+| ------------------------------------ | ------------------------------------------------------- | -------------------------------------------------------------- |
+| `packages/*/dist/`                   | `tsc -b`                                                | Desktop (via `@cardo/*` exports pointing at `dist`)            |
+| `packages/cardo-provider/lib/`       | esbuild (`scripts/build-host.mjs` + `build-client.mjs`) | Workspace built-in provisioning copies `lib/` into the profile |
+| `packages/cardo-skills/dist/skills/` | `scripts/copy-skills.mjs`                               | Packaged `resources/skills` (rank-600 bundled skill provider)  |
 
 ## How to Update
 
-- New source module → add row to module map, create `docs/modules/<name>.md`, index it in `docs/README.md`.
-- Directory added/removed/repurposed → update the directory table.
+- Directory added/removed/repurposed → update the corresponding table row.
+- New skill under `src/skills/` → add a row to the Built-in Skills table.
+- New vendored plugin → add to `vendor/dsh-plugins/` + update `VENDOR.md` pin ledger and this table.
+
+## Find It Fast
+
+```bash
+find packages -maxdepth 2 -name package.json    # all workspace manifests
+ls packages/cardo-skills/src/skills/            # bundled skills
+```
