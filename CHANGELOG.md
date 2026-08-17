@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-08-17
+
+### Fixed
+
+- `@cardo/cardo-provider` silently dropped reasoning (chain-of-thought) content for most real OpenAI-compatible wire shapes. Chat Completions only read `delta.reasoning_content`, losing `delta.reasoning` (OpenRouter-style aggregators) and the terminal-chunk `message.reasoning_content` / `message.reasoning` full-text replay (DashScope compatible mode); buffered gateways that replay `message.content` / `message.tool_calls` with empty deltas lost text and tool calls too. The Responses API translator only read `response.reasoning_text.delta`, losing `reasoning_summary_text.delta/.done`, complete `reasoning` output items, `content_part` reasoning parts, and the authoritative `response.output` array on `response.completed` / `response.incomplete`. Both translators now consume every shape with per-item dedup (no loss, no duplication), locked by per-shape regressions plus seeded randomized properties (`test/reasoning-preservation.test.mjs`)
+- The agent loop never replayed previous turns' reasoning on the wire over the Responses protocol: `serialize-response.ts` now emits a `reasoning` input item (`content` + `summary`) before assistant messages, so OpenAI (requires `summary`) and DeepSeek (merges `content`) both keep conversation state
+- `@cardo/cardo-provider` bumps 0.1.0 → 0.1.1: the desktop's `workspacePluginsStale()` guard compares the workspace plugin's source vs installed `version`, so existing profiles re-provision the fixed `lib/` on their next launch
+
 ## [0.6.1] — 2026-08-17
 
 ### Fixed

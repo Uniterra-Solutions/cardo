@@ -1,6 +1,6 @@
 {
   "name": "@cardo/cardo-desktop",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "description": "Cardo desktop shell: supervises a bundled DeepSeek Harness (dsh) CLI and hosts its Web UI in an Electron window. Runs dsh against the user's normal ~/.dsh (dev uses a mirrored test home); built-ins are ensured into the profile at startup.",
   "type": "module",
