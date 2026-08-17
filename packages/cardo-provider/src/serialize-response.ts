@@ -61,6 +61,25 @@ export function serializeInput(messages: Message[]): ResponsesInputItem[] {
       continue;
     }
     if (message.role === 'assistant') {
+      const reasoning = message.content
+        .filter((block) => block.type === 'reasoning')
+        .map((block) => block.text)
+        .join('');
+      if (reasoning.length > 0) {
+        // Round-trip the previous turn's chain of thought. DeepSeek's
+        // Responses API in thinking mode rejects a multi-turn tool-call
+        // continuation unless the prior turn's reasoning is replayed as a
+        // `reasoning` input item BEFORE its function_call items. `id` is a
+        // locally synthesized unique key: the harness does not persist
+        // reasoning item ids, and both OpenAI and DeepSeek only need it
+        // unique within the request.
+        input.push({
+          type: 'reasoning',
+          id: `reasoning_${String(input.length)}`,
+          content: [{ type: 'reasoning_text', text: reasoning }],
+          summary: [{ type: 'summary_text', text: reasoning }],
+        });
+      }
       const toolCalls = message.content.filter((block) => block.type === 'tool-call');
       if (toolCalls.length > 0) {
         // A tool-call turn: emit one function_call item per call; any text on
@@ -75,22 +94,6 @@ export function serializeInput(messages: Message[]): ResponsesInputItem[] {
           });
         }
       } else {
-        const reasoning = message.content
-          .filter((block) => block.type === 'reasoning')
-          .map((block) => block.text)
-          .join('');
-        if (reasoning.length > 0) {
-          // Round-trip the previous turn's chain of thought. `id` is a
-          // locally synthesized unique key: the harness does not persist
-          // reasoning item ids, and both OpenAI and DeepSeek only need it
-          // unique within the request.
-          input.push({
-            type: 'reasoning',
-            id: `reasoning_${String(input.length)}`,
-            content: [{ type: 'reasoning_text', text: reasoning }],
-            summary: [{ type: 'summary_text', text: reasoning }],
-          });
-        }
         input.push({
           role: 'assistant',
           content: textContent(flattenText(message.content), 'output_text'),
