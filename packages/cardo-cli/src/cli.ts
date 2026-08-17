@@ -2,10 +2,13 @@
 /**
  * Cardo desktop installer CLI.
  *
- * `cardo setup` builds the desktop app ON THE USER'S MACHINE from the
- * release's source archive:
- *   1. Fetch the latest release, download its auto-generated source tarball.
- *   2. Extract it, `pnpm install --frozen-lockfile`, `pnpm run build`.
+ * `cardo setup` builds the desktop app from the release's source:
+ *   1. Fetch the latest release, download its source — the prebuilt source
+ *      asset (`cardo-src-<tag>.tar.gz`, CI-built dist/lib + a `.cardo-prebuilt`
+ *      marker) when the release carries one, else the auto-generated tarball.
+ *   2. Extract it, `pnpm install --frozen-lockfile`, then `pnpm run build`
+ *      only when the prebuilt marker is absent (old releases and --source
+ *      checkouts build as before; the asset skips it).
  *   3. Package the Electron app, then embed the whole source tree into the
  *      app resources — the app resolves the bundled dsh CLI, vendored
  *      plugins, and skills from there at runtime, and ensures the built-ins
@@ -19,7 +22,8 @@
  *        shortcut, the source embeds under resources/src (the shell resolves
  *        it via process.resourcesPath), and the app launches as Cardo.exe.
  *
- * No pre-built binary is downloaded: the source is the artifact.
+ * No pre-built binary is downloaded: the source is the artifact — built
+ * ahead of time by CI when the release asset exists.
  *
  * `cardo setup --source <dir>` builds from a local workspace checkout
  * instead of downloading a release — the Windows CI verification path.
@@ -34,7 +38,7 @@
 
 import { execFile, spawn, type ExecFileException } from 'node:child_process';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rename, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -43,18 +47,24 @@ import {
   REPO,
   builderArgs,
   cmdQuote,
+  commandErrorMessage,
   currentPlatform,
   embedResourcesDir,
+  embedStrategy,
   findBuiltApp,
   findSourceRoot,
+  hasPrebuiltSource,
   installDestination,
   installPlan,
   launchTarget,
   parseArgs,
+  pnpmInvocation,
+  pnpmVersionFromPackageJson,
   readVersion,
-  sourceArchiveUrl,
+  sourceDownloadUrl,
   startMenuShortcut,
   type InstallPlatform,
+  type ReleaseAsset,
 } from './install-logic.js';
 
 const PACKAGE_NAME = '@uniterra-solutions/cardo';
@@ -83,6 +93,7 @@ const ROBOCOPY_QUIET = [
 
 interface LatestRelease {
   readonly tag_name: string;
+  readonly assets?: readonly ReleaseAsset[];
 }
 
 interface RunResult {
@@ -114,13 +125,30 @@ function run(
       },
       (error: ExecFileException | null, stdout: string, stderr: string) => {
         if (error !== null) {
-          reject(new Error(error.message));
+          reject(new Error(commandErrorMessage(error.message, error.code, stderr, stdout)));
           return;
         }
         resolve({ stdout, stderr });
       },
     );
   });
+}
+
+/** How to run pnpm for this install. The CLI itself runs on node, so node
+ * (with its bundled npm/npx) is guaranteed; pnpm is the only tool that can be
+ * absent. When it's missing, npx fetches the exact version the source tree
+ * pins (`packageManager` field), so the install self-provisions instead of
+ * failing on a machine without a global pnpm. */
+async function resolvePnpm(src: string): Promise<{ file: string; args: readonly string[] }> {
+  let onPath = false;
+  try {
+    await run('pnpm', ['--version']);
+    onPath = true;
+  } catch {
+    // not installed — self-provision via npx below
+  }
+  const packageJson = await readFile(join(src, 'package.json'), 'utf8');
+  return pnpmInvocation(onPath, pnpmVersionFromPackageJson(packageJson));
 }
 
 /** Windows recursive copy. Robocopy's exit code is a bitmask where 0-7 all
@@ -217,6 +245,10 @@ interface InstallOptions {
 interface ResolvedSource {
   readonly src: string;
   readonly version: string;
+  /** True when the CLI downloaded the release source into its own tmp tree
+   * (safe to rename when embedding); false for a `--source` local checkout,
+   * which must never be moved away from the user's working copy. */
+  readonly downloaded: boolean;
 }
 
 /** Resolve the source tree to build. `--source` uses a local workspace
@@ -243,13 +275,13 @@ async function resolveInstallSource(
     const version = await readVersion(
       join(options.source, 'packages', 'cardo-desktop', 'package.json'),
     );
-    return { src: options.source, version };
+    return { src: options.source, version, downloaded: false };
   }
 
   const release = await fetchLatestRelease();
   process.stdout.write(`Downloading source ${release.tag_name}...\n`);
   const tarPath = join(tmpRoot, 'source.tar.gz');
-  await downloadFile(sourceArchiveUrl(release.tag_name), tarPath);
+  await downloadFile(sourceDownloadUrl(release.tag_name, release.assets ?? []), tarPath);
   const extractDir = join(tmpRoot, 'src');
   await extractTarGz(tarPath, extractDir, platform);
   const src = await findSourceRoot(extractDir);
@@ -257,7 +289,7 @@ async function resolveInstallSource(
     process.stdout.write(`[dry-run] Would build from ${src} and install for ${platform}\n`);
     return undefined;
   }
-  return { src, version: release.tag_name.replace(/^v/, '') };
+  return { src, version: release.tag_name.replace(/^v/, ''), downloaded: true };
 }
 
 /** Windows: move a directory, preferring an instant same-volume rename.
@@ -294,10 +326,23 @@ async function moveArtifact(
   await run('/bin/mv', [appPath, staged]);
 }
 
-/** Embed the source tree into the packaged app's resources dir. */
-async function embedSource(staged: string, src: string, platform: InstallPlatform): Promise<void> {
+/** Embed the source tree into the packaged app's resources dir. A DOWNLOADED
+ * source on Windows is renamed into the app (same volume — instant, robocopy
+ * fallback on EXDEV/EPERM); a `--source` checkout is always copied so the
+ * user's working tree stays put. macOS copies (APFS clonefile is already
+ * near-instant). */
+async function embedSource(
+  staged: string,
+  src: string,
+  platform: InstallPlatform,
+  strategy: 'move' | 'copy',
+): Promise<void> {
   const target = join(embedResourcesDir(platform, staged), 'src');
   if (platform === 'windows') {
+    if (strategy === 'move') {
+      await moveOrRobocopy(src, target);
+      return;
+    }
     await robocopy(src, target);
     return;
   }
@@ -368,20 +413,29 @@ async function buildInstallApp(options: InstallOptions): Promise<string | undefi
       return undefined; // dry-run reported already
     }
     const { src, version } = resolved;
+    const pnpm = await resolvePnpm(src);
 
     process.stdout.write('Installing dependencies...\n');
     // CI=true: the installer may run without a TTY (CI environments, or
     // spawned detached) and pnpm 11 aborts with
     // ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY otherwise.
-    await run('pnpm', ['install', '--frozen-lockfile'], {
+    await run(pnpm.file, [...pnpm.args, 'install', '--frozen-lockfile'], {
       cwd: src,
       env: { ...process.env, CI: 'true' },
     });
-    process.stdout.write('Building packages...\n');
-    await run('pnpm', ['run', 'build'], { cwd: src });
+    if (await hasPrebuiltSource(src)) {
+      // The release asset ships the built tree (CI built it on Linux, and
+      // tsc/esbuild output is platform-independent), so the multi-minute
+      // build is skipped. Pre-asset releases and --source checkouts have no
+      // marker and build exactly as before.
+      process.stdout.write('Prebuilt artifacts found — skipping the workspace build.\n');
+    } else {
+      process.stdout.write('Building packages...\n');
+      await run(pnpm.file, [...pnpm.args, 'run', 'build'], { cwd: src });
+    }
 
     process.stdout.write('Packaging the desktop app...\n');
-    await packageApp(src, version, platform);
+    await packageApp(src, version, platform, pnpm);
 
     // Move the packaged artifact OUT of the source tree (electron-builder
     // writes it under <src>/packages/cardo-desktop/dist), then embed the
@@ -392,10 +446,11 @@ async function buildInstallApp(options: InstallOptions): Promise<string | undefi
     await mkdir(outDir, { recursive: true });
     const staged = join(outDir, basename(appPath));
     await moveArtifact(appPath, staged, platform);
-    // This step copies hundreds of thousands of small files (the embedded
-    // node_modules) — the line before it keeps the install log readable.
+    // This step moves/copies hundreds of thousands of small files (the
+    // embedded node_modules) — the line before it keeps the install log
+    // readable.
     process.stdout.write('Embedding source tree into the app...\n');
-    await embedSource(staged, src, platform);
+    await embedSource(staged, src, platform, embedStrategy(platform, resolved.downloaded));
 
     const destination = installDestination(platform, process.env, staged);
     process.stdout.write(`Installing to ${destination}...\n`);
@@ -455,11 +510,20 @@ async function runInstallPlan(command: 'setup' | 'update', options: InstallOptio
 }
 
 /** Package the Electron app; the source is embedded afterwards by the caller. */
-async function packageApp(src: string, version: string, platform: InstallPlatform): Promise<void> {
+async function packageApp(
+  src: string,
+  version: string,
+  platform: InstallPlatform,
+  pnpm: { file: string; args: readonly string[] },
+): Promise<void> {
   const desktopDir = join(src, 'packages', 'cardo-desktop');
-  await run('pnpm', ['exec', 'electron-builder', ...builderArgs(platform, version)], {
-    cwd: desktopDir,
-  });
+  await run(
+    pnpm.file,
+    [...pnpm.args, 'exec', 'electron-builder', ...builderArgs(platform, version)],
+    {
+      cwd: desktopDir,
+    },
+  );
 }
 
 async function updateCli(): Promise<void> {

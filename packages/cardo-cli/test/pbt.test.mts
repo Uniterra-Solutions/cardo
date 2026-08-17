@@ -22,18 +22,26 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  PREBUILT_MARKER,
   builderArgs,
   cmdQuote,
+  commandErrorMessage,
   embedResourcesDir,
+  embedStrategy,
   findBuiltApp,
   findSourceRoot,
+  hasPrebuiltSource,
   installDestination,
   installPlan,
   launchTarget,
   parseArgs,
+  pnpmInvocation,
+  pnpmVersionFromPackageJson,
   psSingleQuote,
   readVersion,
   sourceArchiveUrl,
+  sourceAssetName,
+  sourceDownloadUrl,
   startMenuShortcut,
 } from '../dist/install-logic.js';
 
@@ -475,6 +483,195 @@ test('startMenuShortcut: exe paths with quotes survive the PS script', () => {
       const exePath = join(...parts, 'Cardo.exe');
       const spec = startMenuShortcut(exePath, {});
       assert.ok(spec.script.includes(`TargetPath='${psSingleQuote(exePath)}'`));
+    }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// ASSET — prebuilt source asset selection (the CLI downloads it when the
+// release carries one; otherwise it falls back to the auto-generated archive)
+// ---------------------------------------------------------------------------
+
+const tagPartsArb = fc.array(
+  fc.constantFrom('v', '0', '1', '9', '.', '-', 'beta', 'rc', '_', 'a', 'b'),
+  {
+    minLength: 1,
+    maxLength: 12,
+  },
+);
+const assetUrlArb = fc.constantFrom(
+  'https://cdn.example.com/cardo/x.tar.gz',
+  'https://dl.example.org/a/b/c.tar.gz',
+  'https://github.example/cardo-assets/1.tar.gz',
+);
+
+test('sourceAssetName: names the prebuilt asset for the tag', () => {
+  fc.assert(
+    fc.property(tagPartsArb, (parts) => {
+      const tag = parts.join('');
+      const name = sourceAssetName(tag);
+      assert.ok(name.startsWith('cardo-src-'), 'asset prefix');
+      assert.ok(name.endsWith('.tar.gz'), 'tarball suffix');
+      assert.ok(name.includes(tag), 'the tag is carried in the name');
+    }),
+  );
+});
+
+test('sourceDownloadUrl: the matching asset wins at any position; otherwise the auto-archive fallback', () => {
+  fc.assert(
+    fc.property(
+      tagPartsArb,
+      fc.array(fc.tuple(assetUrlArb, assetUrlArb), { maxLength: 4 }),
+      (parts, pairs) => {
+        const tag = parts.join('');
+        const matchUrl = 'https://releases.example.com/match.tar.gz';
+        const others = pairs.map(([name, url]) => ({ name, browser_download_url: url }));
+        assert.equal(
+          sourceDownloadUrl(tag, others),
+          sourceArchiveUrl(tag),
+          'no matching asset → GitHub auto-archive fallback (old releases)',
+        );
+        for (let i = 0; i <= others.length; i += 1) {
+          const withMatch = [
+            ...others.slice(0, i),
+            { name: sourceAssetName(tag), browser_download_url: matchUrl },
+            ...others.slice(i),
+          ];
+          assert.equal(
+            sourceDownloadUrl(tag, withMatch),
+            matchUrl,
+            `the matching asset wins at position ${i}`,
+          );
+        }
+      },
+    ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// PREBUILT — the marker alone decides whether `cardo setup` skips the build
+// ---------------------------------------------------------------------------
+
+test('hasPrebuiltSource: exactly the marker file decides the build skip', async () => {
+  const entryArb = fc.constantFrom(
+    PREBUILT_MARKER,
+    'package.json',
+    'pnpm-lock.yaml',
+    'packages',
+    'node_modules',
+    '.git',
+    'dist',
+    'README.md',
+  );
+  await fc.assert(
+    fc.asyncProperty(fc.array(entryArb, { maxLength: 6 }), async (entries) => {
+      const dir = await mkdtemp(join(tmpdir(), 'cardo-marker-'));
+      try {
+        for (const entry of new Set(entries)) {
+          await writeFile(join(dir, entry), 'x');
+        }
+        assert.equal(
+          await hasPrebuiltSource(dir),
+          entries.includes(PREBUILT_MARKER),
+          'skip iff the marker is present — nothing else may decide',
+        );
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }),
+  );
+});
+
+test('hasPrebuiltSource: a missing root reports no marker (the caller builds)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cardo-marker-'));
+  const missing = join(dir, 'does-not-exist');
+  await rm(dir, { recursive: true, force: true });
+  assert.equal(await hasPrebuiltSource(missing), false);
+});
+
+// ---------------------------------------------------------------------------
+// EMBED — only a DOWNLOADED Windows source may be renamed into the app;
+// a --source checkout must never be moved away from the user's tree
+// ---------------------------------------------------------------------------
+
+test('embedStrategy: only a downloaded Windows source moves; every other case copies', () => {
+  fc.assert(
+    fc.property(fc.constantFrom('macos', 'windows'), fc.boolean(), (platform, downloaded) => {
+      const strategy = embedStrategy(platform, downloaded);
+      if (platform === 'windows' && downloaded) {
+        assert.equal(strategy, 'move', 'downloaded Windows source uses the rename fast path');
+      } else {
+        assert.equal(strategy, 'copy', '--source checkouts and macOS never move the source');
+      }
+    }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// ERROR — a failed subprocess must never swallow its captured output
+// ---------------------------------------------------------------------------
+
+test('commandErrorMessage: keeps the command line and surfaces the exit code + output', () => {
+  fc.assert(
+    fc.property(
+      fc.string(),
+      fc.oneof(fc.integer(), fc.string(), fc.constant(undefined)),
+      fc.string(),
+      fc.string(),
+      (message, code, stderr, stdout) => {
+        const err = commandErrorMessage(message, code, stderr, stdout);
+        assert.ok(err.startsWith(message), 'the command line is always kept');
+        if (typeof code === 'number') {
+          assert.ok(
+            err.includes(`(exit code ${code})`),
+            'numeric code becomes an exit-code suffix',
+          );
+        }
+        const output = [stderr.trim(), stdout.trim()].filter((part) => part.length > 0).join('\n');
+        if (output.length > 0) {
+          assert.ok(err.endsWith(output), 'captured output is appended verbatim');
+        }
+      },
+    ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// PNPM — self-provision when the pinned package manager is absent
+// ---------------------------------------------------------------------------
+
+const pinnedVersionArb = fc
+  .array(fc.constantFrom('0', '1', '9', '.', '-', 'a', 'b', 'rc'), {
+    minLength: 1,
+    maxLength: 8,
+  })
+  .map((parts) => parts.join(''));
+
+test('pnpmVersionFromPackageJson: reads the packageManager pin or returns undefined', () => {
+  fc.assert(
+    fc.property(fc.boolean(), pinnedVersionArb, (present, version) => {
+      const json = present
+        ? `{"name":"x","version":"1.0.0","packageManager":"pnpm@${version}"}`
+        : `{"name":"x","version":"1.0.0"}`;
+      assert.equal(pnpmVersionFromPackageJson(json), present ? version : undefined);
+    }),
+  );
+});
+
+test('pnpmInvocation: pnpm on PATH is used as-is; otherwise npx fetches the pin; unknown pin throws', () => {
+  const versionArb = fc.option(pinnedVersionArb).map((v) => v ?? undefined);
+  fc.assert(
+    fc.property(fc.boolean(), versionArb, (onPath, version) => {
+      if (onPath) {
+        assert.deepEqual(pnpmInvocation(true, version), { file: 'pnpm', args: [] });
+      } else if (version !== undefined) {
+        assert.deepEqual(pnpmInvocation(false, version), {
+          file: 'npx',
+          args: ['--yes', `pnpm@${version}`],
+        });
+      } else {
+        assert.throws(() => pnpmInvocation(false, version), /cannot self-provision pnpm/);
+      }
     }),
   );
 });

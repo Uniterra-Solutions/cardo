@@ -24,6 +24,92 @@ export function sourceArchiveUrl(tag: string): string {
   return `https://github.com/${REPO}/archive/refs/tags/${encodeURIComponent(tag)}.tar.gz`;
 }
 
+/** Root-level marker shipped in the release's prebuilt source asset. When
+ * present, the CLI skips `pnpm run build` — the release workflow already
+ * built the tree (tsc/esbuild output is platform-independent). */
+export const PREBUILT_MARKER = '.cardo-prebuilt';
+
+/** A GitHub release asset entry — the fields the source download uses. */
+export interface ReleaseAsset {
+  readonly name: string;
+  readonly browser_download_url: string;
+}
+
+/** The release asset carrying the source tree WITH built artifacts (built by
+ * the release workflow on Linux; one asset serves both install platforms). */
+export function sourceAssetName(tag: string): string {
+  return `cardo-src-${tag}.tar.gz`;
+}
+
+/** The source download URL for a release: the prebuilt source asset when the
+ * release carries one, the GitHub auto-generated archive otherwise (releases
+ * predating the asset keep building on the user's machine). */
+export function sourceDownloadUrl(tag: string, assets: readonly ReleaseAsset[]): string {
+  const match = assets.find((asset) => asset.name === sourceAssetName(tag));
+  return match?.browser_download_url ?? sourceArchiveUrl(tag);
+}
+
+/** Whether the source root carries the prebuilt marker: the marker alone
+ * decides the build skip — a `--source` checkout without it builds as
+ * always. A missing root reports false, so the caller builds (and any real
+ * error surfaces from the build itself). */
+export async function hasPrebuiltSource(root: string): Promise<boolean> {
+  try {
+    return (await readdir(root)).includes(PREBUILT_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+/** How `embedSource` places the source into the packaged app: a DOWNLOADED
+ * source on Windows sits on the same volume as the staging dir, so a
+ * same-volume rename (robocopy fallback) is instant; every other case
+ * copies — a `--source` checkout must NEVER be moved away from the user's
+ * tree, whatever volume it is on. */
+export function embedStrategy(platform: InstallPlatform, downloaded: boolean): 'move' | 'copy' {
+  return platform === 'windows' && downloaded ? 'move' : 'copy';
+}
+
+/** Build the message for a failed subprocess: the command line, its exit
+ * code, and its captured output — the output is what carries the real
+ * failure reason (e.g. electron-builder's binary-download error), which the
+ * CLI must never swallow. */
+export function commandErrorMessage(
+  message: string,
+  code: number | string | null | undefined,
+  stderr: string,
+  stdout: string,
+): string {
+  const output = [stderr.trim(), stdout.trim()].filter((part) => part.length > 0).join('\n');
+  const suffix = typeof code === 'number' ? ` (exit code ${String(code)})` : '';
+  return `${message}${suffix}${output.length > 0 ? `\n${output}` : ''}`;
+}
+
+/** The pnpm version pinned by a package.json `packageManager` field, e.g.
+ * `"packageManager": "pnpm@11.17.0"` → `"11.17.0"`; undefined when absent. */
+export function pnpmVersionFromPackageJson(packageJson: string): string | undefined {
+  return /"packageManager"\s*:\s*"pnpm@([^"]+)"/.exec(packageJson)?.[1];
+}
+
+/** How to invoke pnpm: the installed binary, or npx (bundled with the npm
+ * that ships with the node running this CLI) fetching the pinned version —
+ * so a machine without a global pnpm self-provisions instead of failing.
+ * Throws when pnpm is missing AND the pin is unknown (no version to fetch). */
+export function pnpmInvocation(
+  pnpmOnPath: boolean,
+  pnpmVersion: string | undefined,
+): { readonly file: string; readonly args: readonly string[] } {
+  if (pnpmOnPath) {
+    return { file: 'pnpm', args: [] };
+  }
+  if (pnpmVersion === undefined) {
+    throw new Error(
+      'pnpm is not installed and the source tree has no packageManager pin — cannot self-provision pnpm',
+    );
+  }
+  return { file: 'npx', args: ['--yes', `pnpm@${pnpmVersion}`] };
+}
+
 /** The single extracted source root (GitHub names it `<repo>-<tag>`). */
 export async function findSourceRoot(dir: string): Promise<string> {
   const entries = await readdir(dir, { withFileTypes: true });
