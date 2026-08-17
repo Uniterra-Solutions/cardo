@@ -35,19 +35,16 @@ const target = process.argv[2] ?? path.resolve(root, 'vendor', 'dsh-runtime');
 function runtimeDeps() {
   return {
     '@deepseek-ai/dsh': '0.1.0-rc.6',
-    'dshmarket': '1.9.0',
+    dshmarket: '1.9.0',
     'dsh-notifier': '0.6.2',
     'dsh-better-sidebar': '0.12.2',
     'dsh-file-upload': '0.4.2',
-    'dsh-lan-gateway': '0.2.1',
     'dsh-find-plugin': '0.3.6',
     'dsh-subagent-model-picker': '0.1.1',
     // Vendored (non-npm) plugins: file: refs pull them into the hoisted
     // tree so the dsh loader can resolve the profile bundles from the
     // runtime alone (no pnpm install at app runtime).
     'dsh-deep-whale': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-deep-whale')}`,
-    'dsh-subagent-monitor': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-subagent-monitor')}`,
-    'dsh-thinking-effort': `file:${path.join(root, 'vendor', 'dsh-plugins', 'dsh-thinking-effort')}`,
   };
 }
 
@@ -56,23 +53,34 @@ rmSync(tmp, { recursive: true, force: true });
 mkdirSync(tmp, { recursive: true });
 writeFileSync(
   path.join(tmp, 'package.json'),
-  `${JSON.stringify({
-    name: 'cardo-dsh-runtime',
-    private: true,
-    type: 'module',
-    dependencies: runtimeDeps(),
-  }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      name: 'cardo-dsh-runtime',
+      private: true,
+      type: 'module',
+      dependencies: runtimeDeps(),
+    },
+    null,
+    2,
+  )}\n`,
 );
 // pnpm 11 reads non-auth settings from pnpm-workspace.yaml (not .npmrc).
 // autoInstallPeers: false — some vendored plugins declare peers that only
 // exist in the dsh source workspace (not npm); the host tree provides them.
-writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'nodeLinker: hoisted\nautoInstallPeers: false\n');
+writeFileSync(
+  path.join(tmp, 'pnpm-workspace.yaml'),
+  'nodeLinker: hoisted\nautoInstallPeers: false\n',
+);
 
 execFileSync('pnpm', ['install', '--dir', tmp, '--ignore-scripts'], {
   env: { ...process.env, CI: 'true' },
   stdio: 'inherit',
 });
-execFileSync('pnpm', ['rebuild'], { cwd: tmp, env: { ...process.env, CI: 'true' }, stdio: 'inherit' });
+execFileSync('pnpm', ['rebuild'], {
+  cwd: tmp,
+  env: { ...process.env, CI: 'true' },
+  stdio: 'inherit',
+});
 
 // Copy the hoisted tree into the target (regular files — no deref needed).
 rmSync(target, { recursive: true, force: true });

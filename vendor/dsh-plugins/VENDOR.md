@@ -11,10 +11,19 @@ copy for every checkout, with no build-time GitHub dependency.
 | Directory | Upstream | Pinned commit | Notes |
 |---|---|---|---|
 | `dsh-deep-whale` | `Small-tailqwq/dsh-deep-whale` | `873f5c6d7f52aa4e4283a5ffd5598229595184da` | Whale-maid skin, **standalone distribution** (`maid-atelier/` package). Chosen over the GGBond `deep-whale-day-night-theme` builtin-row distribution, which depends on `dsh-client-ui-theme-plugins` / `dsh-host-theme-catalog` (absent in the pinned rc.6 family) and so silently never loaded. This copy self-inserts its `ui-skin-maid-atelier` row, ships a no-op host (`apply` is empty, art embedded as data URIs) and needs only `@deepseek-ai/cordis`. Trimmed to runtime files (`lib/` + `package.json` + `cordis.patch.yml` + `skin.json` + `preview/` + license/NOTICE/README); `src/`/`assets/`/`build/`/`tests/` are source/build, not runtime. Package name: `@dsh-external/dsh-client-ui-skin-maid-atelier`. CC BY-NC-SA 4.0 — non-commercial only. |
-| `dsh-subagent-monitor` | `Mombrane/dsh-subagent-monitor` | `5f7f026f877b127c53d4205aeec2cca94e316bcc` | npm package name: `@leetoners/dsh-ui-subagent-monitor` |
-| `dsh-thinking-effort` | `hytime/dsh-thinking-effort` | `b2f5c54f1a0743114ece8c6de6334a7ae652b436` | Custom-provider reasoning-effort GUI |
 | `dsh-shortcuts` | `Ricketts-Guo/dsh-shortcuts` | `0d12280cea78451d7d7e65bdb7e8b475f41c0a79` | 34 pre-registered keyboard shortcuts (session/view/clipboard/model/permission/system), one-click recording, macOS-first defaults. Client-only plugin (needs `react`, `@deepseek-ai/cordis`, `@deepseek-ai/dsh-client-runtime` — all host-provided). Trimmed to runtime (`lib/` + `package.json` + `cordis.patch.yml` + docs); `test/`/`install.sh` are source/ops, not runtime. |
-| `dsh-git-graph` | `1841220388zzzcccxxx-star/dsh-git-graph` | `6b9899060ae28decfad065d9656519591f6013d7` | Embedded git repo graph visualizer: commit DAG, branch filter, file diff, VSCode-style uncommitted changes. Zero npm dependencies (server half uses node builtins + `git` binary); serves its own `web/index.html` relative to the package root, so the whole `web/` dir ships. Patch is a root `insert` of one loader row. |
+
+## Retired plugins
+
+These were vendored built-ins once, then dropped because their function
+overlapped another built-in (see the desktop's `RETIRED_BUILTINS` list):
+
+| Directory (removed) | Replaced by |
+|---|---|
+| `dsh-subagent-monitor` (`@leetoners/dsh-ui-subagent-monitor`) | `dsh-better-sidebar` Tasks page (subagent topology + background jobs) |
+| `dsh-git-graph` | `dsh-better-sidebar` Git panel (history, diff, uncommitted changes) |
+| `dsh-thinking-effort` | `@cardo/cardo-provider` (declares + edits `reasoningEfforts` from models.dev) |
+| `dsh-hotkeys` (npm) | `dsh-shortcuts` |
 
 ## Update policy
 
@@ -29,10 +38,7 @@ To bump one plugin:
 
 ```sh
 dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-deep-whale
-dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-subagent-monitor
-dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-thinking-effort
 dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-shortcuts
-dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-git-graph
 ```
 
 Smoke test after any change: sandbox `DSH_HOME`, boot the profile, expect

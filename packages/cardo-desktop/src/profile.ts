@@ -10,20 +10,13 @@ export const PROFILE_PLUGINS: readonly string[] = [
   'dsh-notifier@0.6.2',
   'dsh-better-sidebar@0.12.2',
   'dsh-file-upload@0.4.2',
-  'dsh-lan-gateway@0.2.1',
   'dsh-find-plugin@0.3.6',
   'dsh-subagent-model-picker@0.1.1',
 ] as const;
 
 /** Vendored (non-npm) community plugins, installed from the monorepo checkout
  * at build time. The `vendor/dsh-plugins` pin ledger records their commits. */
-export const VENDOR_PLUGIN_DIRS: readonly string[] = [
-  'dsh-deep-whale',
-  'dsh-subagent-monitor',
-  'dsh-thinking-effort',
-  'dsh-shortcuts',
-  'dsh-git-graph',
-] as const;
+export const VENDOR_PLUGIN_DIRS: readonly string[] = ['dsh-deep-whale', 'dsh-shortcuts'] as const;
 
 /** The official dsh bundles every profile stacks (resolved from the dsh CLI). */
 export const OFFICIAL_BUNDLES: readonly string[] = [

@@ -16,6 +16,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as fc from 'fast-check';
 import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -23,9 +24,11 @@ import {
   BUILTIN_NPM_PLUGINS,
   BUILTIN_VENDOR_PLUGINS,
   BUILTIN_WORKSPACE_PLUGINS,
+  RETIRED_BUILTINS,
   builtinPackageName,
   expectedBuiltinBundles,
   hasAllBuiltins,
+  removeRetiredBuiltins,
   vendoredPluginsStale,
 } from '../dist/builtin.js';
 import { awaitReadiness } from '../dist/dsh-process.js';
@@ -39,8 +42,7 @@ const npmSpecArb = fc.oneof(
   fc.constant('dsh-notifier@0.6.2'),
   fc.constant('dsh-better-sidebar@0.12.2'),
   fc.constant('@dsh-external/dsh-client-ui-skin-maid-atelier@1.0.0'),
-  fc.constant('@leetoners/dsh-ui-subagent-monitor@1.0.0'),
-  fc.constant('dsh-thinking-effort@0.1.0'),
+  fc.constant('dsh-shortcuts@1.1.0'),
 );
 
 /** Independent model: the version split is on the LAST `@` (names may be scoped). */
@@ -88,9 +90,11 @@ const bundleWordArb = fc.constantFrom(
   'dsh-find-plugin',
   'dsh-subagent-model-picker',
   '@dsh-external/dsh-client-ui-skin-maid-atelier',
-  '@leetoners/dsh-ui-subagent-monitor',
-  'dsh-thinking-effort',
+  'dsh-shortcuts',
   '@cardo/cardo-provider',
+  // Retired built-ins linger in profiles provisioned by older cardo builds;
+  // they must count as harmless extras for the SET verdict.
+  ...RETIRED_BUILTINS,
   'user-installed-plugin',
   'totally-unrelated',
 );
@@ -193,12 +197,21 @@ function isSelfContainedPatch(patchText) {
 
 test('VENDOR: every built-in vendored plugin contributes its Loader row via a self-contained insert patch', async () => {
   const entries = Object.entries(BUILTIN_VENDOR_PLUGINS);
-  assert.ok(entries.length >= 3, 'all three vendored built-ins remain shipped');
+  assert.ok(entries.length >= 2, 'both vendored built-ins remain shipped');
   for (const [dirName] of entries) {
     const text = await readFile(join(vendorPluginsRoot, dirName, 'cordis.patch.yml'), 'utf8');
     assert.ok(
       isSelfContainedPatch(text),
       `${dirName}/cordis.patch.yml must be a self-contained root insert`,
+    );
+  }
+});
+
+test('VENDOR regression: the retired built-ins must be gone from the vendored map', () => {
+  for (const retired of RETIRED_BUILTINS) {
+    assert.ok(
+      !Object.values(BUILTIN_VENDOR_PLUGINS).includes(retired),
+      `retired built-in ${retired} must not ship as a vendored built-in`,
     );
   }
 });
@@ -289,6 +302,96 @@ test('STALE: a missing or illegible installed copy is stale (forces re-provision
 });
 
 // ---------------------------------------------------------------------------
+// RETIRED — retired built-ins must heal an already-provisioned profile by
+//           removal (rows, dependency entries, installed copies), and never
+//           touch anything else
+// ---------------------------------------------------------------------------
+
+test('RETIRED: removeRetiredBuiltins removes exactly the retired rows, deps, and installed copies', async () => {
+  await fc.assert(
+    fc.asyncProperty(fc.subarray(RETIRED_BUILTINS, { minLength: 0 }), async (retired) => {
+      const dir = await mkdtemp(join(tmpdir(), 'cardo-retired-'));
+      try {
+        const profile = join(dir, 'profiles', 'web');
+        const installed = new Set(retired);
+        const extras = ['user-installed-plugin', '@user/scope-plugin'];
+        const deps = Object.fromEntries([
+          ...retired.map((name) => [name, '0.1.0']),
+          ...extras.map((name) => [name, '1.0.0']),
+        ]);
+        await mkdir(profile, { recursive: true });
+        for (const name of [...installed, ...extras]) {
+          const dest = join(profile, 'node_modules', ...name.split('/'));
+          await mkdir(dest, { recursive: true });
+          await writeFile(join(dest, 'package.json'), `${JSON.stringify({ name })}\n`);
+        }
+        await writeFile(
+          join(profile, 'package.json'),
+          `${JSON.stringify({
+            dependencies: deps,
+            dsh: { profile: { bundles: [...retired, ...extras, 'dsh-better-sidebar'] } },
+          })}\n`,
+        );
+
+        const removed = removeRetiredBuiltins(profile);
+        assert.equal(
+          removed,
+          retired.length > 0,
+          'removal reported iff something retired was present',
+        );
+
+        // Second pass is a no-op (idempotent).
+        assert.equal(removeRetiredBuiltins(profile), false);
+
+        const manifest = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
+        for (const name of RETIRED_BUILTINS) {
+          assert.ok(!manifest.dsh.profile.bundles.includes(name), `${name} row removed`);
+          assert.ok(!(name in manifest.dependencies), `${name} dependency removed`);
+        }
+        for (const name of extras) {
+          assert.ok(manifest.dsh.profile.bundles.includes(name), `${name} row untouched`);
+          assert.ok(name in manifest.dependencies, `${name} dependency untouched`);
+        }
+        assert.ok(manifest.dsh.profile.bundles.includes('dsh-better-sidebar'));
+        for (const name of RETIRED_BUILTINS) {
+          assert.equal(
+            existsSync(join(profile, 'node_modules', ...name.split('/'))),
+            false,
+            `${name} installed copy removed`,
+          );
+        }
+        for (const name of extras) {
+          assert.equal(
+            existsSync(join(profile, 'node_modules', ...name.split('/'))),
+            true,
+            `${name} installed copy untouched`,
+          );
+        }
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }),
+  );
+});
+
+test('RETIRED: an illegible manifest never throws — node_modules cleanup still runs', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cardo-retired-'));
+  try {
+    const profile = join(dir, 'profiles', 'web');
+    await mkdir(profile, { recursive: true });
+    const name = RETIRED_BUILTINS[0];
+    const dest = join(profile, 'node_modules', ...name.split('/'));
+    await mkdir(dest, { recursive: true });
+    await writeFile(join(profile, 'package.json'), 'not json at all {{{');
+    assert.equal(removeRetiredBuiltins(profile), true); // the installed copy was removed
+    assert.equal(removeRetiredBuiltins(profile), false);
+    assert.equal(existsSync(dest), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // READY — awaitReadiness
 // ---------------------------------------------------------------------------
 
@@ -342,7 +445,18 @@ test('READY: resolves with the first 127.0.0.1 URL even when split across arbitr
 
 test('READY: a stream that never carries a 127.0.0.1 URL rejects', async () => {
   const junk = fc.array(
-    fc.constantFrom('booting', ' ', '\n', 'log', 'line', '...', 'http', '://', 'localhost', 'https'),
+    fc.constantFrom(
+      'booting',
+      ' ',
+      '\n',
+      'log',
+      'line',
+      '...',
+      'http',
+      '://',
+      'localhost',
+      'https',
+    ),
     { maxLength: 12 },
   );
   await fc.assert(

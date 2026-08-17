@@ -19,7 +19,6 @@ export const BUILTIN_NPM_PLUGINS: readonly string[] = [
   'dsh-file-upload@0.4.2',
   'dsh-find-plugin@0.3.6',
   'dsh-subagent-model-picker@0.1.1',
-  'dsh-hotkeys@0.1.1',
   'dsh-tool-git@0.1.3',
   'dsh-browser-playwright@0.1.1',
   'dsh-computer-use@0.1.0',
@@ -27,10 +26,9 @@ export const BUILTIN_NPM_PLUGINS: readonly string[] = [
 
 /** Vendored (non-npm) built-ins: source dir → package name. The loader
  * resolves a bundle row by the package.json `name`, which can differ from
- * the repo dir (e.g. the subagent-monitor dir's package is
- * `@leetoners/dsh-ui-subagent-monitor`). They are copied into the profile's
- * node_modules (not pnpm-installed) because some declare peers that only
- * exist in the dsh source workspace and pnpm would fail fetching them.
+ * the repo dir. They are copied into the profile's node_modules (not
+ * pnpm-installed) because some declare peers that only exist in the dsh
+ * source workspace and pnpm would fail fetching them.
  *
  * The skin is the `dsh-deep-whale` standalone distribution (`maid-atelier`
  * package) — self-inserting, host is a no-op, art embedded. The earlier
@@ -40,10 +38,7 @@ export const BUILTIN_NPM_PLUGINS: readonly string[] = [
  * never loaded. See `vendor/dsh-plugins/VENDOR.md`. */
 export const BUILTIN_VENDOR_PLUGINS: Readonly<Record<string, string>> = {
   'dsh-deep-whale': '@dsh-external/dsh-client-ui-skin-maid-atelier',
-  'dsh-subagent-monitor': '@leetoners/dsh-ui-subagent-monitor',
-  'dsh-thinking-effort': 'dsh-thinking-effort',
   'dsh-shortcuts': 'dsh-shortcuts',
-  'dsh-git-graph': 'dsh-git-graph',
 };
 
 /** In-house (this repo's own) built-ins: source dir (relative to the source
@@ -179,6 +174,81 @@ export function workspacePluginsStale(profileDirPath: string, sourceRoot: string
   return false;
 }
 
+/** Built-in plugins retired from the cardo profile (dropped, or their
+ * function folded into another built-in). A profile provisioned by an older
+ * cardo still carries their bundle rows and installed copies; because
+ * {@link hasAllBuiltins} deliberately ignores extras, those rows would stay
+ * loaded forever without an explicit heal. Removal targets exactly these
+ * names — user-installed plugins are never touched. */
+export const RETIRED_BUILTINS: readonly string[] = [
+  // Keyboard hotkeys: overlapped by the vendored `dsh-shortcuts`.
+  'dsh-hotkeys',
+  // Live subagent monitor: covered by dsh-better-sidebar's Tasks page.
+  '@leetoners/dsh-ui-subagent-monitor',
+  // Embedded git graph: covered by dsh-better-sidebar's Git panel.
+  'dsh-git-graph',
+  // Third-party reasoning-effort editor: @cardo/cardo-provider declares
+  // reasoningEfforts from models.dev and edits them in its own settings page.
+  'dsh-thinking-effort',
+];
+
+/**
+ * Remove retired built-ins from one profile: their bundle rows, their
+ * `dependencies` entries, and their installed copies under node_modules.
+ * Idempotent and cheap; runs before the provisioning gate so already-full
+ * profiles heal by removal instead of early-returning.
+ *
+ * @returns true when anything was removed or rewritten.
+ */
+export function removeRetiredBuiltins(profileDirPath: string): boolean {
+  let changed = false;
+  for (const name of RETIRED_BUILTINS) {
+    const dest = path.join(profileDirPath, 'node_modules', ...name.split('/'));
+    if (existsSync(dest)) {
+      rmSync(dest, { recursive: true, force: true });
+      changed = true;
+    }
+  }
+  const manifestPath = path.join(profileDirPath, 'package.json');
+  try {
+    const manifest = readJson(manifestPath) as {
+      dependencies?: Record<string, string>;
+      dsh?: { profile?: { bundles?: unknown } };
+    };
+    let manifestChanged = false;
+    const profile = manifest.dsh?.profile;
+    if (profile !== undefined && Array.isArray(profile.bundles)) {
+      const kept = (profile.bundles as unknown[]).filter(
+        (name) => typeof name !== 'string' || !RETIRED_BUILTINS.includes(name),
+      );
+      if (kept.length !== profile.bundles.length) {
+        profile.bundles = kept;
+        manifestChanged = true;
+      }
+    }
+    if (manifest.dependencies !== undefined) {
+      const keptDeps: Record<string, string> = {};
+      for (const [name, version] of Object.entries(manifest.dependencies)) {
+        if (!RETIRED_BUILTINS.includes(name)) {
+          keptDeps[name] = version;
+        }
+      }
+      if (Object.keys(keptDeps).length !== Object.keys(manifest.dependencies).length) {
+        manifest.dependencies = keptDeps;
+        manifestChanged = true;
+      }
+    }
+    if (manifestChanged) {
+      writeJson(manifestPath, manifest);
+      changed = true;
+    }
+  } catch {
+    // No legible manifest — nothing to clean there; node_modules removal
+    // above has already run.
+  }
+  return changed;
+}
+
 /**
  * Ensure the built-in plugins are installed into `dshHome`'s profile.
  *
@@ -202,6 +272,9 @@ export function ensureBuiltinPlugins(
   if (!existsSync(dir)) {
     return; // no profile yet — nothing to ensure
   }
+  // Heal retired built-ins first: an already-full profile early-returns
+  // below, so this is the only pass that can remove them.
+  removeRetiredBuiltins(dir);
   if (
     hasAllBuiltins(dir) &&
     !vendoredPluginsStale(dir, vendorRoot) &&
