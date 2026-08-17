@@ -24,9 +24,11 @@ permissions:
 #     (pnpm install/build on Windows → cardo setup --source → electron-builder
 #     --win --dir → embedded source → Start Menu shortcut → Cardo.exe boot
 #     smoke).
-# The desktop app is built ON THE USER'S MACHINE by `cardo setup` from the
-# release's source tarball, so both installer flows must be proven before the
-# source archive becomes the release artifact.
+# The publish job builds the workspace on Linux and uploads the built tree as
+# the `cardo-src-<tag>.tar.gz` release asset (dist/lib + `.cardo-prebuilt`
+# marker), so `cardo setup` skips the build on user machines; releases without
+# the asset still build from the auto-generated archive. Both installer flows
+# must be proven before the source asset becomes the release artifact.
 
 jobs:
   ci:
@@ -109,6 +111,17 @@ jobs:
             exit 1
           fi
 
+      # The source asset ships these artifacts; the CLI skips `pnpm run build`
+      # when it downloads them (tsc/esbuild output is platform-independent, so
+      # one Linux-built tree serves both macOS and Windows installs).
+      - name: Build workspace (prebuilt artifacts for the source asset)
+        run: pnpm run build
+
+      - name: Package the source asset (built tree + prebuilt marker)
+        env:
+          REF_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+        run: scripts/make-source-asset.sh "$REF_NAME"
+
       - name: Check if version already published
         id: check
         env:
@@ -144,3 +157,12 @@ jobs:
               --title "$REF_NAME" \
               --generate-notes
           fi
+
+      # The desktop artifact: the built source tree. `cardo setup` downloads
+      # this asset and skips the build; the auto-generated archive remains the
+      # fallback for releases created without it.
+      - name: Upload the source asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+        run: gh release upload "$REF_NAME" "cardo-src-${REF_NAME}.tar.gz" --clobber

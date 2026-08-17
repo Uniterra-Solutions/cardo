@@ -8,6 +8,8 @@
 #   4. The runtime dependencies the packaged Electron shell resolves are
 #      present at the paths main.ts actually uses.
 #   5. The bundled skills ship to dist/skills.
+#   6. The release source asset carries the built artifacts + the prebuilt
+#      marker (so `cardo setup` skips the build on user machines).
 set -euo pipefail
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$1"; }
@@ -88,5 +90,35 @@ export CARDO_SOURCE_ROOT=/src
   fail "Docker PBT suite failed"
 }
 ok "Docker PBT passed (bundles/provisioning properties + dsh boot to readiness)"
+
+step "9/9 release source asset ships the prebuilt build artifacts"
+TAG="v0.0.0-verify"
+scripts/make-source-asset.sh "$TAG" > /tmp/asset.log 2>&1 || {
+  tail -20 /tmp/asset.log
+  fail "make-source-asset.sh failed"
+}
+ASSET="cardo-src-$TAG.tar.gz"
+[ -f "$ASSET" ] || fail "asset $ASSET missing"
+# The CLI must pick exactly this asset name — compute it from the compiled
+# logic so the producer and the downloader can never drift apart.
+ASSET_NAME="$(node --input-type=module -e \
+  "import('./packages/cardo-cli/dist/install-logic.js').then((m) => process.stdout.write(m.sourceAssetName('$TAG')))")"
+[ "$ASSET" = "$ASSET_NAME" ] || fail "asset name $ASSET != CLI-expected $ASSET_NAME"
+# Grep the listing from a FILE, not a pipe: `grep -q` exits on its first match
+# and, under `set -o pipefail`, the SIGPIPE it sends the writer turns a
+# successful match into a pipeline failure.
+tar -tzf "$ASSET" > /tmp/asset-list.txt
+for rel in \
+  "cardo-$TAG/.cardo-prebuilt" \
+  "cardo-$TAG/packages/cardo-desktop/dist/main.js" \
+  "cardo-$TAG/packages/cardo-provider/lib/index.js"; do
+  grep -qxF -- "$rel" /tmp/asset-list.txt || fail "asset missing $rel"
+done
+grep -qE "^cardo-$TAG/packages/cardo-skills/dist/skills/[^/]+/SKILL\.md$" /tmp/asset-list.txt \
+  || fail "asset missing bundled skills"
+if grep -qE '(^|/)node_modules/|(^|/)\.git/' /tmp/asset-list.txt; then
+  fail "asset must not carry node_modules or .git"
+fi
+ok "asset $ASSET carries the marker + built artifacts (no node_modules/.git)"
 
 printf '\n\033[1;32mALL CLI-FLOW CHECKS PASSED\033[0m\n'
