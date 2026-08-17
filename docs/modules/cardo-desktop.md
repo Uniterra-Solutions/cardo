@@ -53,7 +53,7 @@ Source: `packages/cardo-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.ts`
 
 ## Update Check
 
-`initUpdateChecker()` (`main.ts:278-291`) schedules `runCardoStartupUpdateCheck()`: probes GitHub latest release + npm `latest` dist-tag in parallel, probes `cardo --version` (3 s timeout). Verdicts via `@cardo/cardo-updater` (see [cardo-updater.md](cardo-updater.md)). Overridable: `CARDO_UPDATE_API_BASE`, `CARDO_UPDATE_NPM_URL`, `CARDO_UPDATE_COMMAND`, `CARDO_UPDATE_RELEASES_PAGE`, `CARDO_UPDATE_DELAY_MS`. Prompt: Update Now (= `cardo setup`) / Later / Skip This Version (persisted to `userData/cardo-update-state.json`).
+`initUpdateChecker()` (`main.ts:278-291`) schedules `runCardoStartupUpdateCheck()`: probes GitHub latest release + npm `latest` dist-tag in parallel, probes `cardo --version` (3 s timeout). Verdicts via `@cardo/cardo-updater` (see [cardo-updater.md](cardo-updater.md)); the prompt response is mapped to the action by `resolveUpdateAction` and the spawn spec by `updateInvocation`. Overridable: `CARDO_UPDATE_API_BASE`, `CARDO_UPDATE_NPM_URL`, `CARDO_UPDATE_COMMAND`, `CARDO_UPDATE_RELEASES_PAGE`, `CARDO_UPDATE_DELAY_MS`. Prompt: Update Now / Later / Skip This Version (persisted to `userData/cardo-update-state.json`). Update Now spawns the updater **detached before `app.quit()`** (so it survives the shutdown) — the default invocation is `npx --yes @uniterra-solutions/cardo@latest update`, which always runs the LATEST updater and refreshes the CLI, rebuilds + reinstalls the app, and relaunches it when done: the relaunch IS the restart. (npm shims are `.cmd` on Windows — `shell: true` resolves them via PATHEXT.)
 
 ## Dependencies
 
@@ -67,10 +67,10 @@ Source: `packages/cardo-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.ts`
 - `ensureBuiltinPlugins` returns early when the profile dir doesn't exist — it enriches an existing profile, never scaffolds one.
 - Vendored plugins are copied, not `dsh plugin add`-ed (peers only exist in the dsh source workspace); workspace built-ins ship pre-built with no pnpm install — a missing `packages/cardo-provider/lib/` breaks boot (0.6.1 regression).
 - Staleness is content identity (installed vs source `package.json` version), not bundle-list — a fixed distribution can ship under the same package name.
-- `profile.ts` is legacy: `PROFILE_PLUGINS` lists 7 specs incl. `dsh-lan-gateway` (live list: 10, no lan-gateway); `profileManifest()` still has the scoped-name split bug `p.split('@')[0]` that `builtinPackageName` fixes. Do not use as a source of truth.
+- `profile.ts` is legacy: `PROFILE_PLUGINS` lists 6 specs while `builtin.ts`'s live set is 9 npm + 2 vendored (+ 1 workspace); `profileManifest()` still has the scoped-name split bug `p.split('@')[0]` that `builtinPackageName` fixes. Do not use as a source of truth.
 - `scripts/prepare-runtime.mjs` is orphaned (the 0.5.0 `vendor/dsh-runtime` model); its plugin list is inconsistent with `builtin.ts`. `vendor/dsh-runtime/` itself is a legacy snapshot not on the current boot path.
 - No Apple code signing (`hardenedRuntime: false`, `identity: null`) — no quarantine needed (macOS); Windows ships unsigned unpacked binaries.
-- On Windows the CLI probe and Update Now spawn `cardo` (npm's `cardo.cmd`) with `shell: process.platform === 'win32'` — execFile cannot launch `.cmd` shims directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT (args are fixed, no quoting risk).
+- On Windows the CLI probe and Update Now spawn npm shims (`cardo` / `npx` as `.cmd`) with `shell: process.platform === 'win32'` — execFile cannot launch `.cmd` shims directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT (args are fixed, no quoting risk).
 
 ## Decisions
 

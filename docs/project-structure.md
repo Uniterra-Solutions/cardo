@@ -25,30 +25,30 @@ Directory map for the cardo monorepo. Locate code by task, not by grepping.
 | `packages/cardo-provider`     | In-house dual-protocol LLM provider plugin (chat completions + Responses API)  | `src/index.ts`, `src/adapter.ts`, `src/serialize-*.ts`, `src/translate-*.ts`, `src/client/*`           |
 | `packages/cardo-cli`          | Public npm installer (`cardo` bin): `setup` / `update` — macOS + Windows       | `src/cli.ts`, `src/install-logic.ts`                                                                   |
 | `packages/cardo-updater`      | Pure update-check decision logic (no Electron imports)                         | `src/index.ts`, `src/decision.ts`                                                                      |
-| `packages/cardo-skills`       | Built-in skill registry (7 company skills) + provisioning                      | `src/index.ts`, `src/skills/*/SKILL.md`, `scripts/copy-skills.mjs`                                     |
+| `packages/cardo-skills`       | Built-in skill registry (10 company skills) + provisioning                     | `src/index.ts`, `src/skills/*/SKILL.md`, `scripts/copy-skills.mjs`                                     |
 | `packages/cardo-systemprompt` | pi-agent extension appending app-wide working rules to every turn              | `src/index.ts`                                                                                         |
 
 ## Built-in Skills (`packages/cardo-skills/src/skills/`)
 
-| Skill dir               | Purpose                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `cardo-planmode`        | TDD-style development pipeline: plan → clarify → PRD/design → failing PBTs → execution-plan.json → execute → review |
-| `cardo-pbt-debugging`   | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests     |
-| `project-documentation` | Generate/maintain the structured `docs/` tree                                                                       |
-| `qa`                    | PRD-driven acceptance testing across app types                                                                      |
-| `create-skill`          | Scaffold a new agent skill                                                                                          |
-| `manage-agents-md`      | Create/audit agent spec files (AGENTS.md etc.)                                                                      |
-| `manage-git-repo`       | Commit, version, release, PR workflows                                                                              |
+| Skill dir               | Purpose                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cardo-plan`            | Planning phase: clarify → PRD/design subagents → execution-plan.json with per-task requirements → user approval                                              |
+| `cardo-implement`       | PBT-first execution: simple tasks inline; complex tasks write ALL failing PBTs then batched/full-parallel dynamic workflow                                   |
+| `cardo-simplify`        | Scope-bound simplification review: explicit review scope → fix ↔ simplify-review dynamic workflow loop                                                       |
+| `cardo-review`          | Scope-bound adversarial review: explicit review scope → fix ↔ adversarial-review dynamic workflow loop                                                       |
+| `cardo-pbt-debugging`   | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests                                              |
+| `project-documentation` | Generate/maintain the structured `docs/` tree                                                                                                                |
+| `cardo-qa`              | PRD-driven acceptance testing: UI apps = playwright geometry + pixel checks then UI operation; backend = clean-container install + smoke boot + API journeys |
+| `create-skill`          | Scaffold a new agent skill                                                                                                                                   |
+| `manage-agents-md`      | Create/audit agent spec files (AGENTS.md etc.)                                                                                                               |
+| `manage-git-repo`       | Commit, version, release, PR workflows                                                                                                                       |
 
 ## Vendored Plugins (`vendor/dsh-plugins/`)
 
-| Dir                    | Package name                                  | Purpose                                                 |
-| ---------------------- | --------------------------------------------- | ------------------------------------------------------- |
-| `dsh-deep-whale`       | @dsh-external/dsh-client-ui-skin-maid-atelier | Whale-maid UI skin (standalone distribution)            |
-| `dsh-subagent-monitor` | @leetoners/dsh-ui-subagent-monitor            | Live subagent run monitor                               |
-| `dsh-thinking-effort`  | dsh-thinking-effort                           | Reasoning-effort level editor for third-party models    |
-| `dsh-shortcuts`        | dsh-shortcuts                                 | 34 keyboard shortcuts, one-click recording, macOS-first |
-| `dsh-git-graph`        | dsh-git-graph                                 | Embedded git repo graph visualizer                      |
+| Dir              | Package name                                  | Purpose                                                 |
+| ---------------- | --------------------------------------------- | ------------------------------------------------------- |
+| `dsh-deep-whale` | @dsh-external/dsh-client-ui-skin-maid-atelier | Whale-maid UI skin (standalone distribution)            |
+| `dsh-shortcuts`  | dsh-shortcuts                                 | 34 keyboard shortcuts, one-click recording, macOS-first |
 
 ## Build Outputs (gitignored)
 

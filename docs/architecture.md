@@ -74,7 +74,7 @@ graph TD
 ### Install / update
 
 - `cardo setup`: GitHub source archive (or `--source` checkout) → pnpm install → build → electron-builder `--mac` / `--win --dir` → embed source (`Contents/Resources/src` / `resources/src`) → install (`~/Applications/Cardo.app` / `%LOCALAPPDATA%\Programs\Cardo` + Start Menu shortcut).
-- Update check probes GitHub release + npm dist-tag; Update Now = `cardo setup`; CLI = `cardo update`; Skip persists to `userData/cardo-update-state.json`.
+- Update check probes GitHub release + npm dist-tag; Update Now quits the app and runs `cardo update` detached — `cardo update` refreshes the CLI, rebuilds + reinstalls the app, and relaunches it when done; Skip persists to `userData/cardo-update-state.json`.
 
 ## Key Decisions
 

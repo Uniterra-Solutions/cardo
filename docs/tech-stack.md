@@ -27,9 +27,9 @@ All versions are the spec ranges from `package.json` / `pnpm-workspace.yaml`; th
 | @cardo/cardo-desktop      | 0.7.1   | Electron shell over the bundled dsh CLI; built-in provisioning |
 | @uniterra-solutions/cardo | 0.7.1   | Public npm installer CLI (bin `cardo`)                         |
 | @cardo/cardo-provider     | 0.1.1   | In-house dual-protocol LLM provider plugin                     |
-| @cardo/cardo-skills       | 0.5.0   | Built-in skill registry (7 company skills)                     |
+| @cardo/cardo-skills       | 0.5.0   | Built-in skill registry (10 company skills)                    |
 | @cardo/cardo-systemprompt | 0.5.0   | pi-agent extension: app-wide working rules                     |
-| @cardo/cardo-updater      | 0.5.0   | Update-check decision logic (pure, no Electron)                |
+| @cardo/cardo-updater      | 0.5.0   | Update decision + action mapping (pure, no Electron)           |
 
 ## dsh Client Peer Packages (cardo-provider)
 
@@ -69,11 +69,11 @@ All pinned exact at 0.1.0-rc.6 — see `packages/cardo-provider/package.json` `p
 
 Provisioned into the user's dsh profile at startup — see [modules/vendor-plugins.md](modules/vendor-plugins.md) and `packages/cardo-desktop/src/builtin.ts`.
 
-| Source                           | Plugins                                                                                                                                                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| npm (pinned exact)               | dshmarket 1.9.0, dsh-notifier 0.6.2, dsh-better-sidebar 0.12.2, dsh-file-upload 0.4.2, dsh-find-plugin 0.3.6, dsh-subagent-model-picker 0.1.1, dsh-hotkeys 0.1.1, dsh-tool-git 0.1.3, dsh-browser-playwright 0.1.1, dsh-computer-use 0.1.0 |
-| vendored (`vendor/dsh-plugins/`) | dsh-deep-whale (skin), dsh-subagent-monitor, dsh-thinking-effort, dsh-shortcuts, dsh-git-graph                                                                                                                                             |
-| workspace built-in               | @cardo/cardo-provider                                                                                                                                                                                                                      |
+| Source                           | Plugins                                                                                                                                                                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| npm (pinned exact)               | dshmarket 1.9.0, dsh-notifier 0.6.2, dsh-better-sidebar 0.12.2, dsh-file-upload 0.4.2, dsh-find-plugin 0.3.6, dsh-subagent-model-picker 0.1.1, dsh-tool-git 0.1.3, dsh-browser-playwright 0.1.1, dsh-computer-use 0.1.0 |
+| vendored (`vendor/dsh-plugins/`) | dsh-deep-whale (skin), dsh-shortcuts                                                                                                                                                                                    |
+| workspace built-in               | @cardo/cardo-provider                                                                                                                                                                                                   |
 
 ## External Services
 

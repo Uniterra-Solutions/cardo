@@ -11,7 +11,7 @@ cardo setup            # download source → build → package → install → l
 
 Install targets: macOS `~/Applications/Cardo.app`; Windows `%LOCALAPPDATA%\Programs\Cardo` (plus a Start Menu shortcut). Prerequisites on both platforms: Node ≥ 22, pnpm, git; Windows 10+ ships `tar` built in.
 
-`cardo setup` flags: `--source <dir>` (build a local workspace checkout instead of downloading a release), `--no-open` (skip launch), `--dry-run` (print the plan, install nothing). Re-running `cardo setup` reinstalls the app. `cardo update` updates the CLI only. See [modules/cardo-cli.md](modules/cardo-cli.md).
+`cardo setup` flags: `--source <dir>` (build a local workspace checkout instead of downloading a release), `--no-open` (skip launch), `--dry-run` (print the plan, install nothing). Re-running `cardo setup` reinstalls the app. `cardo update` is the one-command update: it refreshes the CLI itself, then rebuilds + reinstalls the app from the latest source and relaunches it (same flags as `setup`; `--no-open` skips the relaunch). The desktop's Update Now quits the app and runs `cardo update` automatically — the relaunch IS the restart. See [modules/cardo-cli.md](modules/cardo-cli.md).
 
 ## Developer Setup
 

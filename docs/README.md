@@ -1,6 +1,6 @@
 # Cardo Documentation
 
-Cardo is a desktop app built on the DeepSeek Harness (dsh) agent runtime and community dsh plugins: an Electron shell boots a bundled dsh CLI, provisions built-in plugins + skills into the user's profile, and hosts dsh's Web UI. Its goal is to let users quickly build their own desktop agent app through plugins. Built-in workflows: a TDD development pipeline (`cardo-planmode`), an invariant-first debugging workflow (`cardo-pbt-debugging`), and project-documentation management skills. Built-in provider enhancement: freely configure external OpenAI-compatible providers and fetch upstream model metadata (models.dev).
+Cardo is a desktop app built on the DeepSeek Harness (dsh) agent runtime and community dsh plugins: an Electron shell boots a bundled dsh CLI, provisions built-in plugins + skills into the user's profile, and hosts dsh's Web UI. Its goal is to let users quickly build their own desktop agent app through plugins. Built-in workflows: a four-phase TDD development pipeline (`cardo-plan` → `cardo-implement` → `cardo-simplify` / `cardo-review`), an invariant-first debugging workflow (`cardo-pbt-debugging`), and project-documentation management skills. Built-in provider enhancement: freely configure external OpenAI-compatible providers and fetch upstream model metadata (models.dev).
 
 Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack](tech-stack.md) · [Root README](../README.md)
 

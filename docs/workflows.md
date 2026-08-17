@@ -4,12 +4,12 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Develop a Feature (company standard)
 
-1. Load the `cardo-planmode` skill; clarify ≤5 open questions; write `<repo>/.plan/<YYYYMMDD>/<name>/clarify.md`.
+1. Load the `cardo-plan` skill; clarify ≤5 open questions; write `<repo>/.plan/<YYYYMMDD>/<name>/clarify.md`.
 2. Dispatch PRD → Design subagents via a `workflow` script; artifacts `prd.md` / `design.md`.
-3. Write failing property-based tests (red phase) at the project's test location.
-4. Write `execution-plan.json` (`serial` / `batched` / `parallel`); present for approval.
-5. Execute with a `workflow` script mirroring the batches; run the fix ↔ review loop to `verdict: pass`.
-   Details: [modules/cardo-skills.md](modules/cardo-skills.md#cardo-planmode).
+3. Write `execution-plan.json` (`serial` / `batched` / `parallel`; each task carries its explicit `requirements` list); present for approval.
+4. Load `cardo-implement`: simple tasks go inline (failing PBTs → code); complex tasks first write ALL failing property tests (red phase), then choose batched vs full-parallel by task overlap and run the `workflow` script.
+5. Run the fix ↔ review loop to `verdict: pass` — `cardo-review` (adversarial) and/or `cardo-simplify`, each with an explicit review scope.
+   Details: [modules/cardo-skills.md](modules/cardo-skills.md#cardo-plan).
 
 ## Debug a Bug (PBT-first)
 

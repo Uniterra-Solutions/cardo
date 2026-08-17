@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Split the `cardo-planmode` skill into four pipeline skills: `cardo-plan` (clarify → PRD/design subagents → execution-plan.json with an explicit per-task `requirements` list → approval), `cardo-implement` (PBT-first: simple tasks inline — invariants → failing property tests → code; complex tasks write ALL failing property tests then run a batched/full-parallel dynamic workflow chosen by task overlap), and `cardo-simplify` / `cardo-review` (scope-bound fix ↔ review loops — each usable standalone with just an explicit review scope). `provisionBuiltinSkills()` now removes the retired `cardo-planmode` from already-provisioned skill dirs.
+- Renamed the `qa` skill to `cardo-qa` (the retired `qa` is removed from already-provisioned skill dirs) and split its workflow into two pipelines: UI apps verify DOM geometry with the playwright-backed browser tools, pixel-analyze screenshots of every key state, then operate the UI via external tools (computer-use etc.) or playwright end-to-end when none exist; pure backend apps replay the full install + smoke-boot flow inside a clean container before API/CLI journeys.
+- Removed `dsh-lan-gateway` from the profile spec (`packages/cardo-desktop/src/profile.ts`), the packaged runtime deps (`prepare-runtime.mjs`), and the root `pnpm-workspace.yaml` `minimumReleaseAgeExclude` — it was never part of the built-in set in `builtin.ts`.
+- `cardo update` is now the one-command full update: it refreshes the CLI itself first (`npm install -g @uniterra-solutions/cardo@latest` — fail fast before the long build), then rebuilds + reinstalls the desktop app exactly like `cardo setup` and relaunches it (unless `--no-open`). The stage plan is pure and PBT-locked (`installPlan` in `packages/cardo-cli/src/install-logic.ts`), so users never need a separate `cardo setup`.
+- Desktop Update Now closes the app and spawns the updater detached before quitting; `cardo update` relaunches the app when it finishes — the relaunch IS the restart. The prompt-response → action mapping and the spawn spec are pure and PBT-locked (`resolveUpdateAction` / `updateInvocation` in `@cardo/cardo-updater`): the default invocation runs `npx --yes @uniterra-solutions/cardo@latest update`, so the LATEST updater executes even on machines whose global `cardo` CLI predates the one-command update. The clean-container verification (`scripts/verify-cli-container/verify.sh`) now smoke-tests `cardo update --dry-run` (offline, deterministic).
+
+### Removed
+
+- Retired four built-in plugins whose function overlaps another built-in: `dsh-hotkeys` (covered by `dsh-shortcuts`), `dsh-subagent-monitor` and `dsh-git-graph` (covered by dsh-better-sidebar's Tasks/Git pages), and `dsh-thinking-effort` (covered by `@cardo/cardo-provider`'s models.dev reasoningEfforts). The vendored dirs are gone (`vendor/dsh-plugins/` now ships `dsh-deep-whale` + `dsh-shortcuts`), and a new `RETIRED_BUILTINS` heal (`removeRetiredBuiltins()` in `packages/cardo-desktop/src/builtin.ts`) strips their bundle rows, dependency entries, and installed copies from already-provisioned profiles on the next ensure pass.
+
 ## [0.7.1] — 2026-08-17
 
 ### Added
