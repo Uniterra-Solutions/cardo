@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.7.0] — 2026-08-17
+## [0.7.1] — 2026-08-17
 
 ### Added
 
 - Windows installer support (`cardo setup`): platform branches in the CLI — `electron-builder --win --dir` produces the `win-unpacked/` layout (the NSIS installer cannot carry the source embedded afterwards), the source tree embeds under `resources/src`, the app installs to `%LOCALAPPDATA%\Programs\Cardo` with a best-effort Start Menu shortcut, and launches as `Cardo.exe`. Windows file ops use `robocopy /MT:16 /R:5 /W:5` (exit codes 0–7 = success) with a same-volume `fs.rename` fast path that degrades to robocopy on any failure (EXDEV cross-volume, EPERM locked files); the macOS flow is byte-for-byte unchanged. npm/pnpm/cardo ship as `.cmd` shims on Windows: the CLI and the desktop run them with `shell: true` (cmd.exe resolves via PATHEXT) and quote whitespace-bearing args
 - `cardo setup --source <dir>`: build from a local workspace checkout instead of downloading a release — the Windows CI verification path
+- Windows dsh CLI resolution: `dshCliPath()` resolves the bundled CLI through the `.pnpm` store on Windows (robocopy materializes pnpm junctions, so the junction path cannot resolve dsh's own dependencies)
 - Windows install verification (`scripts/verify-windows-install/verify.ps1`): replays the REAL CLI install on windows-latest — install → build → `--win --dir` packaging → embedded source → install + Start Menu shortcut → `Cardo.exe` boot smoke to a reachable readiness URL
 - PR CI workflow (`.github/workflows/ci.yml`): parallel lint / typecheck / tests jobs, callable from the release workflow
 - Release gate: `release.yml` publishes only after the full matrix passes (CI + clean-container installer replay + windows-latest install verification, all via `needs`)
