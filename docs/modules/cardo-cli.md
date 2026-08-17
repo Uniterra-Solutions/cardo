@@ -47,7 +47,7 @@ Exported from `install-logic.ts`:
 6. `findBuiltApp(platform)`: the `.app` under `dist/mac-*` / the `win-unpacked` dir.
 7. Move the artifact out of the tree (embedding the source into itself is illegal): `/bin/mv` (macOS, cross-volume safe) / `fs.rename` with EXDEV fallback to `robocopy` + `rm` (Windows — CI workspaces can live on another volume than the temp dir).
 8. Embed source: `/bin/cp -R <src> <app>/Contents/Resources/src` / `robocopy /MT:16 <src> <win-unpacked>/resources/src` — the tree the packaged app resolves everything from (multi-threaded: the pnpm store is hundreds of thousands of small files).
-9. Install: `/usr/bin/ditto` → `~/Applications/Cardo.app` / same-volume `fs.rename` → `%LOCALAPPDATA%\Programs\Cardo` (tmp and LOCALAPPDATA are both on C:, so the multi-GB move is instant; EXDEV falls back to `robocopy`), replacing any existing copy.
+9. Install: `/usr/bin/ditto` → `~/Applications/Cardo.app` / same-volume `fs.rename` → `%LOCALAPPDATA%\Programs\Cardo` (tmp and LOCALAPPDATA are both on C:, so the multi-GB move is instant; ANY rename failure — EXDEV cross-volume, EPERM locked files — falls back to `robocopy /MT:16 /R:5 /W:5`), replacing any existing copy.
 10. Windows only: Start Menu shortcut via `powershell` WScript.Shell (best-effort — a missing shortcut never fails the install).
 11. Launch: `/usr/bin/open` / detached spawn of `Cardo.exe` (unless `--no-open`).
 12. `finally`: remove the temp root.
