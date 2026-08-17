@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-08-18
+
+### Fixed
+
+- `@cardo/cardo-provider` dropped the prior turn's chain-of-thought when serializing a Responses API tool-call turn back to DeepSeek: `serializeInput` emitted the `function_call` items but no `reasoning` item, so a multi-turn agent loop in thinking mode failed with "The `reasoning_text` in the thinking mode must be passed back to the API." Every assistant turn (tool-call and non-tool-call) now emits a `reasoning` item before its `function_call` items / assistant message, locked by a new deterministic regression plus a seeded property test (`test/reasoning-preservation.test.mjs`).
+
 ## [0.8.1] — 2026-08-18
 
 ### Added
