@@ -83,14 +83,24 @@ export interface ChatChunk {
 /** One streamed choice; `finish_reason` is non-null only on its terminal chunk. */
 export interface ChatChoice {
   delta?: ChatDelta;
+  /**
+   * Full-message replay attached to the terminal chunk (DashScope compatible
+   * mode carries the whole `reasoning_content` here with empty deltas).
+   */
+  message?: ChatDelta;
   finish_reason?: string | null;
 }
 
-/** The incremental content of one streamed choice. */
+/**
+ * The incremental content of one streamed choice. Reasoning arrives under
+ * three field names across OpenAI-compatible gateways: `reasoning_content`
+ * (DeepSeek / Qwen / GLM style) and `reasoning` (OpenRouter/aggregator style).
+ */
 export interface ChatDelta {
   role?: string;
   content?: string | null;
   reasoning_content?: string | null;
+  reasoning?: string | null;
   tool_calls?: ChatToolCallDelta[];
 }
 
@@ -131,11 +141,17 @@ export interface ResponsesRequest {
   stop?: string[];
 }
 
-/** One request input item (messages + prior tool-call items). */
+/** One request input item (messages + prior tool-call/reasoning items). */
 export type ResponsesInputItem =
   | { role: 'system'; content: ResponsesContent[] }
   | { role: 'user'; content: ResponsesContent[] }
   | { role: 'assistant'; content: ResponsesContent[] }
+  | {
+      type: 'reasoning';
+      id: string;
+      content: Array<{ type: 'reasoning_text'; text: string }>;
+      summary: Array<{ type: 'summary_text'; text: string }>;
+    }
   | {
       type: 'function_call';
       call_id: string;
@@ -170,12 +186,46 @@ export type ResponsesEvent =
       type: 'response.content_part.added';
       item_id: string;
       output_index: number;
-      part: { type: 'output_text'; text: string };
+      part: ResponsesContentPart;
+    }
+  | {
+      type: 'response.content_part.done';
+      item_id: string;
+      output_index: number;
+      part: ResponsesContentPart;
     }
   | { type: 'response.output_text.delta'; item_id: string; output_index: number; delta: string }
   | { type: 'response.output_text.done'; item_id: string; output_index: number; text: string }
   | { type: 'response.reasoning_text.delta'; item_id: string; output_index: number; delta: string }
   | { type: 'response.reasoning_text.done'; item_id: string; output_index: number; text: string }
+  | {
+      type: 'response.reasoning_summary_text.delta';
+      item_id: string;
+      output_index: number;
+      summary_index: number;
+      delta: string;
+    }
+  | {
+      type: 'response.reasoning_summary_text.done';
+      item_id: string;
+      output_index: number;
+      summary_index: number;
+      text: string;
+    }
+  | {
+      type: 'response.reasoning_summary_part.added';
+      item_id: string;
+      output_index: number;
+      summary_index: number;
+      part: { type: 'summary_text'; text?: string };
+    }
+  | {
+      type: 'response.reasoning_summary_part.done';
+      item_id: string;
+      output_index: number;
+      summary_index: number;
+      part: { type: 'summary_text'; text: string };
+    }
   | {
       type: 'response.function_call_arguments.delta';
       item_id: string;
@@ -196,9 +246,17 @@ export type ResponsesEvent =
     }
   | { type: 'response.completed'; response: ResponsesCompleted }
   | { type: 'response.failed'; response: { error?: WireError['error'] } }
-  | { type: 'response.incomplete'; response: { incomplete_details?: { reason?: string } } };
+  | {
+      type: 'response.incomplete';
+      response: { incomplete_details?: { reason?: string }; output?: ResponsesStreamedItem[] };
+    };
 
-/** A streamed output item (function call or message). */
+/** One content part within a streamed item (`response.content_part.*`). */
+export type ResponsesContentPart =
+  | { type: 'output_text'; text: string }
+  | { type: 'reasoning_text'; text?: string; reasoning?: string };
+
+/** A streamed output item (reasoning, message, or function call). */
 export type ResponsesStreamedItem =
   | {
       type: 'message';
@@ -214,6 +272,13 @@ export type ResponsesStreamedItem =
       call_id: string;
       name: string;
       arguments: string;
+    }
+  | {
+      type: 'reasoning';
+      id: string;
+      status?: 'in_progress' | 'completed' | 'incomplete';
+      content?: Array<{ type: 'reasoning_text'; text: string }>;
+      summary?: Array<{ type: 'summary_text'; text: string }>;
     };
 
 /** The terminal `response.completed` payload, carrying usage. */

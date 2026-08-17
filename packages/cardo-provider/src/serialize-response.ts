@@ -3,7 +3,10 @@
  * {baseURL}/responses`). The Responses protocol restructures the conversation
  * as `input` items: message items carry `content` arrays, prior assistant tool
  * calls become `function_call` items and their results `function_call_output`
- * items. Assistant reasoning rides `reasoning` item content when present.
+ * items. Assistant reasoning rides a `reasoning` item (plain-text `content`
+ * plus `summary`) right before its assistant message — OpenAI requires
+ * `summary` on reasoning items and DeepSeek merges `content` into the adjacent
+ * assistant message, so both consume the same shape.
  * Core image blocks are rejected because this wire route is text-only.
  *
  * @module @cardo/cardo-provider/serialize-response
@@ -72,6 +75,22 @@ export function serializeInput(messages: Message[]): ResponsesInputItem[] {
           });
         }
       } else {
+        const reasoning = message.content
+          .filter((block) => block.type === 'reasoning')
+          .map((block) => block.text)
+          .join('');
+        if (reasoning.length > 0) {
+          // Round-trip the previous turn's chain of thought. `id` is a
+          // locally synthesized unique key: the harness does not persist
+          // reasoning item ids, and both OpenAI and DeepSeek only need it
+          // unique within the request.
+          input.push({
+            type: 'reasoning',
+            id: `reasoning_${String(input.length)}`,
+            content: [{ type: 'reasoning_text', text: reasoning }],
+            summary: [{ type: 'summary_text', text: reasoning }],
+          });
+        }
         input.push({
           role: 'assistant',
           content: textContent(flattenText(message.content), 'output_text'),

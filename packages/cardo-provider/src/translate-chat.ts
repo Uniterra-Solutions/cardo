@@ -5,13 +5,21 @@
  * usage are deferred until `[DONE]`, covering both finish-attached and
  * trailing usage-only shapes while ensuring no chunk follows `finish`.
  *
+ * Reasoning arrives under three wire shapes, all preserved: `delta.
+ * reasoning_content` (DeepSeek/Qwen/GLM style), `delta.reasoning`
+ * (OpenRouter/aggregator style), and a full-text `message.reasoning_content` /
+ * `message.reasoning` replay on the terminal chunk (DashScope compatible
+ * mode). Buffered gateways replay `message.content` / `message.tool_calls` the
+ * same way; every replay is appended only when nothing of that kind streamed,
+ * so nothing is lost and nothing is duplicated.
+ *
  * @module @cardo/cardo-provider/translate-chat
  */
 
 import { CallId, EMPTY_RESPONSE_CODE, LlmError } from '@deepseek-ai/dsh-llm';
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm';
 import { DONE } from './sse.ts';
-import type { ChatChunk, ChatUsage } from './types.ts';
+import type { ChatChunk, ChatToolCallDelta, ChatUsage } from './types.ts';
 
 /** One open block under assembly. */
 interface OpenBlock {
@@ -77,6 +85,14 @@ function closeBlock(block: OpenBlock): ContentBlock {
 /**
  * Consume SSE data payloads (ending with `[DONE]`) and yield StreamChunks.
  * Malformed JSON payloads abort the stream with `MALFORMED_RESPONSE`.
+ *
+ * Reasoning arrives under three wire shapes, all preserved: `delta.
+ * reasoning_content` (DeepSeek/Qwen/GLM style), `delta.reasoning`
+ * (OpenRouter/aggregator style), and a full-text `message.reasoning_content` /
+ * `message.reasoning` replay on the terminal chunk (DashScope compatible
+ * mode) — the replay is appended only when no reasoning deltas streamed, so
+ * nothing is lost and nothing is duplicated.
+ *
  * @param payloads - SSE data payloads from {@link parseSse}, `[DONE]`-terminated.
  * @returns deltas as they arrive; `block-end`s, `usage`, and `finish` are all deferred to the `[DONE]` sentinel.
  */
@@ -88,6 +104,11 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
   const order: OpenBlock[] = [];
   let pendingFinish: FinishReason | undefined;
   let pendingUsage: TokenUsage | undefined;
+  let sawDeltaReasoning = false;
+  let sawDeltaText = false;
+  const replayReasoning: string[] = [];
+  const replayText: string[] = [];
+  const replayToolCalls: ChatToolCallDelta[] = [];
 
   function open(kind: OpenBlock['kind']): OpenBlock {
     const block: OpenBlock = { index: nextIndex++, kind, text: '' };
@@ -95,8 +116,72 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
     return block;
   }
 
+  /**
+   * Append one non-empty reasoning fragment to the reasoning block, opening
+   * it first. `front` presents a whole-response replay before the answer
+   * block it trails.
+   */
+  function pushReasoning(fragment: string, front = false): StreamChunk[] {
+    if (typeof fragment !== 'string' || fragment.length === 0) return [];
+    const chunks: StreamChunk[] = [];
+    if (!reasoningBlock) {
+      reasoningBlock = open('reasoning');
+      if (front) {
+        order.pop();
+        order.unshift(reasoningBlock);
+      }
+      chunks.push({ type: 'block-start', index: reasoningBlock.index, blockType: 'reasoning' });
+    }
+    reasoningBlock.text += fragment;
+    chunks.push({ type: 'reasoning-delta', index: reasoningBlock.index, text: fragment });
+    return chunks;
+  }
+
+  /** Append one non-empty answer-text fragment, opening the block first. */
+  function pushText(fragment: string): StreamChunk[] {
+    if (typeof fragment !== 'string' || fragment.length === 0) return [];
+    const chunks: StreamChunk[] = [];
+    if (!textBlock) {
+      textBlock = open('text');
+      chunks.push({ type: 'block-start', index: textBlock.index, blockType: 'text' });
+    }
+    textBlock.text += fragment;
+    chunks.push({ type: 'text-delta', index: textBlock.index, text: fragment });
+    return chunks;
+  }
+
   for await (const payload of payloads) {
     if (payload === DONE) {
+      // Buffered gateways replay whole content on the terminal chunk's
+      // `message` with empty deltas; append each replay only when nothing of
+      // that kind streamed, so nothing is lost and nothing is duplicated.
+      if (!sawDeltaReasoning) {
+        for (const fragment of replayReasoning) {
+          yield* pushReasoning(fragment, true);
+        }
+      }
+      if (!sawDeltaText) {
+        for (const fragment of replayText) {
+          yield* pushText(fragment);
+        }
+      }
+      for (const call of replayToolCalls) {
+        const existing = toolBlocks.get(call.index);
+        if (existing !== undefined) continue;
+        const block = open('tool-call');
+        block.callId = call.id;
+        if (call.function?.name !== undefined) block.name = call.function.name;
+        block.text = call.function?.arguments ?? '';
+        toolBlocks.set(call.index, block);
+        yield { type: 'block-start', index: block.index, blockType: 'tool-call' };
+        yield {
+          type: 'tool-call-delta',
+          index: block.index,
+          id: CallId(block.callId ?? ''),
+          ...(block.name !== undefined ? { name: block.name } : {}),
+          argumentsDelta: block.text,
+        };
+      }
       for (const block of order) {
         yield { type: 'block-end', index: block.index, block: closeBlock(block) };
       }
@@ -128,25 +213,19 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
     for (const choice of chunk.choices ?? []) {
       const delta = choice.delta;
 
-      // Reasoning first: reasoning-capable upstreams interleave it before text.
-      const reasoning = delta?.reasoning_content;
-      if (typeof reasoning === 'string' && reasoning.length > 0) {
-        if (!reasoningBlock) {
-          reasoningBlock = open('reasoning');
-          yield { type: 'block-start', index: reasoningBlock.index, blockType: 'reasoning' };
+      // Reasoning first: reasoning-capable upstreams interleave it before
+      // text, under either field name.
+      for (const fragment of [delta?.reasoning_content, delta?.reasoning]) {
+        if (typeof fragment === 'string' && fragment.length > 0) {
+          sawDeltaReasoning = true;
+          yield* pushReasoning(fragment);
         }
-        reasoningBlock.text += reasoning;
-        yield { type: 'reasoning-delta', index: reasoningBlock.index, text: reasoning };
       }
 
       const content = delta?.content;
       if (typeof content === 'string' && content.length > 0) {
-        if (!textBlock) {
-          textBlock = open('text');
-          yield { type: 'block-start', index: textBlock.index, blockType: 'text' };
-        }
-        textBlock.text += content;
-        yield { type: 'text-delta', index: textBlock.index, text: content };
+        sawDeltaText = true;
+        yield* pushText(content);
       }
 
       for (const call of delta?.tool_calls ?? []) {
@@ -169,6 +248,16 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
         };
       }
 
+      // The terminal chunk may replay whole content on `message` instead of
+      // streaming deltas; collect it and defer the decision to [DONE].
+      const message = choice.message;
+      const replayReasoningFragment = firstNonEmpty(message?.reasoning_content, message?.reasoning);
+      if (replayReasoningFragment !== undefined) replayReasoning.push(replayReasoningFragment);
+      if (typeof message?.content === 'string' && message.content.length > 0) {
+        replayText.push(message.content);
+      }
+      replayToolCalls.push(...(message?.tool_calls ?? []));
+
       if (typeof choice.finish_reason === 'string') {
         pendingFinish = mapFinishReason(choice.finish_reason);
       }
@@ -182,4 +271,12 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
   // parseSse guarantees the [DONE] sentinel (or returns early); reaching here
   // means the payload source violated that contract.
   throw new LlmError('SSE payload stream ended without [DONE]', 'STREAM_CLOSED');
+}
+
+/** The first non-empty string among the candidates, if any. */
+function firstNonEmpty(...candidates: Array<string | null | undefined>): string | undefined {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+  return undefined;
 }

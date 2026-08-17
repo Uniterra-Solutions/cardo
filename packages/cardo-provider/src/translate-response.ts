@@ -6,10 +6,16 @@
  * `sequence_number`; the harness cares only about the type field.
  *
  * Event → block mapping:
- *  - `response.output_text.delta` → text delta
- *  - `response.reasoning_text.delta` → reasoning delta (when the gateway emits it)
+ *  - `response.output_text.delta` / `.done` → text (done is the no-delta fallback)
+ *  - `response.reasoning_text.delta` / `.done`,
+ *    `response.reasoning_summary_text.delta` / `.done`,
+ *    `response.content_part.*` `reasoning_text` parts, and reasoning output
+ *    items → reasoning; each source appends exactly once — a whole-item /
+ *    done-event replay is skipped when deltas already streamed, so nothing is
+ *    lost and nothing is duplicated
  *  - `response.function_call_arguments.delta` → tool-call delta (item id = call id)
- *  - `response.completed` → usage + finish; emits no further deltas
+ *  - `response.completed` → usage + finish, and materializes any items that
+ *    arrived only inside the terminal `response.output` array
  *  - `response.failed` / `response.incomplete` → error finish
  *
  * @module @cardo/cardo-provider/translate-response
@@ -17,7 +23,7 @@
 
 import { CallId, EMPTY_RESPONSE_CODE, LlmError } from '@deepseek-ai/dsh-llm';
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm';
-import type { ResponsesEvent } from './types.ts';
+import type { ResponsesEvent, ResponsesStreamedItem } from './types.ts';
 
 /** One open block under assembly. */
 interface OpenBlock {
@@ -79,11 +85,83 @@ export async function* translate(events: AsyncIterable<string>): AsyncGenerator<
   let pendingUsage: TokenUsage | undefined;
   let terminal: FinishReason | undefined;
   const callNames = new Map<string, string>();
+  /** Item ids whose reasoning already streamed incrementally. */
+  const streamedReasoning = new Set<string>();
+  /** Item ids whose answer text already streamed incrementally. */
+  const streamedText = new Set<string>();
 
   function open(kind: OpenBlock['kind']): OpenBlock {
     const block: OpenBlock = { index: nextIndex++, kind, text: '' };
     order.push(block);
     return block;
+  }
+
+  /** Append one non-empty reasoning fragment, opening the block first. */
+  function pushReasoning(fragment: string): StreamChunk[] {
+    if (typeof fragment !== 'string' || fragment.length === 0) return [];
+    const chunks: StreamChunk[] = [];
+    if (!reasoningBlock) {
+      reasoningBlock = open('reasoning');
+      chunks.push({ type: 'block-start', index: reasoningBlock.index, blockType: 'reasoning' });
+    }
+    reasoningBlock.text += fragment;
+    chunks.push({ type: 'reasoning-delta', index: reasoningBlock.index, text: fragment });
+    return chunks;
+  }
+
+  /** Append one non-empty answer-text fragment, opening the block first. */
+  function pushText(fragment: string): StreamChunk[] {
+    if (typeof fragment !== 'string' || fragment.length === 0) return [];
+    const chunks: StreamChunk[] = [];
+    if (!textBlock) {
+      textBlock = open('text');
+      chunks.push({ type: 'block-start', index: textBlock.index, blockType: 'text' });
+    }
+    textBlock.text += fragment;
+    chunks.push({ type: 'text-delta', index: textBlock.index, text: fragment });
+    return chunks;
+  }
+
+  /** Append a complete reasoning item's text — only when nothing streamed for it. */
+  function pushReasoningItem(
+    item: Extract<ResponsesStreamedItem, { type: 'reasoning' }>,
+  ): StreamChunk[] {
+    if (streamedReasoning.has(item.id)) return [];
+    streamedReasoning.add(item.id);
+    const chunks: StreamChunk[] = [];
+    for (const part of item.content ?? []) chunks.push(...pushReasoning(part.text));
+    for (const part of item.summary ?? []) chunks.push(...pushReasoning(part.text));
+    return chunks;
+  }
+
+  /** Append a complete message item's text — only when nothing streamed for it. */
+  function pushMessageItem(
+    item: Extract<ResponsesStreamedItem, { type: 'message' }>,
+  ): StreamChunk[] {
+    if (streamedText.has(item.id)) return [];
+    streamedText.add(item.id);
+    const chunks: StreamChunk[] = [];
+    for (const part of item.content) chunks.push(...pushText(part.text));
+    return chunks;
+  }
+
+  /** Materialize one complete output item, skipping anything already streamed. */
+  function* materializeItem(item: ResponsesStreamedItem): Generator<StreamChunk> {
+    if (item.type === 'reasoning') {
+      yield* pushReasoningItem(item);
+    } else if (item.type === 'message') {
+      yield* pushMessageItem(item);
+    } else {
+      callNames.set(item.id, item.name);
+      if (!toolBlocks.has(item.id)) {
+        const block = open('tool-call');
+        block.callId = item.id;
+        block.name = item.name;
+        block.text = item.arguments;
+        toolBlocks.set(item.id, block);
+        yield { type: 'block-start', index: block.index, blockType: 'tool-call' };
+      }
+    }
   }
 
   function closeBlocks(): ContentBlock[] {
@@ -115,21 +193,75 @@ export async function* translate(events: AsyncIterable<string>): AsyncGenerator<
 
     switch (event.type) {
       case 'response.output_text.delta': {
-        if (!textBlock) {
-          textBlock = open('text');
-          yield { type: 'block-start', index: textBlock.index, blockType: 'text' };
+        streamedText.add(event.item_id);
+        yield* pushText(event.delta);
+        break;
+      }
+      case 'response.output_text.done': {
+        // Some gateways skip deltas and send only the full-text done event.
+        if (!streamedText.has(event.item_id)) {
+          streamedText.add(event.item_id);
+          yield* pushText(event.text);
         }
-        textBlock.text += event.delta;
-        yield { type: 'text-delta', index: textBlock.index, text: event.delta };
         break;
       }
       case 'response.reasoning_text.delta': {
-        if (!reasoningBlock) {
-          reasoningBlock = open('reasoning');
-          yield { type: 'block-start', index: reasoningBlock.index, blockType: 'reasoning' };
+        streamedReasoning.add(event.item_id);
+        yield* pushReasoning(event.delta);
+        break;
+      }
+      case 'response.reasoning_text.done': {
+        if (!streamedReasoning.has(event.item_id)) {
+          streamedReasoning.add(event.item_id);
+          yield* pushReasoning(event.text);
         }
-        reasoningBlock.text += event.delta;
-        yield { type: 'reasoning-delta', index: reasoningBlock.index, text: event.delta };
+        break;
+      }
+      case 'response.reasoning_summary_text.delta': {
+        streamedReasoning.add(event.item_id);
+        yield* pushReasoning(event.delta);
+        break;
+      }
+      case 'response.reasoning_summary_text.done': {
+        if (!streamedReasoning.has(event.item_id)) {
+          streamedReasoning.add(event.item_id);
+          yield* pushReasoning(event.text);
+        }
+        break;
+      }
+      case 'response.reasoning_summary_part.done': {
+        // Some gateways deliver the summary as a completed part instead of
+        // `reasoning_summary_text.done`; append it only when nothing streamed.
+        if (!streamedReasoning.has(event.item_id)) {
+          streamedReasoning.add(event.item_id);
+          yield* pushReasoning(event.part.text);
+        }
+        break;
+      }
+      case 'response.content_part.added': {
+        if (event.part.type === 'reasoning_text') {
+          const fragment = event.part.text ?? event.part.reasoning;
+          if (fragment !== undefined) {
+            streamedReasoning.add(event.item_id);
+            yield* pushReasoning(fragment);
+          }
+        }
+        break;
+      }
+      case 'response.content_part.done': {
+        if (event.part.type === 'reasoning_text') {
+          if (!streamedReasoning.has(event.item_id)) {
+            const fragment = event.part.reasoning ?? event.part.text;
+            if (fragment !== undefined) {
+              streamedReasoning.add(event.item_id);
+              yield* pushReasoning(fragment);
+            }
+          }
+        } else if (!streamedText.has(event.item_id)) {
+          // A complete output_text part without streamed deltas.
+          streamedText.add(event.item_id);
+          yield* pushText(event.part.text);
+        }
         break;
       }
       case 'response.function_call_arguments.delta': {
@@ -158,8 +290,7 @@ export async function* translate(events: AsyncIterable<string>): AsyncGenerator<
         if (block) block.text = event.arguments;
         break;
       }
-      case 'response.output_item.added':
-      case 'response.output_item.done': {
+      case 'response.output_item.added': {
         const item = event.item;
         if (item.type === 'function_call') {
           callNames.set(item.id, item.name);
@@ -173,14 +304,32 @@ export async function* translate(events: AsyncIterable<string>): AsyncGenerator<
             yield { type: 'block-start', index: block.index, blockType: 'tool-call' };
           }
         }
+        // Reasoning items append nothing here: their text either streams as
+        // deltas or arrives whole on `response.output_item.done`.
+        break;
+      }
+      case 'response.output_item.done': {
+        yield* materializeItem(event.item);
         break;
       }
       case 'response.completed': {
         if (event.response.usage) pendingUsage = mapUsage(event.response.usage);
+        // The terminal payload carries the authoritative output array:
+        // materialize anything that never streamed incrementally.
+        for (const item of event.response.output) {
+          yield* materializeItem(item);
+        }
         terminal = terminalReason('completed');
         break;
       }
       case 'response.incomplete': {
+        // A truncated response still carries whatever it generated; keep it
+        // even though the turn ends in error.
+        if (event.response.output) {
+          for (const item of event.response.output) {
+            yield* materializeItem(item);
+          }
+        }
         terminal = terminalReason('incomplete');
         break;
       }
@@ -194,11 +343,8 @@ export async function* translate(events: AsyncIterable<string>): AsyncGenerator<
       }
       case 'response.created':
       case 'response.in_progress':
-      case 'response.content_part.added':
-      case 'response.output_text.done':
-      case 'response.reasoning_text.done':
-        // Lifecycle and content-frame bookkeeping events carry no harness
-        // deltas of their own.
+      case 'response.reasoning_summary_part.added':
+        // Lifecycle and part-announcement events carry no harness deltas.
         break;
     }
   }
