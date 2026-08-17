@@ -8,7 +8,7 @@
 - `packages/cardo-systemprompt`:
   - `pnpm --filter @cardo/cardo-systemprompt test` — node:test suite for the system-prompt injection handler (registration, append, no cross-turn duplication)
 - `packages/cardo-provider`:
-  - `pnpm --filter @cardo/cardo-provider test` — builds, then node:test composition + dual-protocol translate tests (chat completions + Responses API) on the compiled `lib/`
+  - `pnpm --filter @cardo/cardo-provider test` — builds, then node:test composition + dual-protocol translate tests (chat completions + Responses API) plus reasoning-preservation regressions and seeded properties (no loss, no duplication across every gateway wire shape) on the compiled `lib/`
   - `pnpm --filter @cardo/cardo-provider run lint` / `typecheck` — lint/type-check host + client source
 - `packages/cardo-skills`:
   - `pnpm --filter @cardo/cardo-skills test` — builds, then runs provisioning tests (every bundled skill ships a SKILL.md; provisioning is idempotent)

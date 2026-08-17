@@ -6,23 +6,24 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 
 ## I want to...
 
-| I want to...                             | Read...                                      |
-| ---------------------------------------- | -------------------------------------------- |
-| Set up the project from zero             | [setup.md](setup.md)                         |
-| Understand the system design             | [architecture.md](architecture.md)           |
-| Know what technologies we use            | [tech-stack.md](tech-stack.md)               |
-| Find where code lives                    | [project-structure.md](project-structure.md) |
-| Know the code conventions                | [conventions.md](conventions.md)             |
-| Style / theme the desktop app            | [design-system.md](design-system.md)         |
-| Understand the extension entry / 6 tools | [modules/extension.md](modules/extension.md) |
-| Understand the pipeline state machine    | [modules/state.md](modules/state.md)         |
-| Understand phase chains + verdicts       | [modules/chain.md](modules/chain.md)         |
-| Understand the execution-plan model      | [modules/plan.md](modules/plan.md)           |
-| Understand plan mode + execute widget    | [modules/plan-mode.md](modules/plan-mode.md) |
-| Understand child process dispatch        | [modules/dispatch.md](modules/dispatch.md)   |
-| Understand prompt loading/rendering      | [modules/prompts.md](modules/prompts.md)     |
-| Run the tests / verification             | [testing.md](testing.md)                     |
-| Do a common dev task                     | [workflows.md](workflows.md)                 |
+| I want to...                                            | Read...                                                |
+| ------------------------------------------------------- | ------------------------------------------------------ |
+| Set up the project from zero                            | [setup.md](setup.md)                                   |
+| Understand the system design                            | [architecture.md](architecture.md)                     |
+| Know what technologies we use                           | [tech-stack.md](tech-stack.md)                         |
+| Find where code lives                                   | [project-structure.md](project-structure.md)           |
+| Know the code conventions                               | [conventions.md](conventions.md)                       |
+| Style / theme the desktop app                           | [design-system.md](design-system.md)                   |
+| Understand the extension entry / 6 tools                | [modules/extension.md](modules/extension.md)           |
+| Understand the LLM provider (dual protocol + reasoning) | [modules/cardo-provider.md](modules/cardo-provider.md) |
+| Understand the pipeline state machine                   | [modules/state.md](modules/state.md)                   |
+| Understand phase chains + verdicts                      | [modules/chain.md](modules/chain.md)                   |
+| Understand the execution-plan model                     | [modules/plan.md](modules/plan.md)                     |
+| Understand plan mode + execute widget                   | [modules/plan-mode.md](modules/plan-mode.md)           |
+| Understand child process dispatch                       | [modules/dispatch.md](modules/dispatch.md)             |
+| Understand prompt loading/rendering                     | [modules/prompts.md](modules/prompts.md)               |
+| Run the tests / verification                            | [testing.md](testing.md)                               |
+| Do a common dev task                                    | [workflows.md](workflows.md)                           |
 
 ## Document Index
 
@@ -32,6 +33,7 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 - [conventions.md](conventions.md) — code style, testing, commit, security rules
 - [design-system.md](design-system.md) — 03b Warm Paper Sharp tokens, palette, radii, theming
 - [modules/extension.md](modules/extension.md) — entry factory, 6 tools, 5 events, plan-mode layer
+- [modules/cardo-provider.md](modules/cardo-provider.md) — dual-protocol gateway adapter, reasoning wire shapes, no-loss/no-dup invariant, round-trip rules
 - [modules/state.md](modules/state.md) — PipelineState + SQLite session store
 - [modules/chain.md](modules/chain.md) — CHAIN tables, verdict readers, plan_waiting settlement
 - [modules/plan.md](modules/plan.md) — execution-plan schema/parser, steps, mermaid, progress

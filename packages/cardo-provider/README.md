@@ -8,6 +8,16 @@
 - **models.dev 自動偵測**：context window / max output tokens / reasoning efforts 自動比對填入，Web 設定頁一鍵拉取
 - **Web 設定頁**：新增 gateway（base URL + API key）、逐模型管理、proxy 支援（undici `ProxyAgent`）
 
+## Wire 格式與 reasoning 保留
+
+雙協定對 reasoning 的處理守同一條不變量：**wire 發出的任何非空 reasoning fragment 都必須進 harness 的 `reasoning` block，歷史回合的 reasoning 也必須回傳網關——無遺失、無重複**。
+
+- **Chat Completions 接收**：`delta.reasoning_content`（DeepSeek/Qwen/GLM）、`delta.reasoning`（OpenRouter 等聚合器）、終止 chunk 的 `message.reasoning_content` / `message.reasoning` 全量回放（DashScope compatible mode）——回放只在沒有 delta 時補上，避免重複
+- **Chat Completions 回傳**：工具回合的 assistant message 攜帶 `reasoning_content`（DeepSeek 硬性要求）
+- **Responses 接收**：`response.reasoning_text.delta/.done`、`response.reasoning_summary_text.delta/.done`、`reasoning` output item（`content` / `summary`）、`content_part.*` 的 `reasoning_text` part、`response.completed` / `response.incomplete` 的 `response.output` 兜底——同一 item 已流式 delta 則跳過整段回放
+- **Responses 回傳**：非工具回合在 assistant message 前插入 `reasoning` item（`content` + `summary` 同發；OpenAI 要求 `summary`，DeepSeek 合併 `content`）
+- **測試**：`test/reasoning-preservation.test.mjs` — 逐 wire shape 回歸 + seeded 隨機 property（300 輪隨機交錯，鎖定無遺失、無重複）
+
 ## 開發
 
 ```bash
