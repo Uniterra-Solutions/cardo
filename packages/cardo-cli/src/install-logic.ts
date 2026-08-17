@@ -126,6 +126,13 @@ export function psSingleQuote(value: string): string {
   return value.replace(/'/g, "''");
 }
 
+/** Quote a token for a `shell: true` cmd.exe command line: wrap tokens
+ * containing whitespace in double quotes. Windows command lines have no
+ * shell escaping of their own, and execFile does not quote shell args. */
+export function cmdQuote(arg: string): string {
+  return /\s/.test(arg) ? `"${arg}"` : arg;
+}
+
 export interface StartMenuShortcut {
   readonly lnkPath: string;
   readonly script: string;

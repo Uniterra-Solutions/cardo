@@ -192,10 +192,12 @@ async function fetchInstalledCliVersion(): Promise<string | undefined> {
     const { promisify } = await import('node:util');
     const execFileAsync = promisify(execFile);
     // `cardo` is the npm global bin; on Windows that is cardo.cmd, which
-    // Node >= 20.12.2 resolves through PATHEXT without a shell.
+    // execFile cannot launch directly — shell: true lets cmd.exe resolve it
+    // via PATHEXT (execFile's args are not shell-quoted; ours are fixed).
     const result = await execFileAsync('cardo', ['--version'], {
       timeout: CLI_PROBE_TIMEOUT_MS,
       encoding: 'utf8',
+      shell: process.platform === 'win32',
     });
     const version = result.stdout.trim();
     return version.length > 0 ? version : undefined;
@@ -263,10 +265,14 @@ async function runCardoStartupUpdateCheck(): Promise<void> {
   if (response === 0) {
     // The desktop app is rebuilt from source; the CLI-only update lives in
     // `cardo update`. CARDO_UPDATE_COMMAND overrides the binary, args fixed.
-    // (`cardo` is cardo.cmd on Windows — Node resolves it via PATHEXT.)
+    // (`cardo` is cardo.cmd on Windows — shell: true lets cmd.exe resolve it.)
     const command = envOrDefault('CARDO_UPDATE_COMMAND', 'cardo');
     const { spawn } = await import('node:child_process');
-    const child = spawn(command, ['setup'], { detached: true, stdio: 'ignore' });
+    const child = spawn(command, ['setup'], {
+      detached: true,
+      stdio: 'ignore',
+      shell: process.platform === 'win32',
+    });
     child.once('error', (error: Error) => {
       console.error('[cardo] failed to launch the installer:', error);
       void shell.openExternal(envOrDefault('CARDO_UPDATE_RELEASES_PAGE', DEFAULT_RELEASES_PAGE));

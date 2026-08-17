@@ -38,6 +38,7 @@ import { pipeline } from 'node:stream/promises';
 import {
   REPO,
   builderArgs,
+  cmdQuote,
   currentPlatform,
   embedResourcesDir,
   findBuiltApp,
@@ -66,19 +67,28 @@ interface RunResult {
   readonly stderr: string;
 }
 
-/** Run a CLI tool via execFile. On Windows, Node >= 20.12.2 resolves
- * .cmd/.bat shims (pnpm, npm, tar, robocopy, powershell) through PATHEXT
- * without a shell, so no `shell: true` is needed anywhere. */
+/** Run a CLI tool via execFile. Windows ships npm/pnpm/cardo as `.cmd`
+ * shims, which execFile cannot launch directly (spawn ENOENT) — there
+ * `shell: true` lets cmd.exe resolve them via PATHEXT, the same pattern dsh
+ * uses for its plugin spawns. `.exe` tools (tar, robocopy, powershell) would
+ * resolve either way; args containing whitespace are quoted for cmd.exe. */
 function run(
   file: string,
   args: readonly string[],
   options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
 ): Promise<RunResult> {
+  const windows = process.platform === 'win32';
   return new Promise((resolve, reject) => {
     execFile(
       file,
-      [...args],
-      { encoding: 'utf8', maxBuffer: MAX_BUFFER_BYTES, cwd: options.cwd, env: options.env },
+      windows ? args.map(cmdQuote) : [...args],
+      {
+        encoding: 'utf8',
+        maxBuffer: MAX_BUFFER_BYTES,
+        cwd: options.cwd,
+        env: options.env,
+        shell: windows,
+      },
       (error: ExecFileException | null, stdout: string, stderr: string) => {
         if (error !== null) {
           reject(new Error(error.message));

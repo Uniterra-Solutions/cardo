@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   builderArgs,
+  cmdQuote,
   embedResourcesDir,
   findBuiltApp,
   findSourceRoot,
@@ -395,6 +396,19 @@ test(
     );
   },
 );
+
+test('cmdQuote: tokens containing whitespace are double-quoted; others are unchanged', () => {
+  fc.assert(
+    fc.property(fc.string(), (value) => {
+      const quoted = cmdQuote(value);
+      if (/\s/.test(value)) {
+        assert.equal(quoted, `"${value}"`, 'whitespace tokens are wrapped');
+      } else {
+        assert.equal(quoted, value, 'tokens without whitespace are untouched');
+      }
+    }),
+  );
+});
 
 test('startMenuShortcut: Start Menu path, APPDATA fallback, and script shape', () => {
   const exe = join('C:\\Users\\dev\\AppData\\Local\\Programs\\Cardo', 'Cardo.exe');
