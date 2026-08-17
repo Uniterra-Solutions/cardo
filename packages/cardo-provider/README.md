@@ -1,40 +1,40 @@
 # @cardo/cardo-provider
 
-卡多自家雙協定 LLM provider 插件（DeepSeek Harness）。以 **workspace 內建**方式由 `packages/cardo-desktop` 拷貝進 profile（見 `builtin.ts` 的 `BUILTIN_WORKSPACE_PLUGINS`）。
+Cardo's in-house dual-protocol LLM provider plugin (DeepSeek Harness). Ships as a **workspace built-in**, copied into the profile by `packages/cardo-desktop` (see `BUILTIN_WORKSPACE_PLUGINS` in `builtin.ts`).
 
-## 能力
+## Capabilities
 
-- **雙協定**：OpenAI chat completions（`/chat/completions`）與 Responses API（`/responses`，SSE）—— 任何 OpenAI-compatible gateway 皆可使用；協定可逐模型覆寫（`api: 'chat-completions' | 'responses'`）
-- **models.dev 自動偵測**：context window / max output tokens / reasoning efforts 自動比對填入，Web 設定頁一鍵拉取
-- **Web 設定頁**：新增 gateway（base URL + API key）、逐模型管理、proxy 支援（undici `ProxyAgent`）
+- **Dual protocol**: OpenAI chat completions (`/chat/completions`) and Responses API (`/responses`, SSE) — any OpenAI-compatible gateway works; protocol overridable per model (`api: 'chat-completions' | 'responses'`)
+- **models.dev auto-detection**: context window / max output tokens / reasoning efforts matched and filled in automatically, one-click fetch from the Web settings page
+- **Web settings page**: add gateways (base URL + API key), per-model management, proxy support (undici `ProxyAgent`)
 
-## Wire 格式與 reasoning 保留
+## Wire formats and reasoning preservation
 
-雙協定對 reasoning 的處理守同一條不變量：**wire 發出的任何非空 reasoning fragment 都必須進 harness 的 `reasoning` block，歷史回合的 reasoning 也必須回傳網關——無遺失、無重複**。
+Both protocols hold the same invariant: **any non-empty reasoning fragment the wire emits must reach the harness's `reasoning` block, and reasoning from prior turns must be passed back to the gateway — no loss, no duplication**.
 
-- **Chat Completions 接收**：`delta.reasoning_content`（DeepSeek/Qwen/GLM）、`delta.reasoning`（OpenRouter 等聚合器）、終止 chunk 的 `message.reasoning_content` / `message.reasoning` 全量回放（DashScope compatible mode）——回放只在沒有 delta 時補上，避免重複
-- **Chat Completions 回傳**：工具回合的 assistant message 攜帶 `reasoning_content`（DeepSeek 硬性要求）
-- **Responses 接收**：`response.reasoning_text.delta/.done`、`response.reasoning_summary_text.delta/.done`、`reasoning` output item（`content` / `summary`）、`content_part.*` 的 `reasoning_text` part、`response.completed` / `response.incomplete` 的 `response.output` 兜底——同一 item 已流式 delta 則跳過整段回放
-- **Responses 回傳**：非工具回合在 assistant message 前插入 `reasoning` item（`content` + `summary` 同發；OpenAI 要求 `summary`，DeepSeek 合併 `content`）
-- **測試**：`test/reasoning-preservation.test.mjs` — 逐 wire shape 回歸 + seeded 隨機 property（300 輪隨機交錯，鎖定無遺失、無重複）
+- **Chat Completions receive**: `delta.reasoning_content` (DeepSeek/Qwen/GLM), `delta.reasoning` (OpenRouter-style aggregators), and the terminal chunk's `message.reasoning_content` / `message.reasoning` full-text replay (DashScope compatible mode) — replays append only when nothing streamed, avoiding duplication
+- **Chat Completions send back**: tool-call turns carry `reasoning_content` on the assistant message (required by DeepSeek)
+- **Responses receive**: `response.reasoning_text.delta/.done`, `response.reasoning_summary_text.delta/.done`, `reasoning` output items (`content` / `summary`), `content_part.*` `reasoning_text` parts, and the `response.completed` / `response.incomplete` `response.output` fallback — whole-item replays are skipped when the item already streamed deltas
+- **Responses send back**: every assistant turn (tool-call and non-tool-call) emits a `reasoning` item before its `function_call` items / assistant message (`content` + `summary` sent together; OpenAI requires `summary`, DeepSeek merges `content`). DeepSeek's Responses API in thinking mode rejects a multi-turn tool-call continuation unless the prior turn's `reasoning_text` is replayed this way
+- **Tests**: `test/reasoning-preservation.test.mjs` — per-wire-shape regressions + seeded randomized properties (300 rounds of random interleaving, locking no-loss/no-duplication)
 
-## 開發
+## Development
 
 ```bash
 pnpm --filter @cardo/cardo-provider run build       # tsc (types) + esbuild host+client bundle → lib/
-pnpm --filter @cardo/cardo-provider test            # build + node:test 組合/雙協定 translate 測試
+pnpm --filter @cardo/cardo-provider test            # build + node:test composition/dual-protocol translate tests
 pnpm --filter @cardo/cardo-provider run lint        # eslint src
-pnpm --filter @cardo/cardo-provider run typecheck   # host + client 兩個 tsconfig
+pnpm --filter @cardo/cardo-provider run typecheck   # host + client tsconfigs
 ```
 
-改動 `src/` 後記得 `pnpm run build`：desktop 的 workspace 內建 provision 拷貝的是 `lib/`（build 產物），stale `lib/` 會讓 profile 帶著舊版插件。
+After changing `src/` run `pnpm run build`: the desktop's workspace built-in provisioning copies `lib/` (the build output) — a stale `lib/` ships an outdated plugin into the profile.
 
-## Build 產物佈局
+## Build output layout
 
-- `lib/index.js` — host bundle（ESM，自包含：runtime deps 內聯，僅 `@deepseek-ai/*` peers external）
-- `lib/client.js` — browser bundle（CJS closure-factory，dsh client module loader 載入）
-- `lib/types/` — tsc declaration emit（`.d.ts` 的 `.ts` specifier 已改寫為 `.js`）
+- `lib/index.js` — host bundle (ESM, self-contained: runtime deps inlined, only `@deepseek-ai/*` peers external)
+- `lib/client.js` — browser bundle (CJS closure factory, loaded by the dsh client module loader)
+- `lib/types/` — tsc declaration emit (`.ts` specifiers in `.d.ts` rewritten to `.js`)
 
-## 設定
+## Configuration
 
-命名空間 `llm-cardo`；provider id `cardo`。註冊的 gateway 走 `ctx.llm.registerConfigurableProvider`，models.dev 偵測走 `registerModelDiscovery`。API key 存於 cardo credentials。
+Namespace `llm-cardo`; provider id `cardo`. The registered gateway goes through `ctx.llm.registerConfigurableProvider`; models.dev detection goes through `registerModelDiscovery`. The API key is stored in cardo credentials.
