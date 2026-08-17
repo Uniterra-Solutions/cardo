@@ -46,8 +46,8 @@ Exported from `install-logic.ts`:
 5. Package: `pnpm exec electron-builder <builderArgs(platform, version)>` in `packages/cardo-desktop`.
 6. `findBuiltApp(platform)`: the `.app` under `dist/mac-*` / the `win-unpacked` dir.
 7. Move the artifact out of the tree (embedding the source into itself is illegal): `/bin/mv` (macOS, cross-volume safe) / `fs.rename` with EXDEV fallback to `robocopy` + `rm` (Windows — CI workspaces can live on another volume than the temp dir).
-8. Embed source: `/bin/cp -R <src> <app>/Contents/Resources/src` / `robocopy <src> <win-unpacked>/resources/src` — the tree the packaged app resolves everything from.
-9. Install: `/usr/bin/ditto` → `~/Applications/Cardo.app` / `robocopy` → `%LOCALAPPDATA%\Programs\Cardo`, replacing any existing copy.
+8. Embed source: `/bin/cp -R <src> <app>/Contents/Resources/src` / `robocopy /MT:16 <src> <win-unpacked>/resources/src` — the tree the packaged app resolves everything from (multi-threaded: the pnpm store is hundreds of thousands of small files).
+9. Install: `/usr/bin/ditto` → `~/Applications/Cardo.app` / same-volume `fs.rename` → `%LOCALAPPDATA%\Programs\Cardo` (tmp and LOCALAPPDATA are both on C:, so the multi-GB move is instant; EXDEV falls back to `robocopy`), replacing any existing copy.
 10. Windows only: Start Menu shortcut via `powershell` WScript.Shell (best-effort — a missing shortcut never fails the install).
 11. Launch: `/usr/bin/open` / detached spawn of `Cardo.exe` (unless `--no-open`).
 12. `finally`: remove the temp root.
@@ -55,7 +55,7 @@ Exported from `install-logic.ts`:
 Platform notes:
 
 - macOS tools are absolute `/usr/bin` paths; Windows tools (`tar`, `robocopy`, `powershell`) resolve from PATH.
-- `robocopy` exit codes 0–7 are success (bitmask); `run()` is bypassed for it — a non-zero code is not a failure.
+- `robocopy` exit codes 0–7 are success (bitmask); `run()` is bypassed for it — a non-zero code is not a failure. Runs with `/MT:16` (parallel threads) and is only the copy engine when a same-volume rename is impossible.
 - `run()` on Windows uses `shell: true` (args quoted for cmd.exe via `cmdQuote`): npm/pnpm/cardo ship as `.cmd` shims that execFile cannot launch directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT. `.exe` tools (`tar`, `robocopy`, `powershell`) would resolve either way.
 - `.app` discovery accepts any `mac-*` dir (host arch chosen by electron-builder `[INFERRED]`); Windows expects `win-unpacked/` with an `.exe` (any name).
 
