@@ -28,6 +28,17 @@ function Fail([string]$Message) {
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $env:CI = 'true'
 
+# Defender real-time scanning locks freshly copied files and fails the
+# installer's same-volume rename with EPERM. Best-effort exclusions (the
+# runner is admin; a managed AV may still reject them).
+try {
+  Add-MpPreference -ExclusionPath $RepoRoot -ErrorAction Stop
+  Add-MpPreference -ExclusionPath $env:TEMP -ErrorAction Stop
+  Write-Host 'defender exclusions added for repo root and TEMP'
+} catch {
+  Write-Host 'defender exclusions skipped (not applicable): continuing'
+}
+
 Step '1/8 pnpm install --frozen-lockfile (Windows)'
 # CI=true mirrors what the cardo CLI passes (the app's updater has no TTY);
 # it also stops pnpm 11's confirmModulesPurge prompt from aborting.

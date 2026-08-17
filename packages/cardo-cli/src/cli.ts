@@ -58,10 +58,15 @@ const MAX_BUFFER_BYTES = 50 * 1024 * 1024;
 const ROBOCOPY_SUCCESS_MAX = 7;
 /** /MT:16 — multi-threaded copy: the embedded source tree is hundreds of
  * thousands of small files (pnpm store), where single-threaded robocopy
- * takes minutes and parallel threads finish in seconds. */
+ * takes minutes and parallel threads finish in seconds.
+ * /R:5 /W:5 — bounded retries: robocopy's defaults (1,000,000 retries,
+ * 30 s apart) hang for hours when Defender briefly locks a freshly copied
+ * file. */
 const ROBOCOPY_QUIET = [
   '/E',
   '/MT:16',
+  '/R:5',
+  '/W:5',
   '/NFL',
   '/NDL',
   '/NJH',
@@ -250,17 +255,17 @@ async function resolveInstallSource(
   return { src, version: release.tag_name.replace(/^v/, '') };
 }
 
-/** Windows: move a directory, preferring an instant same-volume rename and
- * falling back to a robocopy copy + delete across volumes (EXDEV). */
+/** Windows: move a directory, preferring an instant same-volume rename.
+ * Rename is only an optimization — ANY failure degrades to a robocopy copy +
+ * delete: EXDEV (cross-volume, e.g. CI workspace on D: vs temp on C:), EPERM
+ * (Defender briefly locking freshly copied files), or anything else. The
+ * fallback surfaces real problems through robocopy's own exit code. */
 async function moveOrRobocopy(from: string, to: string): Promise<void> {
   try {
     await rename(from, to);
     return;
-  } catch (error) {
-    const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-    if (code !== 'EXDEV') {
-      throw error;
-    }
+  } catch {
+    // fall through to robocopy
   }
   await robocopy(from, to);
   await rm(from, { recursive: true, force: true });
