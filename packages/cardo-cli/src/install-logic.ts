@@ -164,6 +164,35 @@ export async function readVersion(
   return match[1];
 }
 
+/** The ordered execution stages of a cardo CLI run. Pure so the
+ * command/flag semantics are testable without running a shell.
+ *
+ * `cardo update` is the one-command full update: it refreshes the CLI
+ * itself first (fail fast on npm/permission problems before the long build),
+ * then rebuilds + reinstalls the desktop app exactly like `cardo setup`,
+ * and relaunches the app when done — the desktop's Update Now flow quits
+ * the app and runs this command, so the relaunch IS the app restart. */
+export type InstallStage = 'update-cli' | 'build-install-app' | 'launch-app';
+
+export function installPlan(
+  command: 'setup' | 'update',
+  open: boolean,
+  dryRun: boolean,
+): readonly InstallStage[] {
+  if (dryRun) {
+    return [];
+  }
+  const stages: InstallStage[] = [];
+  if (command === 'update') {
+    stages.push('update-cli');
+  }
+  stages.push('build-install-app');
+  if (open) {
+    stages.push('launch-app');
+  }
+  return stages;
+}
+
 export interface ParsedArgs {
   readonly command: 'setup' | 'update' | 'version' | 'help';
   readonly open: boolean;

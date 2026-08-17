@@ -24,8 +24,12 @@
  * `cardo setup --source <dir>` builds from a local workspace checkout
  * instead of downloading a release — the Windows CI verification path.
  *
- * `cardo update` updates the CLI ONLY (`npm install -g`); it never rebuilds
- * or reinstalls the desktop app — that is `cardo setup`'s job.
+ * `cardo update` is the one-command full update: it refreshes the CLI
+ * itself (`npm install -g`), then rebuilds + reinstalls the desktop app
+ * from the latest release source exactly like `cardo setup`, and relaunches
+ * the app when done. The desktop's Update Now flow quits the app and runs
+ * this command, so the relaunch IS the app restart — no separate
+ * `cardo setup` needed.
  */
 
 import { execFile, spawn, type ExecFileException } from 'node:child_process';
@@ -44,6 +48,7 @@ import {
   findBuiltApp,
   findSourceRoot,
   installDestination,
+  installPlan,
   launchTarget,
   parseArgs,
   readVersion,
@@ -349,16 +354,18 @@ async function openApp(destination: string, platform: InstallPlatform): Promise<
 }
 
 /**
- * The full install: fetch source, build, package the app with the source
- * tree embedded in the resources, install, and (optionally) launch.
+ * Build the app from source, package it with the source tree embedded in
+ * the resources, and install it. Returns the install destination —
+ * launching is the caller's `launch-app` stage. Returns undefined after a
+ * dry-run report.
  */
-async function installDesktopApp(options: InstallOptions): Promise<void> {
+async function buildInstallApp(options: InstallOptions): Promise<string | undefined> {
   const platform = currentPlatform();
   const tmpRoot = await mkdtemp(join(tmpdir(), 'cardo-'));
   try {
     const resolved = await resolveInstallSource(options, tmpRoot);
     if (resolved === undefined) {
-      return; // dry-run reported already
+      return undefined; // dry-run reported already
     }
     const { src, version } = resolved;
 
@@ -398,11 +405,52 @@ async function installDesktopApp(options: InstallOptions): Promise<void> {
       await createStartMenuShortcutBestEffort(destination);
     }
     process.stdout.write(`Installed ${destination}\n`);
-    if (options.open) {
-      await openApp(destination, platform);
-    }
+    return destination;
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+/** Execute the command's stage plan (`installPlan`). `cardo update` runs
+ * `update-cli` first so npm/permission problems surface before the long
+ * build; `launch-app` is the relaunch after an update (the desktop quits
+ * itself before running `cardo update`, so launching the installed app is
+ * the restart). */
+async function runInstallPlan(command: 'setup' | 'update', options: InstallOptions): Promise<void> {
+  const plan = installPlan(command, options.open, options.dryRun);
+  if (plan.length === 0) {
+    if (command === 'update') {
+      // The plan report is complete on its own — no source resolution, no
+      // downloads (keeps `cardo update --dry-run` deterministic and offline).
+      process.stdout.write(
+        '[dry-run] Would update the CLI, then rebuild + reinstall the desktop app and relaunch it\n',
+      );
+      return;
+    }
+    // Setup dry-run: resolve the source for the report only (prints and returns).
+    const tmpRoot = await mkdtemp(join(tmpdir(), 'cardo-'));
+    try {
+      await resolveInstallSource(options, tmpRoot);
+    } finally {
+      await rm(tmpRoot, { recursive: true, force: true });
+    }
+    return;
+  }
+  let destination: string | undefined;
+  for (const stage of plan) {
+    switch (stage) {
+      case 'update-cli':
+        await updateCli();
+        break;
+      case 'build-install-app':
+        destination = await buildInstallApp(options);
+        break;
+      case 'launch-app':
+        if (destination !== undefined) {
+          await openApp(destination, currentPlatform());
+        }
+        break;
+    }
   }
 }
 
@@ -436,7 +484,7 @@ function printHelp(): void {
       '',
       'Usage:',
       '  cardo setup [--source <dir>] [--no-open] [--dry-run]   Build and install the latest Cardo desktop app from source',
-      '  cardo update                          Update the CLI only (the desktop app is rebuilt with cardo setup)',
+      '  cardo update [--source <dir>] [--no-open] [--dry-run]  Update the CLI, then rebuild + reinstall the app and relaunch it',
       '  cardo --version                        Print the CLI version',
       '  cardo --help                           Print this help',
       '',
@@ -462,10 +510,12 @@ async function main(): Promise<void> {
       process.stdout.write(`${await readVersion()}\n`);
       return;
     case 'setup':
-      await installDesktopApp({ open: parsed.open, dryRun: parsed.dryRun, source: parsed.source });
-      return;
     case 'update':
-      await updateCli();
+      await runInstallPlan(parsed.command, {
+        open: parsed.open,
+        dryRun: parsed.dryRun,
+        source: parsed.source,
+      });
       return;
   }
 }

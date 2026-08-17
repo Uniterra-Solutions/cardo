@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Verifies the `cardo setup` CLI flow end-to-end inside a clean container:
+# Verifies the cardo CLI setup/update flow end-to-end inside a clean container:
 #   1. The pristine source tree (no .git, no node_modules) installs with
 #      `pnpm install --frozen-lockfile` — the exact command the CLI runs.
 #   2. The workspace builds (`pnpm run build`).
-#   3. The runtime dependencies the packaged Electron shell resolves are
+#   3. `cardo update --dry-run` reports the one-command full update plan
+#      (CLI refresh + app rebuild + relaunch) without executing it.
+#   4. The runtime dependencies the packaged Electron shell resolves are
 #      present at the paths main.ts actually uses.
-#   4. The bundled skills ship to dist/skills.
+#   5. The bundled skills ship to dist/skills.
 set -euo pipefail
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$1"; }
 fail() { printf '\n\033[1;31mFAIL: %s\033[0m\n' "$1" >&2; exit 1; }
 ok()   { printf '\033[1;32mok: %s\033[0m\n' "$1"; }
 
-step "1/7 pnpm install --frozen-lockfile (no .git, no node_modules)"
+step "1/8 pnpm install --frozen-lockfile (no .git, no node_modules)"
 # CI=true mirrors what the fixed cardo CLI now passes (the app's updater has
 # no TTY); it also stops pnpm 11's confirmModulesPurge prompt from aborting.
 CI=true pnpm install --frozen-lockfile > /tmp/install.log 2>&1 || {
@@ -21,14 +23,28 @@ CI=true pnpm install --frozen-lockfile > /tmp/install.log 2>&1 || {
 }
 ok "install exited 0"
 
-step "2/7 workspace build"
+step "2/8 workspace build"
 pnpm run build > /tmp/build.log 2>&1 || {
   tail -30 /tmp/build.log
   fail "pnpm run build failed"
 }
 ok "build exited 0"
 
-step "3/7 dsh CLI resolvable at the path main.ts uses"
+step "3/8 cardo update --dry-run (one-command update entry: plan report, no downloads)"
+# The built CLI's update entry point: dry-run must report the full update
+# (CLI refresh + app rebuild + relaunch) and exit 0 WITHOUT any network
+# access — the exact command the desktop's Update Now spawns, minus the
+# execution stages. Keeping it offline makes this gate deterministic.
+UPDATE_DRY_OUT=/tmp/update-dry-run.log
+node packages/cardo-cli/dist/cli.js update --dry-run > "$UPDATE_DRY_OUT" 2>&1 || {
+  tail -30 "$UPDATE_DRY_OUT"
+  fail "cardo update --dry-run failed"
+}
+grep -q "Would update the CLI, then rebuild + reinstall the desktop app and relaunch it" "$UPDATE_DRY_OUT" \
+  || { cat "$UPDATE_DRY_OUT"; fail "cardo update --dry-run did not report the full update plan"; }
+ok "cardo update --dry-run reported the full update plan (offline)"
+
+step "4/8 dsh CLI resolvable at the path main.ts uses"
 D=packages/cardo-desktop/node_modules/@deepseek-ai/dsh/lib/bin.js
 if [ ! -f "$D" ]; then
   echo "--- candidate locations found ---"
@@ -37,20 +53,20 @@ if [ ! -f "$D" ]; then
 fi
 ok "dsh bin present: $D"
 
-step "4/7 bundled skills copied to dist"
+step "5/8 bundled skills copied to dist"
 [ -d packages/cardo-skills/dist/skills ] || fail "dist/skills missing"
 count=$(ls packages/cardo-skills/dist/skills | wc -l | tr -d ' ')
 [ "$count" -ge 6 ] || fail "expected >=6 bundled skills, got $count"
 ok "dist/skills has $count skills"
 
-step "5/7 desktop package typechecks (what electron-builder consumes)"
+step "6/8 desktop package typechecks (what electron-builder consumes)"
 pnpm --filter @cardo/cardo-desktop run build > /tmp/desktop-build.log 2>&1 || {
   tail -20 /tmp/desktop-build.log
   fail "cardo-desktop build failed"
 }
 ok "desktop build exited 0"
 
-step "6/7 workspace built-in bundle produced by the build"
+step "7/8 workspace built-in bundle produced by the build"
 # The workspace built-in's host entry (packages/cardo-provider/lib/index.js)
 # is an esbuild artifact of the provider's own build, which the root build
 # must run. Without it, the app copies a broken package into the dsh profile
@@ -63,7 +79,7 @@ if [ ! -f "$D" ]; then
 fi
 ok "provider bundle present: $D"
 
-step "7/7 Docker PBT suite (provisioning properties + real dsh boot)"
+step "8/8 Docker PBT suite (provisioning properties + real dsh boot)"
 # CARDO_SOURCE_ROOT points the suite at the pristine source tree that was
 # installed + built above (steps 1-2) — the exact tree cardo setup embeds.
 export CARDO_SOURCE_ROOT=/src

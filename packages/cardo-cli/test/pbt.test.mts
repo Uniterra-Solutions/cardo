@@ -10,6 +10,9 @@
  *  - ROOT: findSourceRoot accepts exactly one `cardo-*` directory.
  *  - APP: findBuiltApp finds the electron-builder .app when one exists and
  *    throws otherwise (order-independent).
+ *  - PLAN: installPlan — update = update-cli → build-install-app →
+ *    launch-app; setup never runs update-cli; dry-run runs nothing;
+ *    launch-app present iff open and last.
  *  - VER: readVersion returns the first `"version": "..."` line or throws.
  */
 import test from 'node:test';
@@ -25,6 +28,7 @@ import {
   findBuiltApp,
   findSourceRoot,
   installDestination,
+  installPlan,
   launchTarget,
   parseArgs,
   psSingleQuote,
@@ -116,6 +120,48 @@ test('parseArgs matches the spec model over arbitrary flag/command mixes', () =>
 // The command is the FIRST positional — order of positionals is by design,
 // so the only order-independence that holds is for FLAGS, which the spec
 // model above already covers. No separate permutation property.
+
+// ---------------------------------------------------------------------------
+// PLAN — installPlan (`cardo setup` vs the one-command `cardo update`)
+// ---------------------------------------------------------------------------
+
+const planCommandArb = fc.constantFrom('setup', 'update');
+
+test('installPlan: update = CLI refresh + app rebuild + relaunch; setup never touches the CLI', () => {
+  fc.assert(
+    fc.property(planCommandArb, fc.boolean(), fc.boolean(), (command, open, dryRun) => {
+      const plan = installPlan(command, open, dryRun);
+      if (dryRun) {
+        assert.deepEqual(plan, [], 'dry-run executes nothing');
+        return;
+      }
+      const cliIndex = plan.indexOf('update-cli');
+      if (command === 'update') {
+        assert.equal(cliIndex, 0, 'update refreshes the CLI first (fail fast)');
+      } else {
+        assert.equal(cliIndex, -1, 'setup never touches the CLI');
+      }
+      assert.equal(
+        plan.filter((stage) => stage === 'build-install-app').length,
+        1,
+        'exactly one app build/install',
+      );
+      assert.ok(plan.indexOf('build-install-app') > cliIndex, 'app build follows the CLI refresh');
+      const launchIndex = plan.indexOf('launch-app');
+      if (open) {
+        assert.equal(launchIndex, plan.length - 1, 'relaunch is the last stage');
+      } else {
+        assert.equal(launchIndex, -1, '--no-open skips the relaunch');
+      }
+      const expected: readonly string[] = [
+        ...(command === 'update' ? ['update-cli'] : []),
+        'build-install-app',
+        ...(open ? ['launch-app'] : []),
+      ];
+      assert.deepEqual(plan, expected, 'plan matches the documented stage order');
+    }),
+  );
+});
 
 // ---------------------------------------------------------------------------
 // URL — sourceArchiveUrl
