@@ -56,7 +56,20 @@ const PACKAGE_NAME = '@uniterra-solutions/cardo';
 const MAX_BUFFER_BYTES = 50 * 1024 * 1024;
 /** robocopy exit codes 0-7 are success (bitmask: 1=copied, 2=extra, 4=mismatch). */
 const ROBOCOPY_SUCCESS_MAX = 7;
-const ROBOCOPY_QUIET = ['/E', '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP'] as const;
+/** /MT:16 — multi-threaded copy: the embedded source tree is hundreds of
+ * thousands of small files (pnpm store), where single-threaded robocopy
+ * takes minutes and parallel threads finish in seconds. */
+const ROBOCOPY_QUIET = [
+  '/E',
+  '/MT:16',
+  '/NFL',
+  '/NDL',
+  '/NJH',
+  '/NJS',
+  '/NC',
+  '/NS',
+  '/NP',
+] as const;
 
 interface LatestRelease {
   readonly tag_name: string;
@@ -237,6 +250,22 @@ async function resolveInstallSource(
   return { src, version: release.tag_name.replace(/^v/, '') };
 }
 
+/** Windows: move a directory, preferring an instant same-volume rename and
+ * falling back to a robocopy copy + delete across volumes (EXDEV). */
+async function moveOrRobocopy(from: string, to: string): Promise<void> {
+  try {
+    await rename(from, to);
+    return;
+  } catch (error) {
+    const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+    if (code !== 'EXDEV') {
+      throw error;
+    }
+  }
+  await robocopy(from, to);
+  await rm(from, { recursive: true, force: true });
+}
+
 /** Move the packaged artifact out of the source tree (it must leave before
  * the source is embedded, or the copy would recurse into itself). */
 async function moveArtifact(
@@ -245,20 +274,10 @@ async function moveArtifact(
   platform: InstallPlatform,
 ): Promise<void> {
   if (platform === 'windows') {
-    // Prefer a same-volume rename; `--source` checkouts can live on another
-    // volume than the tmp dir (e.g. CI: workspace on D:, temp on C:), where
-    // rename fails with EXDEV — fall back to copy + delete.
-    try {
-      await rename(appPath, staged);
-      return;
-    } catch (error) {
-      const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-      if (code !== 'EXDEV') {
-        throw error;
-      }
-    }
-    await robocopy(appPath, staged);
-    await rm(appPath, { recursive: true, force: true });
+    // `--source` checkouts can live on another volume than the tmp dir
+    // (e.g. CI: workspace on D:, temp on C:) — rename fails there with
+    // EXDEV and the helper falls back to copy + delete.
+    await moveOrRobocopy(appPath, staged);
     return;
   }
   // /bin/mv survives cross-volume moves (copy + delete internally).
@@ -275,8 +294,9 @@ async function embedSource(staged: string, src: string, platform: InstallPlatfor
   await run('/bin/cp', ['-R', src, target]);
 }
 
-/** Copy the staged artifact to its install destination, replacing any
- * previous install. */
+/** Install the staged artifact to its destination, replacing any previous
+ * install. Windows prefers a same-volume rename (tmp and %LOCALAPPDATA% are
+ * both on C:) over a multi-GB robocopy; macOS keeps /usr/bin/ditto. */
 async function copyInstalled(
   staged: string,
   destination: string,
@@ -285,11 +305,11 @@ async function copyInstalled(
   if (existsSync(destination)) {
     await rm(destination, { recursive: true, force: true });
   }
+  await mkdir(dirname(destination), { recursive: true });
   if (platform === 'windows') {
-    await robocopy(staged, destination);
+    await moveOrRobocopy(staged, destination);
     return;
   }
-  await mkdir(dirname(destination), { recursive: true });
   await run('/usr/bin/ditto', [staged, destination]);
 }
 
@@ -360,9 +380,13 @@ async function installDesktopApp(options: InstallOptions): Promise<void> {
     await mkdir(outDir, { recursive: true });
     const staged = join(outDir, basename(appPath));
     await moveArtifact(appPath, staged, platform);
+    // This step copies hundreds of thousands of small files (the embedded
+    // node_modules) — the line before it keeps the install log readable.
+    process.stdout.write('Embedding source tree into the app...\n');
     await embedSource(staged, src, platform);
 
     const destination = installDestination(platform, process.env, staged);
+    process.stdout.write(`Installing to ${destination}...\n`);
     await copyInstalled(staged, destination, platform);
     await rm(staged, { recursive: true, force: true });
     if (platform === 'windows') {

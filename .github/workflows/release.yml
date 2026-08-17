@@ -53,6 +53,15 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # electron-builder downloads the electron dist + winCodeSign from
+      # GitHub on first use; caching them keeps release retries fast.
+      - name: Cache electron / electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: win-electron-cache-${{ runner.os }}-${{ hashFiles('packages/cardo-desktop/package.json') }}
       - name: Run Windows verification
         shell: pwsh
         run: scripts/verify-windows-install/verify.ps1
