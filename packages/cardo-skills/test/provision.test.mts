@@ -12,7 +12,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import {
@@ -73,12 +73,12 @@ test('existing skill directories are preserved (user edits survive restarts)', a
   const agentDir = makeTmpAgentDir();
   try {
     await provisionBuiltinSkills(agentDir);
-    const target = path.join(agentDir, 'skills', 'qa', 'SKILL.md');
+    const target = path.join(agentDir, 'skills', 'cardo-qa', 'SKILL.md');
     const userNote = '# user-edited\n';
     writeFileSync(target, userNote);
 
     const again = await provisionBuiltinSkills(agentDir);
-    assert.ok(again.skipped.includes('qa'), 'qa skipped on second run');
+    assert.ok(again.skipped.includes('cardo-qa'), 'cardo-qa skipped on second run');
     assert.equal(readFileSync(target, 'utf-8'), userNote, 'user edit untouched');
   } finally {
     cleanUp(agentDir);
@@ -89,13 +89,53 @@ test('force replaces an existing destination', async () => {
   const agentDir = makeTmpAgentDir();
   try {
     await provisionBuiltinSkills(agentDir);
-    const target = path.join(agentDir, 'skills', 'qa', 'SKILL.md');
+    const target = path.join(agentDir, 'skills', 'cardo-qa', 'SKILL.md');
     writeFileSync(target, '# user-edited\n');
 
     const forced = await provisionBuiltinSkills(agentDir, { force: true });
-    assert.ok(forced.installed.includes('qa'), 'qa reinstalled under force');
+    assert.ok(forced.installed.includes('cardo-qa'), 'cardo-qa reinstalled under force');
     const reinstalled = readFileSync(target, 'utf-8');
     assert.ok(reinstalled.includes('PRD-driven acceptance testing'), 'bundled content restored');
+  } finally {
+    cleanUp(agentDir);
+  }
+});
+
+test('retired skills are removed while other skills and user edits stay untouched', async () => {
+  const agentDir = makeTmpAgentDir();
+  try {
+    await provisionBuiltinSkills(agentDir);
+    // Simulate a profile provisioned by an older cardo: the retired
+    // cardo-planmode and qa dirs are present alongside their replacements.
+    for (const name of ['cardo-planmode', 'qa']) {
+      const retired = path.join(agentDir, 'skills', name);
+      mkdirSync(retired, { recursive: true });
+      writeFileSync(path.join(retired, 'SKILL.md'), '# old\n');
+    }
+    const keep = path.join(agentDir, 'skills', 'cardo-qa', 'SKILL.md');
+    const keepContent = readFileSync(keep, 'utf-8');
+
+    await provisionBuiltinSkills(agentDir);
+    for (const name of ['cardo-planmode', 'qa']) {
+      assert.equal(
+        existsSync(path.join(agentDir, 'skills', name)),
+        false,
+        `retired ${name} removed`,
+      );
+    }
+    assert.equal(readFileSync(keep, 'utf-8'), keepContent, 'other skills untouched');
+    for (const name of [
+      'cardo-plan',
+      'cardo-implement',
+      'cardo-simplify',
+      'cardo-review',
+      'cardo-qa',
+    ]) {
+      assert.ok(
+        existsSync(path.join(agentDir, 'skills', name, 'SKILL.md')),
+        `replacement provisioned: ${name}`,
+      );
+    }
   } finally {
     cleanUp(agentDir);
   }

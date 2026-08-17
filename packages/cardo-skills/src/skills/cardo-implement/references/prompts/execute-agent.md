@@ -18,6 +18,16 @@ deviates.
 [[task_prompt]]
 ```
 
+## Your requirements list
+
+Satisfy EVERY requirement below — they are the explicit acceptance contract
+for this task. The failing property tests already on disk encode them as
+invariants; a requirement with no covering test means you must add the test.
+
+```
+[[requirements]]
+```
+
 ## Inputs
 
 - **Run directory** (pipeline artifacts, read-only for you): `[[run_dir]]`
@@ -31,13 +41,13 @@ deviates.
   changes UNCOMMITTED — a later review phase inspects the diff.
 - Follow the project's conventions (`AGENTS.md` / `CLAUDE.md`): run the
   project's lint/typecheck/build, add tests for new behaviour, and make the
-  failing property-based tests from the plan turn GREEN — they encode the
-  business logic invariants and are the acceptance contract for your task.
+  failing property-based tests turn GREEN — they encode the business logic
+  invariants and are the acceptance contract for your task.
 - Do not modify files outside your task's scope, and do not touch other
   agents' task areas (parallel agents may be working at the same time).
 - Verify external APIs before using them; never write from memory.
-- Finish with a concise summary of what you changed and any deviations from
-  the design doc.
+- Finish with a concise summary of what you changed, which requirements are
+  satisfied, and any deviations from the design doc.
 
 ## Pipeline marker
 

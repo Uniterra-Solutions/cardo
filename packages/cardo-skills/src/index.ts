@@ -21,15 +21,25 @@ import { fileURLToPath } from 'node:url';
 
 const SKILL_NAMES = [
   'cardo-pbt-debugging',
-  'cardo-planmode',
+  'cardo-plan',
+  'cardo-implement',
+  'cardo-simplify',
+  'cardo-review',
   'manage-agents-md',
   'manage-git-repo',
   'project-documentation',
-  'qa',
+  'cardo-qa',
   'create-skill',
 ] as const;
 
 export type BuiltinSkillName = (typeof SKILL_NAMES)[number];
+
+/** Skills retired from the cardo bundle (renamed, split, or folded into
+ * other skills). Their previously-provisioned copies are removed from the
+ * target skills dir — the copy loop never touches existing dirs, so without
+ * this a retired skill would keep loading alongside its replacements
+ * forever. */
+const RETIRED_SKILL_NAMES = ['cardo-planmode', 'qa'] as const;
 
 /** Names of every skill bundled with this package, in provision order. */
 export const builtinSkillNames: readonly BuiltinSkillName[] = SKILL_NAMES;
@@ -87,8 +97,10 @@ export function listBuiltinSkills(): BuiltinSkillInfo[] {
  * Provision the bundled skills into `<agentDir>/skills/`.
  *
  * Idempotent: a skill whose destination directory already exists is skipped
- * (unless `force` is set) so user edits survive restarts. Returns a report of
- * what was installed, skipped, and failed — failures never throw.
+ * (unless `force` is set) so user edits survive restarts. Retired skills
+ * (see RETIRED_SKILL_NAMES) are removed on every run — they are cardo's own
+ * replaced artifacts, not user skills. Returns a report of what was
+ * installed, skipped, and failed — failures never throw.
  */
 export function provisionBuiltinSkills(
   agentDir: string,
@@ -99,6 +111,15 @@ export function provisionBuiltinSkills(
   const installed: BuiltinSkillName[] = [];
   const skipped: BuiltinSkillName[] = [];
   const failed: ProvisionFailure[] = [];
+
+  // Best-effort removal of retired skills (missing dirs are a no-op).
+  for (const name of RETIRED_SKILL_NAMES) {
+    try {
+      rmSync(path.join(targetRoot, name), { recursive: true, force: true });
+    } catch {
+      // a locked dir must not fail provisioning
+    }
+  }
 
   for (const name of SKILL_NAMES) {
     const sourceDir = path.join(sourceRoot, name);

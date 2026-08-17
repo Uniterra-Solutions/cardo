@@ -1,21 +1,26 @@
 ---
 name: project-documentation
 description: >-
-  Generate a structured multi-file docs/ tree from any codebase:
+  Generate AND maintain a structured multi-file docs/ tree from any codebase:
   architecture diagrams, per-module deep dives, API reference, conventions,
   data models, setup, testing, and workflow recipes — with Mermaid diagrams
-  and incremental git-diff updates. Use when the user asks to document a
-  project, generate documentation, write docs, or create project wiki
-  (寫文檔, 生成文檔, 項目文檔, documentation). NOT for: single README
-  updates, one-line summaries, AGENTS.md/CLAUDE.md generation, or trivial
-  single-file scripts.
+  and incremental git-diff updates. Use whenever the user asks to document a
+  project, generate documentation, write docs, create a project wiki, OR
+  update / refresh / rebuild / regenerate existing project docs after code
+  changes (寫文檔, 生成文檔, 項目文檔, documentation, 更新文檔, 刷新文檔,
+  重建文檔, 同步文檔, 補全文檔, docs 過時). NOT for: single README updates,
+  one-line summaries, AGENTS.md/CLAUDE.md generation, or trivial single-file
+  scripts.
 ---
 
 ## Goal
 
-Transform any codebase into a structured `docs/` tree where every fact has
-exactly one home, every diagram matches the code, and every cross-reference
-resolves. Output is agent-first — tables over prose, structural maps over
+Transform any codebase into a structured `docs/` tree — or keep an existing
+one in sync after code changes — where every fact has exactly one home, every
+diagram matches the code, and every cross-reference resolves. This skill is
+for BOTH first-time generation and ongoing updates: when `docs/` already
+exists in our format, run the Incremental Update path instead of full
+generation. Output is agent-first — tables over prose, structural maps over
 narrative. Downstream agents read these docs instead of re-grepping the repo.
 The project root `README.md` stays in sync — it remains the front door,
 linking to `docs/` and reflecting the current project state.
@@ -162,7 +167,9 @@ Apply fixes for clear issues, then re-audit. Report issues you can't fix
 
 ## Incremental Update
 
-Run this workflow when `docs/` exists and is our format.
+Run this workflow when `docs/` exists and is our format — e.g. the user asks
+to update / refresh / rebuild the docs (更新文檔 / 重建文檔), or recent
+commits changed code the docs cover.
 
 1. `git diff --name-only <baseline>..HEAD` (or unstaged diff)
 2. Map changes to affected docs using the dependency graph from Phase 2:
