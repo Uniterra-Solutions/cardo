@@ -97,6 +97,56 @@ export type CardoUpdateResult =
   | { readonly status: 'up-to-date'; readonly currentVersion: string }
   | { readonly status: 'error'; readonly message: string };
 
+/** The action the desktop takes after the update prompt's user response. */
+export type CardoUpdateAction =
+  | { readonly action: 'quit-and-update' }
+  | { readonly action: 'skip-version'; readonly skippedVersion: string }
+  | { readonly action: 'none' };
+
+/**
+ * Map the update prompt's user response onto the action to take. `cardo
+ * update` is the single full-update command (CLI refresh + app rebuild +
+ * relaunch), so Update Now always runs it — the desktop quits itself first
+ * and the CLI relaunches the app when done.
+ */
+export function resolveUpdateAction(
+  result: CardoUpdateResult,
+  response: number,
+): CardoUpdateAction {
+  if (result.status !== 'update-available') {
+    return { action: 'none' };
+  }
+  if (response === 0) {
+    return { action: 'quit-and-update' };
+  }
+  if (response === 2) {
+    return { action: 'skip-version', skippedVersion: result.latestVersion };
+  }
+  return { action: 'none' };
+}
+
+/** The spawn spec for the quit-and-update action. */
+export interface UpdateInvocation {
+  readonly command: string;
+  readonly args: readonly string[];
+}
+
+/**
+ * How Update Now spawns the updater. Default: `npx --yes
+ * @uniterra-solutions/cardo@latest update` — ALWAYS execute the latest
+ * published updater, so a stale global `cardo` CLI (one that predates the
+ * one-command full update and would only refresh the CLI, leaving the app
+ * closed) can never be the binary that runs. `CARDO_UPDATE_COMMAND`
+ * overrides the command for tests/dev (the args stay `['update']`).
+ */
+export function updateInvocation(commandOverride: string | undefined): UpdateInvocation {
+  const override = commandOverride?.trim();
+  if (override !== undefined && override.length > 0) {
+    return { command: override, args: ['update'] };
+  }
+  return { command: 'npx', args: ['--yes', '@uniterra-solutions/cardo@latest', 'update'] };
+}
+
 /**
  * Combine the CLI and GitHub-release checks into one verdict. An update
  * exists when either published version is newer than its installed

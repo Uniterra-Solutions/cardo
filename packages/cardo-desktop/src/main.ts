@@ -20,7 +20,12 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startDsh, stopDsh, type DshRuntimeHandle } from './dsh-process.js';
 import { ensureBuiltinPlugins } from './builtin.js';
-import { resolveCardoUpdateStatus, shouldPromptForUpdate } from '@cardo/cardo-updater';
+import {
+  resolveCardoUpdateStatus,
+  resolveUpdateAction,
+  shouldPromptForUpdate,
+  updateInvocation,
+} from '@cardo/cardo-updater';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -278,30 +283,36 @@ async function runCardoStartupUpdateCheck(): Promise<void> {
     type: 'info',
     title: 'Cardo',
     message: `Cardo ${result.latestVersion} is available.`,
-    detail: `You have ${result.currentVersion}. Update Now rebuilds and reinstalls the app from the latest source ('cardo setup') — it may take a few minutes. The CLI itself is updated separately with 'cardo update'.`,
+    detail: `You have ${result.currentVersion}. Update Now closes Cardo and runs 'cardo update', which updates the CLI, rebuilds + reinstalls the app from the latest source, and restarts the app when done — it may take a few minutes.`,
     buttons: ['Update Now', 'Later', 'Skip This Version'],
     defaultId: 0,
     cancelId: 1,
   });
-  if (response === 0) {
-    // The desktop app is rebuilt from source; the CLI-only update lives in
-    // `cardo update`. CARDO_UPDATE_COMMAND overrides the binary, args fixed.
-    // (`cardo` is cardo.cmd on Windows — shell: true lets cmd.exe resolve it.)
-    const command = envOrDefault('CARDO_UPDATE_COMMAND', 'cardo');
+  const action = resolveUpdateAction(result, response);
+  if (action.action === 'quit-and-update') {
+    // `cardo update` is the single full-update command (CLI refresh + app
+    // rebuild + relaunch). It is spawned detached BEFORE quitting so it
+    // survives the app shutdown, and it relaunches the app when done —
+    // that relaunch IS the restart. The default invocation runs the LATEST
+    // updater via npx (`npx --yes @uniterra-solutions/cardo@latest update`)
+    // so a stale global cardo CLI can never do a CLI-only update and leave
+    // the app closed; CARDO_UPDATE_COMMAND overrides the command. (npm
+    // shims are `.cmd` on Windows — shell: true lets cmd.exe resolve them.)
+    const invocation = updateInvocation(process.env.CARDO_UPDATE_COMMAND);
     const { spawn } = await import('node:child_process');
-    const child = spawn(command, ['setup'], {
+    const child = spawn(invocation.command, invocation.args, {
       detached: true,
       stdio: 'ignore',
       shell: process.platform === 'win32',
     });
     child.once('error', (error: Error) => {
-      console.error('[cardo] failed to launch the installer:', error);
+      console.error('[cardo] failed to launch the updater:', error);
       void shell.openExternal(envOrDefault('CARDO_UPDATE_RELEASES_PAGE', DEFAULT_RELEASES_PAGE));
     });
     child.unref();
     app.quit();
-  } else if (response === 2) {
-    writeSkippedVersion(result.latestVersion);
+  } else if (action.action === 'skip-version') {
+    writeSkippedVersion(action.skippedVersion);
   }
 }
 

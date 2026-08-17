@@ -7,11 +7,18 @@ import * as fc from 'fast-check';
 import {
   compareSemver,
   resolveCardoUpdateStatus,
+  resolveUpdateAction,
   shouldPromptForUpdate,
+  updateInvocation,
+  type CardoUpdateResult,
 } from '../dist/decision.js';
 
 const semverArb = fc
-  .tuple(fc.integer({ min: 0, max: 9 }), fc.integer({ min: 0, max: 9 }), fc.integer({ min: 0, max: 9 }))
+  .tuple(
+    fc.integer({ min: 0, max: 9 }),
+    fc.integer({ min: 0, max: 9 }),
+    fc.integer({ min: 0, max: 9 }),
+  )
   .map(([a, b, c]) => `${a}.${b}.${c}`);
 
 test('compareSemver: total ordering with identity and reflexivity', () => {
@@ -20,7 +27,10 @@ test('compareSemver: total ordering with identity and reflexivity', () => {
       assert.equal(compareSemver(a, a), 0, 'reflexive');
       const ab = compareSemver(a, b);
       const ba = compareSemver(b, a);
-      assert.ok((ab > 0 && ba < 0) || (ab < 0 && ba > 0) || (ab === 0 && ba === 0), 'antisymmetric');
+      assert.ok(
+        (ab > 0 && ba < 0) || (ab < 0 && ba > 0) || (ab === 0 && ba === 0),
+        'antisymmetric',
+      );
       // transitivity on the sign
       const bc = compareSemver(b, c);
       if (ab > 0 && bc > 0) assert.ok(compareSemver(a, c) > 0, 'transitive >');
@@ -118,4 +128,57 @@ test('shouldPromptForUpdate: prompts when no skip recorded, never re-prompts a s
   assert.equal(shouldPromptForUpdate('1.1.0', '1.1.0'), false);
   assert.equal(shouldPromptForUpdate('1.1.0', '1.2.0'), false);
   assert.equal(shouldPromptForUpdate('1.2.0', '1.1.0'), true);
+});
+
+test('resolveUpdateAction: Update Now = quit-and-update; Skip persists; else none', () => {
+  fc.assert(
+    fc.property(
+      fc.constantFrom('update-available', 'up-to-date', 'error'),
+      semverArb,
+      fc.integer({ min: -1, max: 3 }),
+      (status, version, response) => {
+        const result: CardoUpdateResult =
+          status === 'update-available'
+            ? { status, latestVersion: version, currentVersion: '0.0.1' }
+            : status === 'up-to-date'
+              ? { status, currentVersion: '0.0.1' }
+              : { status, message: 'probe failed' };
+        const action = resolveUpdateAction(result, response);
+        if (status === 'update-available' && response === 0) {
+          assert.deepEqual(action, { action: 'quit-and-update' }, 'Update Now quits and updates');
+        } else if (status === 'update-available' && response === 2) {
+          assert.deepEqual(
+            action,
+            { action: 'skip-version', skippedVersion: version },
+            'Skip persists the version that was offered',
+          );
+        } else {
+          assert.deepEqual(action, { action: 'none' }, 'anything else takes no action');
+        }
+      },
+    ),
+  );
+});
+
+test('updateInvocation: default runs the latest updater via npx; override keeps update args', () => {
+  fc.assert(
+    fc.property(fc.string(), fc.boolean(), (rawOverride, useDefault) => {
+      const override = useDefault ? undefined : rawOverride;
+      const invocation = updateInvocation(override);
+      const trimmed = rawOverride.trim();
+      if (override !== undefined && trimmed.length > 0) {
+        assert.deepEqual(
+          invocation,
+          { command: trimmed, args: ['update'] },
+          'an explicit override replaces only the command',
+        );
+      } else {
+        assert.deepEqual(
+          invocation,
+          { command: 'npx', args: ['--yes', '@uniterra-solutions/cardo@latest', 'update'] },
+          'the default always executes the latest published updater',
+        );
+      }
+    }),
+  );
 });

@@ -2,7 +2,7 @@
   "name": "@cardo/cardo-updater",
   "version": "0.5.0",
   "private": true,
-  "description": "Cardo update-check logic: probes the npm CLI dist-tag and the cardo GitHub release, decides whether an update is available, and persists the user's skipped version. Pure (no Electron imports) so the decision semantics are unit-testable.",
+  "description": "Cardo update logic: probes the npm CLI dist-tag and the cardo GitHub release, decides whether an update is available, maps the update-prompt response onto the action to take (quit-and-update / skip-version), and supports the user's skipped-version gate. Pure (no Electron imports) so the decision semantics are unit-testable.",
   "type": "module",
   "exports": {
     ".": {
