@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-17
+
+### Added
+
+- Windows installer support (`cardo setup`): platform branches in the CLI — `electron-builder --win --dir` produces the `win-unpacked/` layout (the NSIS installer cannot carry the source embedded afterwards), the source tree embeds under `resources/src`, the app installs to `%LOCALAPPDATA%\Programs\Cardo` with a best-effort Start Menu shortcut, and launches as `Cardo.exe`. Windows file ops use `robocopy` (exit codes 0–7 = success) and `fs.rename` with an EXDEV cross-volume fallback; the macOS flow is byte-for-byte unchanged. Node ≥ 20.12.2 resolves `.cmd` shims (pnpm/npm/cardo) via PATHEXT, so no shell wrapping is needed
+- `cardo setup --source <dir>`: build from a local workspace checkout instead of downloading a release — the Windows CI verification path
+- Windows install verification (`scripts/verify-windows-install/verify.ps1`): replays the REAL CLI install on windows-latest — install → build → `--win --dir` packaging → embedded source → install + Start Menu shortcut → `Cardo.exe` boot smoke to a reachable readiness URL
+- PR CI workflow (`.github/workflows/ci.yml`): parallel lint / typecheck / tests jobs, callable from the release workflow
+- Release gate: `release.yml` publishes only after the full matrix passes (CI + clean-container installer replay + windows-latest install verification, all via `needs`)
+- CLI platform-seam PBTs: `win-unpacked` discovery, install destinations, builder args, launch targets, and Start Menu shortcut script quoting (`packages/cardo-cli/test/pbt.test.mts`)
+
+### Changed
+
+- Docs restructured to per-package module docs (cardo-cli / cardo-desktop / cardo-provider / cardo-skills / cardo-systemprompt / cardo-updater / vendor-plugins); cross-platform facts updated across the tree
+- `AGENTS.md` documents the cross-platform installer and the gated release flow
+
 ## [0.6.2] — 2026-08-17
 
 ### Fixed
