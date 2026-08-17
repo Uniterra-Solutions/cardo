@@ -53,7 +53,7 @@ Task recipes. Each links to the module/skill that owns the details.
 ## Release a Version
 
 1. Bump `packages/cardo-cli/package.json` + `packages/cardo-desktop/package.json` versions (+ `CHANGELOG.md` entry), commit, push.
-2. Push tag `v<version>` — `release.yml` gates the publish on the full matrix (CI lint/typecheck/tests + clean-container installer replay + windows-latest install verification, all via `needs`); on success it publishes the CLI via npm trusted publishing and creates the GitHub Release (the source archive IS the desktop artifact).
+2. Push tag `v<version>` — `release.yml` gates the publish on the full matrix (CI lint/typecheck/tests + clean-container installer replay + windows-latest install verification, all via `needs`); on success it publishes the CLI via npm trusted publishing, builds the workspace on Linux, and creates the GitHub Release carrying the `cardo-src-<tag>.tar.gz` source asset (built tree + `.cardo-prebuilt` marker).
 3. Version mismatch between tag and `packages/cardo-cli/package.json` fails the release.
    Details: [modules/cardo-cli.md](modules/cardo-cli.md), [modules/cardo-updater.md](modules/cardo-updater.md).
 

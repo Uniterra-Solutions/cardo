@@ -77,19 +77,19 @@ Provisioned into the user's dsh profile at startup — see [modules/vendor-plugi
 
 ## External Services
 
-| Service               | Used By                                        | Purpose                                                                   |
-| --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
-| npm registry          | cardo-cli publish, `dsh plugin add`, dshmarket | Installer distribution + plugin installs                                  |
-| GitHub Releases       | cardo-cli, cardo-updater                       | Source-archive artifact (`cardo setup`), `releases/latest` update probe   |
-| models.dev API        | cardo-provider                                 | Context-window / output-token / reasoning-effort auto-detection per model |
-| Upstream LLM gateways | cardo-provider                                 | Any OpenAI-compatible endpoint (chat completions and/or Responses API)    |
+| Service               | Used By                                        | Purpose                                                                                        |
+| --------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| npm registry          | cardo-cli publish, `dsh plugin add`, dshmarket | Installer distribution + plugin installs                                                       |
+| GitHub Releases       | cardo-cli, cardo-updater                       | Prebuilt source asset `cardo-src-<tag>.tar.gz` (`cardo setup`), `releases/latest` update probe |
+| models.dev API        | cardo-provider                                 | Context-window / output-token / reasoning-effort auto-detection per model                      |
+| Upstream LLM gateways | cardo-provider                                 | Any OpenAI-compatible endpoint (chat completions and/or Responses API)                         |
 
 ## CI/CD
 
-| System                         | Purpose                                                                                                                                                                                                                                 |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub Actions (`ci.yml`)      | Every PR: parallel lint / typecheck / tests (also callable from the release workflow)                                                                                                                                                   |
-| GitHub Actions (`release.yml`) | On `v*` tag: publish is gated on ci + clean-container installer replay + windows-latest install verification (all via `needs`); then npm trusted publishing (OIDC) of the CLI → GitHub Release (source archive is the desktop artifact) |
+| System                         | Purpose                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub Actions (`ci.yml`)      | Every PR: parallel lint / typecheck / tests (also callable from the release workflow)                                                                                                                                                                                                                                 |
+| GitHub Actions (`release.yml`) | On `v*` tag: publish is gated on ci + clean-container installer replay + windows-latest install verification (all via `needs`); then npm trusted publishing (OIDC) of the CLI → builds the workspace on Linux → GitHub Release with the `cardo-src-<tag>.tar.gz` source asset (built tree + `.cardo-prebuilt` marker) |
 
 ## How to Update
 
