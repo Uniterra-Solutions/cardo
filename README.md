@@ -6,24 +6,26 @@ A desktop app built on the DeepSeek Harness (dsh) agent runtime and community ds
 
 ## Built-in Plugins
 
-The app ships 12 built-in plugins (9 npm community, 2 vendored, 1 in-house). Source repositories:
+The app ships 12 built-in plugins (9 npm community, 2 vendored, 1 in-house). Source and license:
 
-| Plugin                      | Type     | Source                                                                                              |
-| --------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
-| `dshmarket`                 | npm      | [dsh-market/dsh-market](https://github.com/dsh-market/dsh-market)                                   |
-| `dsh-notifier`              | npm      | [THEWOLFWALKER/dsh-notifier](https://github.com/THEWOLFWALKER/dsh-notifier)                         |
-| `dsh-better-sidebar`        | npm      | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)                     |
-| `dsh-file-upload`           | npm      | [HongMing-Huang/dsh-file-upload](https://github.com/HongMing-Huang/dsh-file-upload)                 |
-| `dsh-find-plugin`           | npm      | [awesome-dsh-plugin/dsh-find-plugin](https://github.com/awesome-dsh-plugin/dsh-find-plugin)         |
-| `dsh-subagent-model-picker` | npm      | [npm package](https://www.npmjs.com/package/dsh-subagent-model-picker) (no public source repo)      |
-| `dsh-tool-git`              | npm      | [lxj808624/dsh-tool-git](https://github.com/lxj808624/dsh-tool-git)                                 |
-| `dsh-browser-playwright`    | npm      | [ChenyuHeee/dsh-browser-playwright](https://github.com/ChenyuHeee/dsh-browser-playwright)           |
-| `dsh-computer-use`          | npm      | [988hj7tczd-oss/dsh-computer-use](https://github.com/988hj7tczd-oss/dsh-computer-use)               |
-| `dsh-deep-whale`            | vendored | [Small-tailqwq/dsh-deep-whale](https://github.com/Small-tailqwq/dsh-deep-whale)                     |
-| `dsh-shortcuts`             | vendored | [Ricketts-Guo/dsh-shortcuts](https://github.com/Ricketts-Guo/dsh-shortcuts)                         |
-| `@cardo/cardo-provider`     | in-house | [Uniterra-Solutions/cardo](https://github.com/Uniterra-Solutions/cardo) (`packages/cardo-provider`) |
+| Plugin                      | Type     | Source                                                                                                   | License         |
+| --------------------------- | -------- | -------------------------------------------------------------------------------------------------------- | --------------- |
+| `dshmarket`                 | npm      | [dsh-market/dsh-market](https://github.com/dsh-market/dsh-market)                                        | MIT             |
+| `dsh-notifier`              | npm      | [THEWOLFWALKER/dsh-notifier](https://github.com/THEWOLFWALKER/dsh-notifier)                              | MIT             |
+| `dsh-better-sidebar`        | npm      | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)                          | MIT             |
+| `dsh-file-upload`           | npm      | [HongMing-Huang/dsh-file-upload](https://github.com/HongMing-Huang/dsh-file-upload)                      | MIT             |
+| `dsh-find-plugin`           | npm      | [awesome-dsh-plugin/dsh-find-plugin](https://github.com/awesome-dsh-plugin/dsh-find-plugin)              | MIT             |
+| `dsh-subagent-model-picker` | npm      | [npm package](https://www.npmjs.com/package/dsh-subagent-model-picker) (author ninjasln, no public repo) | MIT             |
+| `dsh-tool-git`              | npm      | [lxj808624/dsh-tool-git](https://github.com/lxj808624/dsh-tool-git)                                      | MIT             |
+| `dsh-browser-playwright`    | npm      | [ChenyuHeee/dsh-browser-playwright](https://github.com/ChenyuHeee/dsh-browser-playwright)                | MIT             |
+| `dsh-computer-use`          | npm      | [988hj7tczd-oss/dsh-computer-use](https://github.com/988hj7tczd-oss/dsh-computer-use)                    | MIT             |
+| `dsh-deep-whale`            | vendored | [Small-tailqwq/dsh-deep-whale](https://github.com/Small-tailqwq/dsh-deep-whale)                          | CC BY-NC-SA 4.0 |
+| `dsh-shortcuts`             | vendored | [Ricketts-Guo/dsh-shortcuts](https://github.com/Ricketts-Guo/dsh-shortcuts)                              | MIT             |
+| `@cardo/cardo-provider`     | in-house | [Uniterra-Solutions/cardo](https://github.com/Uniterra-Solutions/cardo) (`packages/cardo-provider`)      | MIT             |
 
 Vendored plugins are pinned at fixed commits — see [vendor/dsh-plugins/VENDOR.md](vendor/dsh-plugins/VENDOR.md).
+
+`dsh-deep-whale` is licensed under CC BY-NC-SA 4.0 and is redistributed free of charge, unmodified, for non-commercial use. If you are its author and do not want it bundled, please open an issue and we will remove it.
 
 ## Built-in Workflows
 
