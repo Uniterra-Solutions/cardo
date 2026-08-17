@@ -40,9 +40,14 @@ function bundledSrcRoot(): string {
 /** Resolve the bundled dsh CLI entry from the source tree. In the pnpm
  * workspace `@deepseek-ai/dsh` is a devDependency of the cardo-desktop
  * package, so pnpm links it under `packages/cardo-desktop/node_modules`
- * (never the workspace root). Dev and packaged both resolve it there. */
+ * (never the workspace root). Dev and packaged both resolve it there — with
+ * one Windows exception: the installer embeds the tree with robocopy, which
+ * MATERIALIZES pnpm's junctions (directory links become real copies), so the
+ * junction path cannot resolve dsh's own dependencies (ERR_MODULE_NOT_FOUND
+ * on boot). Windows resolves the package's physical .pnpm store location
+ * instead, where every dependency is a materialized sibling. */
 function dshCliPath(): string {
-  return path.join(
+  const junctionPath = path.join(
     bundledSrcRoot(),
     'packages',
     'cardo-desktop',
@@ -52,6 +57,22 @@ function dshCliPath(): string {
     'lib',
     'bin.js',
   );
+  if (process.platform !== 'win32') {
+    return junctionPath;
+  }
+  const storeRoot = path.join(bundledSrcRoot(), 'node_modules', '.pnpm');
+  let storeBin: string | undefined;
+  try {
+    storeBin = readdirSync(storeRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('@deepseek-ai+dsh@'))
+      .map((entry) =>
+        path.join(storeRoot, entry.name, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+      )
+      .find((candidate) => existsSync(candidate));
+  } catch {
+    storeBin = undefined; // no .pnpm store — fall back to the junction path
+  }
+  return storeBin ?? junctionPath;
 }
 
 /** Vendored (non-npm) plugin sources inside the source tree. */

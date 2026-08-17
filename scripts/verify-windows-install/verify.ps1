@@ -72,9 +72,17 @@ $InstalledExe = Join-Path $InstalledDir 'Cardo.exe'
 if (-not (Test-Path $InstalledExe)) { Fail "Cardo.exe missing at $InstalledExe" }
 $EmbeddedDsh = Join-Path $InstalledDir 'resources\src\packages\cardo-desktop\node_modules\@deepseek-ai\dsh\lib\bin.js'
 if (-not (Test-Path $EmbeddedDsh)) { Fail "embedded source missing dsh CLI at $EmbeddedDsh" }
+# dshCliPath() on Windows resolves through the .pnpm store (robocopy
+# materializes junctions, so the junction path can't resolve dsh's own deps).
+$StoreDsh = Get-ChildItem (Join-Path $InstalledDir 'resources\src\node_modules\.pnpm') -Directory -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -like '@deepseek-ai+dsh@*' } |
+  ForEach-Object { Join-Path $_.FullName 'node_modules\@deepseek-ai\dsh\lib\bin.js' } |
+  Where-Object { Test-Path $_ } |
+  Select-Object -First 1
+if (-not $StoreDsh) { Fail 'embedded .pnpm store missing the dsh CLI (dshCliPath store resolution)' }
 $Shortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Cardo.lnk'
 if (-not (Test-Path $Shortcut)) { Fail "Start Menu shortcut missing at $Shortcut" }
-Ok 'Cardo.exe, embedded source, and Start Menu shortcut present'
+Ok 'Cardo.exe, embedded source (.pnpm store), and Start Menu shortcut present'
 
 Step '8/8 boot smoke: installed app reaches readiness'
 $BootHome = Join-Path $env:TEMP ('cardo-boot-' + [guid]::NewGuid().ToString('N'))
