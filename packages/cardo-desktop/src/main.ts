@@ -191,6 +191,8 @@ async function fetchInstalledCliVersion(): Promise<string | undefined> {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
     const execFileAsync = promisify(execFile);
+    // `cardo` is the npm global bin; on Windows that is cardo.cmd, which
+    // Node >= 20.12.2 resolves through PATHEXT without a shell.
     const result = await execFileAsync('cardo', ['--version'], {
       timeout: CLI_PROBE_TIMEOUT_MS,
       encoding: 'utf8',
@@ -261,6 +263,7 @@ async function runCardoStartupUpdateCheck(): Promise<void> {
   if (response === 0) {
     // The desktop app is rebuilt from source; the CLI-only update lives in
     // `cardo update`. CARDO_UPDATE_COMMAND overrides the binary, args fixed.
+    // (`cardo` is cardo.cmd on Windows — Node resolves it via PATHEXT.)
     const command = envOrDefault('CARDO_UPDATE_COMMAND', 'cardo');
     const { spawn } = await import('node:child_process');
     const child = spawn(command, ['setup'], { detached: true, stdio: 'ignore' });

@@ -14,14 +14,53 @@ on:
 permissions:
   contents: write
 
-# The desktop app is built ON THE USER'S MACHINE from the release's source
-# tarball by `cardo setup` (download source → pnpm install → build → package
-# .app → install built-ins → launch). CI only publishes the CLI; GitHub
-# auto-generates the source archive that `cardo setup` consumes.
+# Release gate. The CLI publishes only after the full verification matrix
+# passes on the exact commit being released:
+#   - ci: lint / typecheck / tests (the shared CI workflow),
+#   - verify-cli-container: the installer flow in a clean Linux container
+#     (pristine source → pnpm install → build → runtime-dependency + dsh boot
+#     assertions),
+#   - verify-windows-install: the real Windows install on windows-latest
+#     (pnpm install/build on Windows → cardo setup --source → electron-builder
+#     --win --dir → embedded source → Start Menu shortcut → Cardo.exe boot
+#     smoke).
+# The desktop app is built ON THE USER'S MACHINE by `cardo setup` from the
+# release's source tarball, so both installer flows must be proven before the
+# source archive becomes the release artifact.
+
 jobs:
-  release-cli:
-    name: Publish CLI to npm (trusted publishing)
+  ci:
+    name: Lint / typecheck / tests
+    uses: ./.github/workflows/ci.yml
+
+  verify-cli-container:
+    name: Installer flow (clean Linux container)
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run container verification
+        run: scripts/verify-cli-container/run.sh
+
+  verify-windows-install:
+    name: Windows install (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Run Windows verification
+        shell: pwsh
+        run: scripts/verify-windows-install/verify.ps1
+
+  publish:
+    name: Publish CLI to npm + create GitHub release
+    runs-on: ubuntu-latest
+    needs: [ci, verify-cli-container, verify-windows-install]
     timeout-minutes: 30
     permissions:
       id-token: write
@@ -61,19 +100,6 @@ jobs:
             exit 1
           fi
 
-      # Build BEFORE lint: workspace packages (@cardo/cardo-updater etc.) are
-      # consumed via their dist/ outputs, which are gitignored build products.
-      # Linting before building leaves their types unresolved and type-aware
-      # rules (no-unsafe-*) fail on the fresh checkout.
-      - name: Build
-        run: pnpm run build
-
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
       - name: Check if version already published
         id: check
         env:
@@ -95,11 +121,8 @@ jobs:
         # no NODE_AUTH_TOKEN needed.
         run: npm publish --access public
 
-      # The desktop app is built ON THE USER'S MACHINE from the release's
-      # source archive by `cardo setup`; CI publishes the CLI and creates the
-      # GitHub Release so `releases/latest` (which `cardo setup` resolves)
-      # points at the newest tag. Idempotent: re-running a release (e.g.
-      # workflow_dispatch) skips if the tag's release already exists.
+      # Idempotent: re-running a release (e.g. workflow_dispatch) skips if the
+      # tag's release already exists.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

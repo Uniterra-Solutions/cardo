@@ -1,0 +1,81 @@
+name: CI
+
+# PR regression net: lint / typecheck / tests run as parallel jobs. The
+# Release workflow calls this workflow (workflow_call) so every release is
+# gated on the same checks without duplicating them.
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # Build BEFORE lint: workspace packages (@cardo/cardo-updater etc.) are
+      # consumed via their dist/ outputs, which are gitignored build products.
+      # Linting before building leaves their types unresolved and type-aware
+      # rules (no-unsafe-*) fail on the fresh checkout.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Lint
+        run: pnpm run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Typecheck
+        run: pnpm run typecheck
+
+  tests:
+    name: Unit + PBT tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Tests
+        run: |
+          pnpm --filter @cardo/cardo-systemprompt test
+          pnpm --filter @cardo/cardo-provider test
+          pnpm --filter @cardo/cardo-skills test
+          pnpm --filter @uniterra-solutions/cardo test
+          pnpm --filter @cardo/cardo-desktop test
