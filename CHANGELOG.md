@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-08-18
+
+### Fixed
+
+- `cardo setup` on Windows failed for ordinary users: electron-builder downloaded its `winCodeSign` tool, whose 7z archive contains macOS symlinks (`darwin/*/lib/*.dylib`) that 7-Zip cannot create without Developer Mode or administrator privileges (`SeCreateSymbolicLinkPrivilege`), so packaging aborted with "Cannot create symbolic link" (shown garbled on non-UTF-8 consoles). The Windows build now sets `signAndEditExecutable: false` — Cardo ships unsigned, so the sign + rcedit step (and the `winCodeSign` download it triggers) is skipped entirely, and `app.getVersion()` still reads `package.json`, not the exe resource.
+
 ## [0.8.2] — 2026-08-18
 
 ### Fixed

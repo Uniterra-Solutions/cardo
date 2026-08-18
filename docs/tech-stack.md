@@ -24,8 +24,8 @@ All versions are the spec ranges from `package.json` / `pnpm-workspace.yaml`; th
 
 | Package                   | Version | Purpose                                                        |
 | ------------------------- | ------- | -------------------------------------------------------------- |
-| @cardo/cardo-desktop      | 0.8.2   | Electron shell over the bundled dsh CLI; built-in provisioning |
-| @uniterra-solutions/cardo | 0.8.2   | Public npm installer CLI (bin `cardo`)                         |
+| @cardo/cardo-desktop      | 0.8.3   | Electron shell over the bundled dsh CLI; built-in provisioning |
+| @uniterra-solutions/cardo | 0.8.3   | Public npm installer CLI (bin `cardo`)                         |
 | @cardo/cardo-provider     | 0.1.2   | In-house dual-protocol LLM provider plugin                     |
 | @cardo/cardo-skills       | 0.5.0   | Built-in skill registry (10 company skills)                    |
 | @cardo/cardo-systemprompt | 0.5.0   | pi-agent extension: app-wide working rules                     |
