@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Pre-rename leftovers in existing profiles: the rename shipped the same provider and skills under new names, but old profiles kept loading BOTH — `RETIRED_BUILTINS` now heals `@cardo/cardo-provider` (removed alongside its bundle row), and the skills provisioner now removes the retired `cardo-*` skill dirs (`cardo-plan`, `cardo-implement`, `cardo-simplify`, `cardo-review`, `cardo-pbt-debugging`, `cardo-qa`, plus legacy `cardo-planmode` / `qa`) so `uniterra-*` is the only copy left
+
 ## [0.9.0] — 2026-08-18
 
 ### Changed

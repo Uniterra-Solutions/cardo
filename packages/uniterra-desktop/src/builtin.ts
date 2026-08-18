@@ -190,6 +190,10 @@ export const RETIRED_BUILTINS: readonly string[] = [
   // Third-party reasoning-effort editor: @uniterra-solutions/uniterra-provider declares
   // reasoningEfforts from models.dev and edits them in its own settings page.
   'dsh-thinking-effort',
+  // Pre-rename workspace built-in: the project rename ships the same plugin as
+  // @uniterra-solutions/uniterra-provider, so old profiles must not keep
+  // loading both provider rows.
+  '@cardo/cardo-provider',
 ];
 
 /**
