@@ -3,7 +3,7 @@
 These plugins are vendored at pinned commits because they are **not published
 to npm** (`dsh plugin add github:<owner>/<repo>` would install the default
 branch's HEAD with no version lock — a breaking-change surprise under a fast
-moving ecosystem). Vendoring gives cardo a reproducible, auditable, patchable
+moving ecosystem). Vendoring gives uniterra a reproducible, auditable, patchable
 copy for every checkout, with no build-time GitHub dependency.
 
 ## Pin ledger (2026-08-17)
@@ -22,7 +22,7 @@ overlapped another built-in (see the desktop's `RETIRED_BUILTINS` list):
 |---|---|
 | `dsh-subagent-monitor` (`@leetoners/dsh-ui-subagent-monitor`) | `dsh-better-sidebar` Tasks page (subagent topology + background jobs) |
 | `dsh-git-graph` | `dsh-better-sidebar` Git panel (history, diff, uncommitted changes) |
-| `dsh-thinking-effort` | `@cardo/cardo-provider` (declares + edits `reasoningEfforts` from models.dev) |
+| `dsh-thinking-effort` | `@uniterra-solutions/uniterra-provider` (declares + edits `reasoningEfforts` from models.dev) |
 | `dsh-hotkeys` (npm) | `dsh-shortcuts` |
 
 ## Update policy
@@ -30,15 +30,15 @@ overlapped another built-in (see the desktop's `RETIRED_BUILTINS` list):
 To bump one plugin:
 
 1. `git -C vendor/dsh-plugins/<name> fetch --depth 1 origin`
-2. Checkout the new commit, verify it still targets the cardo-pinned dsh
+2. Checkout the new commit, verify it still targets the uniterra-pinned dsh
    family (`0.1.0-rc.6` / cordis `4.0.1`), re-run the smoke test below.
 3. Update this ledger's commit row.
 
-## Install (in a cardo profile)
+## Install (in a uniterra profile)
 
 ```sh
-dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-deep-whale
-dsh plugin --profile cardo add /absolute/path/vendor/dsh-plugins/dsh-shortcuts
+dsh plugin --profile uniterra add /absolute/path/vendor/dsh-plugins/dsh-deep-whale
+dsh plugin --profile uniterra add /absolute/path/vendor/dsh-plugins/dsh-shortcuts
 ```
 
 Smoke test after any change: sandbox `DSH_HOME`, boot the profile, expect

@@ -10,7 +10,7 @@ node_modules
 # harness must start from a pristine tree that has NOT been built locally,
 # otherwise the very regression it exists to catch (setup build missing the
 # bundle) is masked by stale local outputs.
-packages/cardo-provider/lib
+packages/uniterra-provider/lib
 vendor/dsh-runtime
 .plan
 .hermes

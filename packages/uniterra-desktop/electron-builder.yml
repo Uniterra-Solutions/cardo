@@ -1,0 +1,42 @@
+appId: com.uniterra.uniterra
+productName: Uniterra
+directories:
+  output: dist
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+  - node_modules/@uniterra-solutions/uniterra-updater/**/*
+# The whole source tree is embedded by the uniterra CLI AFTER packaging (the
+# artifact is moved out of the tree first, then the source is copied in —
+# copying src into its own subdirectory is not allowed). macOS:
+# Contents/Resources/src; Windows: resources/src. Both are
+# `process.resourcesPath` at runtime — the app resolves the bundled dsh CLI,
+# vendored plugins, and skills from there.
+extraResources: []
+mac:
+  target:
+    - zip
+  category: public.app-category.developer-tools
+  hardenedRuntime: false
+  identity: null
+win:
+  # Unpacked layout only: the NSIS installer cannot carry the source
+  # embedded afterwards, so `uniterra setup` packages with --win --dir and
+  # installs the win-unpacked/ tree itself.
+  target:
+    - dir
+  # Uniterra ships unsigned, so skip Windows code signing and rcedit executable
+  # resource editing. Besides dropping an unneeded sign step, this stops
+  # electron-builder from downloading/extracting its winCodeSign tool — whose
+  # 7z archive contains macOS symlinks (darwin/*/lib/*.dylib) that 7-Zip
+  # cannot create on Windows without Developer Mode or administrator
+  # privileges (SeCreateSymbolicLinkPrivilege), failing `uniterra setup` for
+  # ordinary users. See electron-userland/electron-builder#8149.
+  signAndEditExecutable: false
+# The source tree the CLI extracted already has its node_modules installed;
+# electron-builder must not reinstall it (the root husky prepare would fail).
+# beforeBuild returning false marks node_modules as handled externally.
+npmRebuild: false
+nodeGypRebuild: false
+beforeBuild: ./scripts/electron-before-build.cjs

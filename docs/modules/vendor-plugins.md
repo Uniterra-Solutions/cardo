@@ -1,6 +1,6 @@
 # Module: Built-in Plugins (vendor/dsh-plugins + npm built-ins)
 
-**Purpose:** The plugin surface that ships with Cardo — 9 npm-published community plugins, 2 vendored community plugins pinned at fixed commits, and 1 in-house workspace plugin. All are ensured into the user's dsh `web` profile at startup (`packages/cardo-desktop/src/builtin.ts`).
+**Purpose:** The plugin surface that ships with Uniterra — 9 npm-published community plugins, 2 vendored community plugins pinned at fixed commits, and 1 in-house workspace plugin. All are ensured into the user's dsh `web` profile at startup (`packages/uniterra-desktop/src/builtin.ts`).
 
 ## Built-in Lists
 
@@ -29,15 +29,15 @@ Vendored at pinned commits because they are not published to npm — `dsh plugin
 | `dsh-deep-whale` | @dsh-external/dsh-client-ui-skin-maid-atelier | `873f5c6…`    | Whale-maid UI skin (standalone distribution; self-inserting patch, no-op host, art embedded as data URIs). CC BY-NC-SA 4.0 |
 | `dsh-shortcuts`  | dsh-shortcuts                                 | `0d12280…`    | 34 keyboard shortcuts, one-click recording, macOS-first                                                                    |
 
-The retired `deep-whale-day-night-theme` distribution is documented in `vendor/dsh-plugins/VENDOR.md` (it depended on `dsh-client-ui-theme-plugins` / `dsh-host-theme-catalog`, absent in the pinned rc.6 family, so its patch silently no-oped). Retired built-ins removed because their function overlapped another built-in — `dsh-hotkeys` (npm, covered by `dsh-shortcuts`), `dsh-subagent-monitor` and `dsh-git-graph` (covered by dsh-better-sidebar's Tasks/Git pages), `dsh-thinking-effort` (covered by `@cardo/cardo-provider`'s models.dev reasoningEfforts) — live in `RETIRED_BUILTINS` (`builtin.ts`); `removeRetiredBuiltins()` strips their rows and installed copies from already-provisioned profiles on every ensure pass.
+The retired `deep-whale-day-night-theme` distribution is documented in `vendor/dsh-plugins/VENDOR.md` (it depended on `dsh-client-ui-theme-plugins` / `dsh-host-theme-catalog`, absent in the pinned rc.6 family, so its patch silently no-oped). Retired built-ins removed because their function overlapped another built-in — `dsh-hotkeys` (npm, covered by `dsh-shortcuts`), `dsh-subagent-monitor` and `dsh-git-graph` (covered by dsh-better-sidebar's Tasks/Git pages), `dsh-thinking-effort` (covered by `@uniterra-solutions/uniterra-provider`'s models.dev reasoningEfforts) — live in `RETIRED_BUILTINS` (`builtin.ts`); `removeRetiredBuiltins()` strips their rows and installed copies from already-provisioned profiles on every ensure pass.
 
 ### Workspace built-in (`BUILTIN_WORKSPACE_PLUGINS`)
 
-| Source dir                | Package name          |
-| ------------------------- | --------------------- |
-| `packages/cardo-provider` | @cardo/cardo-provider |
+| Source dir                   | Package name                          |
+| ---------------------------- | ------------------------------------- |
+| `packages/uniterra-provider` | @uniterra-solutions/uniterra-provider |
 
-Ships pre-built (self-contained host bundle, runtime deps inlined) — copied with `package.json` + `lib/` + `cordis.patch.yml`, no pnpm install. See [cardo-provider.md](cardo-provider.md).
+Ships pre-built (self-contained host bundle, runtime deps inlined) — copied with `package.json` + `lib/` + `cordis.patch.yml`, no pnpm install. See [uniterra-provider.md](uniterra-provider.md).
 
 ## Provisioning Semantics
 
@@ -58,7 +58,7 @@ Staleness (re-provision trigger): installed copy's `package.json` `version` ≠ 
 Per `vendor/dsh-plugins/VENDOR.md`:
 
 1. `git -C vendor/dsh-plugins/<name> fetch --depth 1 origin`; checkout the new commit.
-2. Verify it still targets the cardo-pinned dsh family (0.1.0-rc.6 / cordis 4.0.1); re-run the smoke test.
+2. Verify it still targets the uniterra-pinned dsh family (0.1.0-rc.6 / cordis 4.0.1); re-run the smoke test.
 3. Update the pin-ledger row in `VENDOR.md`.
 
 Smoke test: sandbox `DSH_HOME`, boot the profile, expect HTTP 200 on the web port with no load error mentioning the plugins.
@@ -66,7 +66,7 @@ Smoke test: sandbox `DSH_HOME`, boot the profile, expect HTTP 200 on the web por
 ## Gotchas
 
 - Never hand-edit `vendor/dsh-plugins/` contents — bump via the update policy (AGENTS.md prohibition).
-- `vendor/dsh-runtime/` is a legacy 0.5.0 snapshot (its manifest still references the retired `deep-whale-day-night-theme`); the current boot path resolves the dsh CLI from `packages/cardo-desktop/node_modules` — see [cardo-desktop.md](cardo-desktop.md).
+- `vendor/dsh-runtime/` is a legacy 0.5.0 snapshot (its manifest still references the retired `deep-whale-day-night-theme`); the current boot path resolves the dsh CLI from `packages/uniterra-desktop/node_modules` — see [uniterra-desktop.md](uniterra-desktop.md).
 - The root `pnpm-workspace.yaml` `minimumReleaseAgeExclude` mirrors the npm built-in set — keep the two lists in sync when adding npm built-ins.
 
 ## How to Update
@@ -78,6 +78,6 @@ Smoke test: sandbox `DSH_HOME`, boot the profile, expect HTTP 200 on the web por
 ## Find It Fast
 
 ```bash
-grep -n 'BUILTIN_' packages/cardo-desktop/src/builtin.ts   # the three lists
+grep -n 'BUILTIN_' packages/uniterra-desktop/src/builtin.ts   # the three lists
 cat vendor/dsh-plugins/VENDOR.md                            # pin ledger + update policy
 ```

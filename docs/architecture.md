@@ -1,41 +1,41 @@
 # Architecture
 
-Cardo is a thin desktop shell over the bundled DeepSeek Harness (dsh) agent runtime. The Electron main process boots the dsh CLI as a child, provisions built-in plugins + skills into the user's dsh profile, and hosts dsh's Web UI in a BrowserWindow. No app-owned state: everything the agent uses lives in the user's normal dsh home.
+Uniterra is a thin desktop shell over the bundled DeepSeek Harness (dsh) agent runtime. The Electron main process boots the dsh CLI as a child, provisions built-in plugins + skills into the user's dsh profile, and hosts dsh's Web UI in a BrowserWindow. No app-owned state: everything the agent uses lives in the user's normal dsh home.
 
 ## System Context (C4 Level 1)
 
 ```mermaid
 graph TD
-    User[macOS / Windows user] -->|drives agent, installs plugins| Cardo[Cardo desktop app]
-    Dev[Developer] -->|cardo setup / cardo update| Cardo
-    Cardo -->|LLM requests| Gateway[Upstream LLM gateways<br/>any OpenAI-compatible endpoint]
-    Cardo -->|model metadata| ModelsDev[models.dev API]
-    Cardo -->|plugin installs| Npm[npm registry]
-    Cardo -->|source archive, update probes| GitHub[GitHub Releases]
-    Cardo -->|vendored plugin sources| Vendor[vendor/dsh-plugins<br/>pinned commits]
+    User[macOS / Windows user] -->|drives agent, installs plugins| Uniterra[Uniterra desktop app]
+    Dev[Developer] -->|uniterra setup / uniterra update| Uniterra
+    Uniterra -->|LLM requests| Gateway[Upstream LLM gateways<br/>any OpenAI-compatible endpoint]
+    Uniterra -->|model metadata| ModelsDev[models.dev API]
+    Uniterra -->|plugin installs| Npm[npm registry]
+    Uniterra -->|source archive, update probes| GitHub[GitHub Releases]
+    Uniterra -->|vendored plugin sources| Vendor[vendor/dsh-plugins<br/>pinned commits]
 ```
 
-| Node                  | Type              | Notes                                                     |
-| --------------------- | ----------------- | --------------------------------------------------------- |
-| macOS / Windows user  | person            | Runs the app; uses dsh's Web UI + plugins                 |
-| Developer             | person            | Installs/updates via the `cardo` CLI                      |
-| Cardo                 | system            | Electron shell + bundled dsh runtime + built-ins          |
-| Upstream LLM gateways | external          | Chat Completions and/or Responses API                     |
-| models.dev API        | external          | Context/output/reasoning metadata per model               |
-| npm registry          | external          | CLI distribution, `dsh plugin add`, dshmarket             |
-| GitHub Releases       | external          | Source archive for `cardo setup`; `releases/latest` probe |
-| vendor/dsh-plugins    | external (pinned) | Community plugins vendored at fixed commits               |
+| Node                  | Type              | Notes                                                        |
+| --------------------- | ----------------- | ------------------------------------------------------------ |
+| macOS / Windows user  | person            | Runs the app; uses dsh's Web UI + plugins                    |
+| Developer             | person            | Installs/updates via the `uniterra` CLI                      |
+| Uniterra              | system            | Electron shell + bundled dsh runtime + built-ins             |
+| Upstream LLM gateways | external          | Chat Completions and/or Responses API                        |
+| models.dev API        | external          | Context/output/reasoning metadata per model                  |
+| npm registry          | external          | CLI distribution, `dsh plugin add`, dshmarket                |
+| GitHub Releases       | external          | Source archive for `uniterra setup`; `releases/latest` probe |
+| vendor/dsh-plugins    | external (pinned) | Community plugins vendored at fixed commits                  |
 
 ## Containers (C4 Level 2)
 
 ```mermaid
 graph TD
-    subgraph Cardo
+    subgraph Uniterra
         Main[Electron main process<br/>main.ts]
         Dsh[dsh CLI child process<br/>bundled runtime]
         UI[BrowserWindow<br/>dsh Web UI loopback]
         Profile[~/.dsh profiles/web<br/>bundles + node_modules + skills]
-        Adapter[cardo-provider plugin<br/>llm-cardo adapter]
+        Adapter[uniterra-provider plugin<br/>llm-uniterra adapter]
     end
     Main -->|spawn node dsh/bin.js --profile web| Dsh
     Main -->|ensureBuiltinPlugins + DSH_BUNDLED_SKILL_DIR| Profile
@@ -46,13 +46,13 @@ graph TD
     Adapter -->|api.json download| ModelsDev[models.dev API]
 ```
 
-| Container      | Technology                       | Responsibility                                                        |
-| -------------- | -------------------------------- | --------------------------------------------------------------------- |
-| Electron main  | Electron 37, Node 22             | Boot, supervision, built-in provisioning, update check, crash restart |
-| dsh CLI child  | @deepseek-ai/dsh 0.1.0-rc.6      | Agent runtime: agent loop, skills, plugin loader, web server          |
-| BrowserWindow  | Chromium, sandboxed              | dsh Web UI on a loopback origin                                       |
-| Profile        | ~/.dsh/profiles/web              | User's dsh config + plugin bundles + provisioned skills               |
-| cardo-provider | in-house plugin (esbuild bundle) | LLM adapter: dual-protocol serialize/translate, models.dev lookup     |
+| Container         | Technology                       | Responsibility                                                        |
+| ----------------- | -------------------------------- | --------------------------------------------------------------------- |
+| Electron main     | Electron 37, Node 22             | Boot, supervision, built-in provisioning, update check, crash restart |
+| dsh CLI child     | @deepseek-ai/dsh 0.1.0-rc.6      | Agent runtime: agent loop, skills, plugin loader, web server          |
+| BrowserWindow     | Chromium, sandboxed              | dsh Web UI on a loopback origin                                       |
+| Profile           | ~/.dsh/profiles/web              | User's dsh config + plugin bundles + provisioned skills               |
+| uniterra-provider | in-house plugin (esbuild bundle) | LLM adapter: dual-protocol serialize/translate, models.dev lookup     |
 
 ## Data Flow
 
@@ -67,20 +67,20 @@ graph TD
 ### One agent turn
 
 1. User prompt → dsh Web UI (loopback) → dsh runtime agent loop.
-2. LLM call → cardo-provider adapter → protocol resolved per model (`chat-completions` | `responses`).
+2. LLM call → uniterra-provider adapter → protocol resolved per model (`chat-completions` | `responses`).
 3. Serialize harness messages → wire body → POST to the configured gateway → parse SSE → translate to harness chunks (no loss / no duplication of reasoning).
 4. Agent loop continues with tools/skills; skills resolved from `DSH_BUNDLED_SKILL_DIR` (bundled, rank 600) and the user's own skills dir.
 
 ### Install / update
 
-- `cardo setup`: GitHub source archive (or `--source` checkout) → pnpm install → build → electron-builder `--mac` / `--win --dir` → embed source (`Contents/Resources/src` / `resources/src`) → install (`~/Applications/Cardo.app` / `%LOCALAPPDATA%\Programs\Cardo` + Start Menu shortcut).
-- Update check probes GitHub release + npm dist-tag; Update Now quits the app and runs `cardo update` detached — `cardo update` refreshes the CLI, rebuilds + reinstalls the app, and relaunches it when done; Skip persists to `userData/cardo-update-state.json`.
+- `uniterra setup`: GitHub source archive (or `--source` checkout) → pnpm install → build → electron-builder `--mac` / `--win --dir` → embed source (`Contents/Resources/src` / `resources/src`) → install (`~/Applications/Uniterra.app` / `%LOCALAPPDATA%\Programs\Uniterra` + Start Menu shortcut).
+- Update check probes GitHub release + npm dist-tag; Update Now quits the app and runs `uniterra update` detached — `uniterra update` refreshes the CLI, rebuilds + reinstalls the app, and relaunches it when done; Skip persists to `userData/uniterra-update-state.json`.
 
 ## Key Decisions
 
 | Decision                                                                                            | Rationale                                                                                                      | Status |
 | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------ |
-| Thin shell: Electron hosts the bundled dsh CLI instead of reimplementing                            | Cardo IS the dsh desktop surface; user's normal dsh config, no app-owned home                                  | Active |
+| Thin shell: Electron hosts the bundled dsh CLI instead of reimplementing                            | Uniterra IS the dsh desktop surface; user's normal dsh config, no app-owned home                               | Active |
 | Source is the artifact: build the app on the user's machine, no CI-built binaries                   | Reproducible from the release archive; future cross-platform packaging                                         | Active |
 | Whole source tree embedded under the app resources dir (`Contents/Resources/src` / `resources/src`) | Packaged app resolves CLI/skills/vendors from the embedded source; `process.resourcesPath` is platform-neutral | Active |
 | Dual-protocol provider plugin with per-model `api` override                                         | Gateways mix protocols per model; one adapter covers both wire shapes                                          | Active |
@@ -95,9 +95,9 @@ graph TD
 
 | Environment            | Shape                                                                                                                                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User machine (macOS)   | `~/Applications/Cardo.app` — Electron + embedded source + `~/.dsh` profile with built-ins                                                                                                      |
-| User machine (Windows) | `%LOCALAPPDATA%\Programs\Cardo\Cardo.exe` — `win-unpacked` + embedded source + Start Menu shortcut + `~/.dsh` profile                                                                          |
-| npm                    | `@uniterra-solutions/cardo` CLI (trusted publishing, OIDC provenance)                                                                                                                          |
+| User machine (macOS)   | `~/Applications/Uniterra.app` — Electron + embedded source + `~/.dsh` profile with built-ins                                                                                                   |
+| User machine (Windows) | `%LOCALAPPDATA%\Programs\Uniterra\Uniterra.exe` — `win-unpacked` + embedded source + Start Menu shortcut + `~/.dsh` profile                                                                    |
+| npm                    | `@uniterra-solutions/uniterra` CLI (trusted publishing, OIDC provenance)                                                                                                                       |
 | GitHub                 | Release per `v*` tag; auto-generated source archive is the desktop artifact                                                                                                                    |
 | Verification           | `scripts/verify-cli-container` replays the setup flow in a clean Docker container; `scripts/verify-windows-install` replays the real Windows install on windows-latest — both gate the release |
 
@@ -109,6 +109,6 @@ graph TD
 ## Find It Fast
 
 ```bash
-grep -n 'async function boot' packages/cardo-desktop/src/main.ts  # boot order
-grep -n 'ensureBuiltinPlugins' packages/cardo-desktop/src/builtin.ts
+grep -n 'async function boot' packages/uniterra-desktop/src/main.ts  # boot order
+grep -n 'ensureBuiltinPlugins' packages/uniterra-desktop/src/builtin.ts
 ```

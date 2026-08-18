@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Project renamed from Cardo to Uniterra.** The repository, npm packages (`@uniterra-solutions/cardo` → `@uniterra-solutions/uniterra`), CLI command (`cardo` → `uniterra`), desktop app identity (`Uniterra`, `com.uniterra.uniterra`), provider route (`llm-cardo` → `llm-uniterra`), bundled skills (`cardo-*` → `uniterra-*`), and environment variables (`CARDO_*` → `UNITERRA_*`) all use the new name. The old `@uniterra-solutions/cardo` package remains on npm at v0.8.3 for existing installs; earlier entries in this changelog keep the old names as historical record.
+
 ## [0.8.3] — 2026-08-18
 
 ### Fixed
