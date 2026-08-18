@@ -45,10 +45,10 @@ Workflow details: [docs/modules/uniterra-skills.md](docs/modules/uniterra-skills
 
 ```bash
 # Install the app (macOS / Windows 10+)
-npm install -g @uniterra-solutions/uniterra
-uniterra setup
-# macOS → ~/Applications/Uniterra.app; Windows → %LOCALAPPDATA%\Programs\Uniterra (with a Start Menu shortcut)
-uniterra update
+npm install -g @uniterra-solutions/cardo
+cardo setup
+# macOS → ~/Applications/Uniterra.app; Windows → %LOCALAPPDATA%\Programs\cardo (with a Start Menu shortcut)
+cards update
 # One-command update: refresh the CLI + rebuild/reinstall the app + auto-relaunch (Update Now in the app runs this too)
 
 # Development
