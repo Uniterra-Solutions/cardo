@@ -63,7 +63,7 @@ export function registerBuiltinPlugin(plugin: BuiltinPlugin): void {
 }
 
 function isRetired(entry: BuiltinPlugin): entry is RetiredBuiltin {
-  return 'retired' in entry;
+  return (entry as { retired?: unknown }).retired === true;
 }
 
 // ---------------------------------------------------------------------------
