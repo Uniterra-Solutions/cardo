@@ -26,6 +26,14 @@ win:
   # installs the win-unpacked/ tree itself.
   target:
     - dir
+  # Cardo ships unsigned, so skip Windows code signing and rcedit executable
+  # resource editing. Besides dropping an unneeded sign step, this stops
+  # electron-builder from downloading/extracting its winCodeSign tool — whose
+  # 7z archive contains macOS symlinks (darwin/*/lib/*.dylib) that 7-Zip
+  # cannot create on Windows without Developer Mode or administrator
+  # privileges (SeCreateSymbolicLinkPrivilege), failing `cardo setup` for
+  # ordinary users. See electron-userland/electron-builder#8149.
+  signAndEditExecutable: false
 # The source tree the CLI extracted already has its node_modules installed;
 # electron-builder must not reinstall it (the root husky prepare would fail).
 # beforeBuild returning false marks node_modules as handled externally.
