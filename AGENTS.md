@@ -8,7 +8,7 @@
 - `packages/uniterra-systemprompt`:
   - `pnpm --filter @uniterra-solutions/uniterra-systemprompt test` — node:test suite for the system-prompt injection handler (registration, append, no cross-turn duplication)
 - `packages/uniterra-provider`:
-  - `pnpm --filter @uniterra-solutions/uniterra-provider test` — builds, then node:test composition + dual-protocol translate tests (chat completions + Responses API) plus reasoning-preservation regressions and seeded properties (no loss, no duplication across every gateway wire shape) on the compiled `lib/`
+  - `pnpm --filter @uniterra-solutions/uniterra-provider test` — builds, then node:test composition + dual-protocol translate tests (chat completions + Responses API) plus reasoning-preservation regressions and seeded properties (no loss, no duplication, and thinking-mode passback across every gateway wire shape) on the compiled `lib/`
   - `pnpm --filter @uniterra-solutions/uniterra-provider run lint` / `typecheck` — lint/type-check host + client source
 - `packages/uniterra-skills`:
   - `pnpm --filter @uniterra-solutions/uniterra-skills test` — builds, then runs provisioning tests (every bundled skill ships a SKILL.md; provisioning is idempotent)

@@ -76,7 +76,7 @@ test('REGISTRY: one representative entry per kind flows into the expected bundle
 });
 
 test('REGISTRY: retired names never enter the expected bundles', () => {
-  assert.equal(RETIRED.length, 4, 'the four retired built-ins stay declared');
+  assert.equal(RETIRED.length, 5, 'the five retired built-ins stay declared');
   const expected = expectedBuiltinBundles();
   for (const name of RETIRED) {
     assert.ok(!expected.includes(name), `retired ${name} is not an expected bundle`);

@@ -2,11 +2,13 @@
  * Serialize harness messages into OpenAI Chat Completions. User text is
  * joined; assistant text becomes `content`, tool calls become `tool_calls`,
  * and tool results become separate tool messages. Assistant reasoning is
- * replayed as `reasoning_content` only on tool-call turns (DeepSeek-family
- * upstreams require it; other OpenAI-compatible upstreams ignore the field).
- * Core image blocks are rejected explicitly because this wire route is
- * text-only; unknown declaration-merged block types retain the adapter's
- * documented extension fallback.
+ * replayed as `reasoning_content` — DeepSeek's thinking mode is all-or-nothing:
+ * once any assistant message carries reasoning, every later tool-call message
+ * must carry the field too, so a turn whose model answer had no reasoning
+ * round-trips as the empty marker (other OpenAI-compatible upstreams ignore
+ * the field). Core image blocks are rejected explicitly because this wire
+ * route is text-only; unknown declaration-merged block types retain the
+ * adapter's documented extension fallback.
  *
  * @module @uniterra-solutions/uniterra-provider/serialize-chat
  */
@@ -33,13 +35,15 @@ function assertTextOnly(blocks: ContentBlock[]): void {
   }
 }
 
-/** Serialize one assistant message (text + reasoning + tool calls). */
-function serializeAssistant(message: Message): ChatMessage {
+/**
+ * Serialize one assistant message (text + reasoning + tool calls).
+ * @param message - the harness assistant message.
+ * @param sawReasoning - whether any earlier assistant message carried reasoning.
+ */
+function serializeAssistant(message: Message, sawReasoning: boolean): ChatMessage {
   const text = flattenText(message.content);
-  const reasoning = message.content
-    .filter((block) => block.type === 'reasoning')
-    .map((block) => block.text)
-    .join('');
+  const reasoningBlocks = message.content.filter((block) => block.type === 'reasoning');
+  const reasoning = reasoningBlocks.map((block) => block.text).join('');
   const toolCalls = message.content
     .filter((block) => block.type === 'tool-call')
     .map((block) => ({
@@ -53,7 +57,14 @@ function serializeAssistant(message: Message): ChatMessage {
     // Text-less turns send "" — NEVER null. Pure tool-call turns: some
     // gateways reject null outright.
     content: text,
-    ...(toolCalls.length > 0 && reasoning.length > 0 ? { reasoning_content: reasoning } : {}),
+    // Thinking mode is all-or-nothing: replay the turn's own reasoning
+    // verbatim (even empty), and once reasoning appeared anywhere in the
+    // conversation, later tool-call turns must carry the field too — the
+    // model's reasoningless turns round-trip as "" (DeepSeek accepts the
+    // empty marker; other gateways ignore the field).
+    ...(reasoningBlocks.length > 0 || (toolCalls.length > 0 && sawReasoning)
+      ? { reasoning_content: reasoning }
+      : {}),
     ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
   };
 }
@@ -66,6 +77,7 @@ function serializeAssistant(message: Message): ChatMessage {
  */
 export function serializeMessages(messages: Message[]): ChatMessage[] {
   const wire: ChatMessage[] = [];
+  let sawReasoning = false;
   for (const message of messages) {
     assertTextOnly(message.content);
     if (message.role === 'system') {
@@ -73,7 +85,8 @@ export function serializeMessages(messages: Message[]): ChatMessage[] {
       continue;
     }
     if (message.role === 'assistant') {
-      wire.push(serializeAssistant(message));
+      wire.push(serializeAssistant(message, sawReasoning));
+      if (message.content.some((block) => block.type === 'reasoning')) sawReasoning = true;
       continue;
     }
     const toolResults = message.content.filter((block) => block.type === 'tool-result');

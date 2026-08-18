@@ -38,8 +38,19 @@ export type BuiltinSkillName = (typeof SKILL_NAMES)[number];
  * other skills). Their previously-provisioned copies are removed from the
  * target skills dir — the copy loop never touches existing dirs, so without
  * this a retired skill would keep loading alongside its replacements
- * forever. */
-const RETIRED_SKILL_NAMES = ['uniterra-planmode', 'qa'] as const;
+ * forever. Covers the pre-rename `cardo-*` names: the project rename ships
+ * the same skills under `uniterra-*`, and old profiles must not keep loading
+ * both. */
+const RETIRED_SKILL_NAMES = [
+  'qa',
+  'cardo-planmode',
+  'cardo-plan',
+  'cardo-implement',
+  'cardo-simplify',
+  'cardo-review',
+  'cardo-pbt-debugging',
+  'cardo-qa',
+] as const;
 
 /** Names of every skill bundled with this package, in provision order. */
 export const builtinSkillNames: readonly BuiltinSkillName[] = SKILL_NAMES;

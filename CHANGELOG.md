@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pre-rename leftovers in existing profiles: the rename shipped the same provider and skills under new names, but old profiles kept loading BOTH — `RETIRED_BUILTINS` now heals `@cardo/cardo-provider` (removed alongside its bundle row), and the skills provisioner now removes the retired `cardo-*` skill dirs (`cardo-plan`, `cardo-implement`, `cardo-simplify`, `cardo-review`, `cardo-pbt-debugging`, `cardo-qa`, plus legacy `cardo-planmode` / `qa`) so `uniterra-*` is the only copy left
+
+## [0.9.0] — 2026-08-18
+
 ### Changed
 
 - **Project renamed from Cardo to Uniterra.** The repository, npm packages (`@uniterra-solutions/cardo` → `@uniterra-solutions/uniterra`), CLI command (`cardo` → `uniterra`), desktop app identity (`Uniterra`, `com.uniterra.uniterra`), provider route (`llm-cardo` → `llm-uniterra`), bundled skills (`cardo-*` → `uniterra-*`), and environment variables (`CARDO_*` → `UNITERRA_*`) all use the new name. The old `@uniterra-solutions/cardo` package remains on npm at v0.8.3 for existing installs; earlier entries in this changelog keep the old names as historical record.
+
+### Fixed
+
+- `@uniterra-solutions/uniterra-provider` still intermittently crashed agent turns in thinking mode with "The `reasoning_text` in the thinking mode must be passed back to the API." (Responses) / "The `reasoning_content` …" (Chat): DeepSeek's thinking mode is all-or-nothing — once any assistant message carried reasoning, every later tool-call turn must carry it too, including turns the model answered with zero reasoning (`reasoning_tokens: 0`). The serializers now (Chat) replay a reasoning block verbatim on every assistant message and emit the empty marker (`reasoning_content: ""`) on later tool-call turns that lack one, and (Responses) emit a `reasoning` item before every tool-call turn — carrying the conversation's most recent actual chain of thought forward when the turn's own reasoning is missing or empty (empty reasoning items are rejected upstream). Locked by two new deterministic regressions plus two seeded property tests; verified live against the gateway (the pre-fix wire shape reproduces the 400, the fixed shape completes)
+- `@uniterra-solutions/uniterra-provider` bumps 0.1.2 → 0.1.3: the desktop's `workspacePluginsStale()` guard compares the workspace plugin's source vs installed `version`, so existing profiles re-provision the fixed `lib/` on their next launch
 
 ## [0.8.3] — 2026-08-18
 

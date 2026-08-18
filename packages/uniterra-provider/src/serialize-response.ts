@@ -7,6 +7,12 @@
  * plus `summary`) right before its assistant message — OpenAI requires
  * `summary` on reasoning items and DeepSeek merges `content` into the adjacent
  * assistant message, so both consume the same shape.
+ *
+ * DeepSeek's thinking mode is all-or-nothing: once any assistant turn carried
+ * reasoning, every later tool-call turn must pass reasoning_text back — and an
+ * EMPTY reasoning item is rejected. A turn whose model answer had no (or
+ * empty) reasoning therefore carries the conversation's most recent actual
+ * chain of thought forward, so the continuation request stays valid.
  * Core image blocks are rejected because this wire route is text-only.
  *
  * @module @uniterra-solutions/uniterra-provider/serialize-response
@@ -51,6 +57,8 @@ function textContent(text: string, kind: 'input_text' | 'output_text'): Response
  */
 export function serializeInput(messages: Message[]): ResponsesInputItem[] {
   const input: ResponsesInputItem[] = [];
+  let sawReasoning = false;
+  let lastReasoning = '';
   for (const message of messages) {
     assertTextOnly(message.content);
     if (message.role === 'system') {
@@ -61,26 +69,32 @@ export function serializeInput(messages: Message[]): ResponsesInputItem[] {
       continue;
     }
     if (message.role === 'assistant') {
-      const reasoning = message.content
-        .filter((block) => block.type === 'reasoning')
-        .map((block) => block.text)
-        .join('');
-      if (reasoning.length > 0) {
+      const reasoningBlocks = message.content.filter((block) => block.type === 'reasoning');
+      const reasoning = reasoningBlocks.map((block) => block.text).join('');
+      if (reasoning.length > 0) lastReasoning = reasoning;
+      if (reasoningBlocks.length > 0) sawReasoning = true;
+      const toolCalls = message.content.filter((block) => block.type === 'tool-call');
+      const mustReplay = reasoningBlocks.length > 0 || (toolCalls.length > 0 && sawReasoning);
+      if (mustReplay) {
         // Round-trip the previous turn's chain of thought. DeepSeek's
         // Responses API in thinking mode rejects a multi-turn tool-call
         // continuation unless the prior turn's reasoning is replayed as a
-        // `reasoning` input item BEFORE its function_call items. `id` is a
-        // locally synthesized unique key: the harness does not persist
-        // reasoning item ids, and both OpenAI and DeepSeek only need it
-        // unique within the request.
+        // `reasoning` input item BEFORE its function_call items — and rejects
+        // EMPTY reasoning items too, so a turn whose answer had no reasoning
+        // carries the conversation's most recent actual chain of thought
+        // forward (the model's own text; it keeps the thinking context alive).
+        // `id` is a locally synthesized unique key: the harness does not
+        // persist reasoning item ids, and both OpenAI and DeepSeek only need
+        // it unique within the request.
+        const text =
+          reasoning.length > 0 ? reasoning : lastReasoning.length > 0 ? lastReasoning : ' ';
         input.push({
           type: 'reasoning',
           id: `reasoning_${String(input.length)}`,
-          content: [{ type: 'reasoning_text', text: reasoning }],
-          summary: [{ type: 'summary_text', text: reasoning }],
+          content: [{ type: 'reasoning_text', text }],
+          summary: [{ type: 'summary_text', text }],
         });
       }
-      const toolCalls = message.content.filter((block) => block.type === 'tool-call');
       if (toolCalls.length > 0) {
         // A tool-call turn: emit one function_call item per call; any text on
         // the same turn is dropped (tool-call turns are text-less in the

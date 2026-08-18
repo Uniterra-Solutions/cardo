@@ -1,6 +1,6 @@
 {
   "name": "@uniterra-solutions/uniterra-provider",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Uniterra dual-protocol LLM provider plugin for DeepSeek Harness: OpenAI chat completions AND Responses API over any OpenAI-compatible gateway, with models.dev context/output auto-detection.",
   "type": "module",

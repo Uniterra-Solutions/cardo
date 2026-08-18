@@ -124,6 +124,11 @@ registerBuiltinPlugin({
   comment:
     'Third-party reasoning-effort editor: the provider declares reasoningEfforts from models.dev.',
 });
+registerBuiltinPlugin({
+  retired: true,
+  package: '@cardo/cardo-provider',
+  comment: 'Pre-rename workspace built-in: now shipped as @uniterra-solutions/uniterra-provider.',
+});
 
 /** The pnpm settings every profile needs for plugin installs. */
 const PROFILE_PNPM_WORKSPACE = [
