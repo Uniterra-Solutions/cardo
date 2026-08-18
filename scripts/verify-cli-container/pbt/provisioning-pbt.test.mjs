@@ -14,8 +14,8 @@
  *    `main` (and `exports` default) points at. Missing `lib/index.js` after
  *    `pnpm run build` → the installed app's profile copy cannot be imported
  *    by the dsh loader and boot dies with ERR_MODULE_NOT_FOUND.
- *  - VENDOR_ENTRY: every vendored built-in's package name matches its
- *    BUILTIN_VENDOR_PLUGINS row and ships a resolvable entry.
+ *  - VENDOR_ENTRY: every vendored built-in's package name matches its registry
+ *    row and ships a resolvable entry.
  *  - BUNDLES_SET: hasAllBuiltins is true iff every expected bundle is
  *    present; order and extras never matter; malformed manifests are
  *    "not provisioned", never an exception.
@@ -44,16 +44,19 @@ function sourceRoot() {
 const DESKTOP_DIST = pathToFileURL(join(sourceRoot(), 'packages', 'uniterra-desktop', 'dist')).href;
 
 const {
-  BUILTIN_NPM_PLUGINS,
-  BUILTIN_VENDOR_PLUGINS,
-  BUILTIN_WORKSPACE_PLUGINS,
+  builtinPackageName,
+  copyBuiltins,
+  copyBuiltinsStale,
   expectedBuiltinBundles,
   hasAllBuiltins,
-  vendoredPluginsStale,
-  workspacePluginsStale,
+  npmBuiltinSpecs,
   ensureBuiltinPlugins,
 } = await import(`${DESKTOP_DIST}/builtin.js`);
 const { awaitReadiness, stopDsh } = await import(`${DESKTOP_DIST}/dsh-process.js`);
+
+const NPM_SPECS = npmBuiltinSpecs();
+const VENDOR = copyBuiltins('vendor');
+const WORKSPACE = copyBuiltins('workspace');
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, 'utf8'));
@@ -63,7 +66,7 @@ function readJson(file) {
 // SOURCE_ENTRY — the v0.6.0 regression
 // ---------------------------------------------------------------------------
 
-const workspaceDirArb = fc.constantFrom(...Object.keys(BUILTIN_WORKSPACE_PLUGINS));
+const workspaceDirArb = fc.constantFrom(...WORKSPACE.map((entry) => entry.dir));
 
 test('SOURCE_ENTRY: every workspace built-in ships the entry its package.json declares', () => {
   fc.assert(
@@ -96,14 +99,14 @@ test('SOURCE_ENTRY: every workspace built-in ships the entry its package.json de
 
 test('SOURCE_ENTRY: every vendored built-in matches its package name and ships a resolvable entry', () => {
   fc.assert(
-    fc.property(fc.constantFrom(...Object.keys(BUILTIN_VENDOR_PLUGINS)), (dirName) => {
-      const pkgDir = join(sourceRoot(), 'vendor', 'dsh-plugins', dirName);
+    fc.property(fc.constantFrom(...VENDOR), ({ dir, package: pkgName }) => {
+      const pkgDir = join(sourceRoot(), 'vendor', 'dsh-plugins', dir);
       const pkg = readJson(join(pkgDir, 'package.json'));
-      assert.equal(pkg.name, BUILTIN_VENDOR_PLUGINS[dirName], `vendor dir ${dirName} package name`);
+      assert.equal(pkg.name, pkgName, `vendor dir ${dir} package name`);
       const entryRel = pkg.main ?? 'index.js';
       assert.ok(
         existsSync(join(pkgDir, entryRel)),
-        `vendored entry ${dirName}/${entryRel} missing`,
+        `vendored entry ${dir}/${entryRel} missing`,
       );
     }),
   );
@@ -116,9 +119,9 @@ test('SOURCE_ENTRY: every vendored built-in matches its package name and ships a
 const bundleWordArb = fc.constantFrom(
   '@deepseek-ai/dsh-base',
   '@deepseek-ai/dsh-web-app',
-  ...BUILTIN_NPM_PLUGINS.map((spec) => spec.slice(0, spec.lastIndexOf('@'))),
-  ...Object.values(BUILTIN_VENDOR_PLUGINS),
-  ...Object.values(BUILTIN_WORKSPACE_PLUGINS),
+  ...NPM_SPECS.map(builtinPackageName),
+  ...VENDOR.map((entry) => entry.package),
+  ...WORKSPACE.map((entry) => entry.package),
   'user-installed-plugin',
   'totally-unrelated',
 );
@@ -138,7 +141,7 @@ test('BUNDLES_SET: hasAllBuiltins iff every expected bundle is present; order an
       const dir = mkdtempSync(join(tmpdir(), 'uniterra-set-'));
       try {
         writeProfileManifest(dir, bundles);
-        const expected = expectedBuiltinBundles(BUILTIN_NPM_PLUGINS, BUILTIN_VENDOR_PLUGINS);
+        const expected = expectedBuiltinBundles();
         const want = expected.every((name) => bundles.includes(name));
         assert.equal(hasAllBuiltins(dir), want, `bundles=${JSON.stringify(bundles)}`);
         const shuffled = [...bundles].reverse();
@@ -176,10 +179,18 @@ test('BUNDLES_SET: malformed profiles are "not provisioned", never an exception'
 });
 
 // ---------------------------------------------------------------------------
-// STALE_DETECTION — installed-copy drift
+// STALE_DETECTION — installed-copy drift (unified, kind-aware)
 // ---------------------------------------------------------------------------
 
 const damageArb = fc.constantFrom('missing', 'version-bump', 'version-match');
+
+/** Every copy-based built-in with its source root discriminator. */
+function copyEntries() {
+  return [
+    ...VENDOR.map((entry) => ({ kind: 'vendor', ...entry })),
+    ...WORKSPACE.map((entry) => ({ kind: 'workspace', ...entry })),
+  ];
+}
 
 function installedCopyDir(profileDir, pkgName) {
   return join(profileDir, 'node_modules', ...pkgName.split('/'));
@@ -187,60 +198,40 @@ function installedCopyDir(profileDir, pkgName) {
 
 test('STALE_DETECTION: a missing or version-mismatched copy of any built-in is stale; a matching copy is not', () => {
   fc.assert(
-    fc.property(
-      fc.oneof(
-        fc.tuple(fc.constant('vendor'), fc.constantFrom(...Object.keys(BUILTIN_VENDOR_PLUGINS))),
-        fc.tuple(
-          fc.constant('workspace'),
-          fc.constantFrom(...Object.keys(BUILTIN_WORKSPACE_PLUGINS)),
-        ),
-      ),
-      damageArb,
-      ([kind, dirKey], damage) => {
-        const root = sourceRoot();
-        const profileDir = join(mkdtempSync(join(tmpdir(), 'uniterra-stale-')), 'profiles', 'web');
-        mkdirSync(profileDir, { recursive: true });
-        try {
-          // Baseline: EVERY built-in gets a version-matching installed copy.
-          // The staleness checks scan all built-ins (any drift ⇒ stale), so
-          // only the damaged target may differ from the source versions.
-          const entries = [
-            ...Object.entries(BUILTIN_VENDOR_PLUGINS).map(([dir, pkg]) => ['vendor', dir, pkg]),
-            ...Object.entries(BUILTIN_WORKSPACE_PLUGINS).map(([dir, pkg]) => [
-              'workspace',
-              dir,
-              pkg,
-            ]),
-          ];
-          for (const [entryKind, dir, pkgName] of entries) {
-            const sourcePkg =
-              entryKind === 'vendor'
-                ? readJson(join(root, 'vendor', 'dsh-plugins', dir, 'package.json'))
-                : readJson(join(root, dir, 'package.json'));
-            if (entryKind === kind && dir === dirKey && damage === 'missing') {
-              continue; // the damaged target's installed copy stays absent
-            }
-            const dest = installedCopyDir(profileDir, pkgName);
-            mkdirSync(dest, { recursive: true });
-            const version =
-              entryKind === kind && dir === dirKey && damage === 'version-bump'
-                ? '999.0.0'
-                : sourcePkg.version;
-            writeFileSync(
-              join(dest, 'package.json'),
-              `${JSON.stringify({ name: pkgName, version })}\n`,
-            );
+    fc.property(fc.constantFrom(...copyEntries()), damageArb, (target, damage) => {
+      const root = sourceRoot();
+      const profileDir = join(mkdtempSync(join(tmpdir(), 'uniterra-stale-')), 'profiles', 'web');
+      mkdirSync(profileDir, { recursive: true });
+      try {
+        // Baseline: EVERY copy built-in gets a version-matching installed copy.
+        // The unified staleness check scans all of them (any drift ⇒ stale), so
+        // only the damaged target may differ from the source versions.
+        for (const entry of copyEntries()) {
+          const sourcePkg =
+            entry.kind === 'vendor'
+              ? readJson(join(root, 'vendor', 'dsh-plugins', entry.dir, 'package.json'))
+              : readJson(join(root, entry.dir, 'package.json'));
+          if (entry.kind === target.kind && entry.dir === target.dir && damage === 'missing') {
+            continue; // the damaged target's installed copy stays absent
           }
-          const stale =
-            kind === 'vendor'
-              ? vendoredPluginsStale(profileDir, join(root, 'vendor', 'dsh-plugins'))
-              : workspacePluginsStale(profileDir, root);
-          assert.equal(stale, damage !== 'version-match', `${kind}/${dirKey} damage=${damage}`);
-        } finally {
-          rmSync(profileDir, { recursive: true, force: true });
+          const dest = installedCopyDir(profileDir, entry.package);
+          mkdirSync(dest, { recursive: true });
+          const version =
+            entry.kind === target.kind && entry.dir === target.dir && damage === 'version-bump'
+              ? '999.0.0'
+              : sourcePkg.version;
+          writeFileSync(
+            join(dest, 'package.json'),
+            `${JSON.stringify({ name: entry.package, version })}\n`,
+          );
         }
-      },
-    ),
+        const stale = copyBuiltinsStale(
+          profileDir,
+          join(root, 'vendor', 'dsh-plugins'),
+          root,
+        );
+        rmSync(join(profileDir, '..', '..'), { recursive: true, force: true });
+    }),
   );
 });
 

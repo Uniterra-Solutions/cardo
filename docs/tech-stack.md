@@ -94,7 +94,7 @@ Provisioned into the user's dsh profile at startup — see [modules/vendor-plugi
 ## How to Update
 
 - Dependency added/removed/upgraded → update the corresponding table (keep exact pins for `@deepseek-ai/*`).
-- New built-in plugin → update the Built-in dsh Plugins table and `vendor/dsh-plugins/VENDOR.md`.
+- New built-in plugin → add a `registerBuiltinPlugin()` entry in `packages/uniterra-desktop/src/builtin.ts`, update the Built-in dsh Plugins table and `vendor/dsh-plugins/VENDOR.md`.
 - Node/Electron/pnpm bump → update here, `.nvmrc`, and `engines`.
 
 ## Find It Fast

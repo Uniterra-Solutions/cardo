@@ -2,12 +2,18 @@
  * PBT suite for the uniterra desktop built-ins (compiled dist).
  *
  * Business invariants locked here:
+ *  - REGISTRY: the single registerBuiltinPlugin registry is the source of
+ *    truth — one representative entry per kind (npm / vendor / workspace)
+ *    flows into expectedBuiltinBundles, and retired names never do.
  *  - EXTRACT: every built-in npm spec `<name>@<version>` contributes its
  *    package NAME to the expected bundles — including scoped names
  *    (`@scope/name@1.0.0` → `@scope/name`).
  *  - SET: hasAllBuiltins is true iff the profile bundle list carries every
  *    expected bundle (extras and order never matter); malformed manifests
  *    are "not provisioned", never an exception.
+ *  - STALE: the unified copyBuiltinsStale detects drift by content identity
+ *    for BOTH vendored and workspace built-ins.
+ *  - RETIRED: removeRetiredBuiltins heals exactly the retired names.
  *  - READY: awaitReadiness resolves with the first `http://127.0.0.1:<port>`
  *    seen, across arbitrary chunk boundaries, and rejects when the stream
  *    never carries one.
@@ -21,17 +27,79 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import {
-  BUILTIN_NPM_PLUGINS,
-  BUILTIN_VENDOR_PLUGINS,
-  BUILTIN_WORKSPACE_PLUGINS,
-  RETIRED_BUILTINS,
   builtinPackageName,
+  builtinPlugins,
+  copyBuiltins,
+  copyBuiltinsStale,
   expectedBuiltinBundles,
   hasAllBuiltins,
+  npmBuiltinSpecs,
   removeRetiredBuiltins,
-  vendoredPluginsStale,
+  retiredBuiltinNames,
 } from '../dist/builtin.js';
 import { awaitReadiness } from '../dist/dsh-process.js';
+
+const NPM_SPECS = npmBuiltinSpecs();
+const VENDOR = copyBuiltins('vendor');
+const WORKSPACE = copyBuiltins('workspace');
+const RETIRED = retiredBuiltinNames();
+
+// ---------------------------------------------------------------------------
+// REGISTRY — one declarative entry per built-in, every consumer derived
+// ---------------------------------------------------------------------------
+
+test('REGISTRY: one representative entry per kind flows into the expected bundles', () => {
+  const expected = expectedBuiltinBundles();
+  // Official dsh bundles always lead.
+  assert.deepEqual(expected.slice(0, 2), [
+    '@deepseek-ai/dsh-base',
+    '@deepseek-ai/dsh-web-app',
+  ]);
+  // npm kind.
+  assert.ok(NPM_SPECS.length >= 9, 'the full npm built-in set is registered');
+  for (const spec of NPM_SPECS) {
+    assert.ok(
+      expected.includes(builtinPackageName(spec)),
+      `npm spec ${spec} contributes its package name`,
+    );
+  }
+  // vendor kind.
+  assert.ok(VENDOR.length >= 2, 'both vendored built-ins are registered');
+  for (const { dir, package: pkg } of VENDOR) {
+    assert.ok(expected.includes(pkg), `vendor ${dir} contributes ${pkg}`);
+  }
+  // workspace kind.
+  assert.ok(WORKSPACE.length >= 1, 'the workspace built-in is registered');
+  for (const { dir, package: pkg } of WORKSPACE) {
+    assert.ok(expected.includes(pkg), `workspace ${dir} contributes ${pkg}`);
+  }
+});
+
+test('REGISTRY: retired names never enter the expected bundles', () => {
+  assert.equal(RETIRED.length, 5, 'the five retired built-ins stay declared');
+  const expected = expectedBuiltinBundles();
+  for (const name of RETIRED) {
+    assert.ok(!expected.includes(name), `retired ${name} is not an expected bundle`);
+  }
+});
+
+test('REGISTRY: every entry is declared exactly once', () => {
+  const plugins = builtinPlugins();
+  const identities = plugins.map((entry) =>
+    entry.retired === true
+      ? `retired:${entry.package}`
+      : `${entry.kind}:${entry.kind === 'npm' ? entry.spec : entry.dir}`,
+  );
+  assert.equal(new Set(identities).size, identities.length, 'no duplicate declarations');
+});
+
+test('REGISTRY: npm specs are pinned exact (no caret/tilde, semver version)', () => {
+  for (const spec of NPM_SPECS) {
+    const at = spec.lastIndexOf('@');
+    const version = spec.slice(at + 1);
+    assert.ok(/^\d+\.\d+\.\d+$/u.test(version), `${spec} is exact`);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // EXTRACT — npm spec → package name
@@ -51,15 +119,10 @@ function packageNameOf(spec) {
   return at <= 0 ? spec : spec.slice(0, at);
 }
 
-test('EXTRACT: a built-in npm spec always contributes its package name', () => {
+test('EXTRACT: a spec always splits its package name on the LAST @', () => {
   fc.assert(
     fc.property(npmSpecArb, (spec) => {
-      const expected = expectedBuiltinBundles([spec], {});
-      assert.ok(
-        expected.includes(packageNameOf(spec)),
-        `expected bundles from ${spec} should include its package name`,
-      );
-      assert.ok(expected.length >= 3, 'official bundles always present');
+      assert.equal(builtinPackageName(spec), packageNameOf(spec));
     }),
   );
 });
@@ -94,20 +157,14 @@ const bundleWordArb = fc.constantFrom(
   '@uniterra-solutions/uniterra-provider',
   // Retired built-ins linger in profiles provisioned by older uniterra builds;
   // they must count as harmless extras for the SET verdict.
-  ...RETIRED_BUILTINS,
+  ...RETIRED,
   'user-installed-plugin',
   'totally-unrelated',
 );
 
-/** Independent expected set computed from the real constants. */
+/** Independent expected set computed from the registry accessors. */
 function modelExpected() {
-  return [
-    '@deepseek-ai/dsh-base',
-    '@deepseek-ai/dsh-web-app',
-    ...BUILTIN_NPM_PLUGINS.map((spec) => spec.slice(0, spec.lastIndexOf('@'))),
-    ...Object.values(BUILTIN_VENDOR_PLUGINS),
-    ...Object.values(BUILTIN_WORKSPACE_PLUGINS),
-  ];
+  return expectedBuiltinBundles();
 }
 
 async function writeProfileManifest(dir, bundles) {
@@ -173,8 +230,8 @@ test('SET: a missing profile directory is "not provisioned"', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// VENDOR — vendored built-ins must be self-contained, and a stale copy of a
-//          previously-provisioned distribution must force re-provision
+// VENDOR — vendored built-ins must be self-contained, and the skin is the
+//          standalone distribution (not the retired builtin-row one)
 // ---------------------------------------------------------------------------
 
 const vendorPluginsRoot = resolve(import.meta.dirname, '..', '..', '..', 'vendor', 'dsh-plugins');
@@ -195,82 +252,89 @@ function isSelfContainedPatch(patchText) {
   return topLevel.every((line) => /^-\s+insert\s*:/u.test(line));
 }
 
-test('VENDOR: every built-in vendored plugin contributes its Loader row via a self-contained insert patch', async () => {
-  const entries = Object.entries(BUILTIN_VENDOR_PLUGINS);
-  assert.ok(entries.length >= 2, 'both vendored built-ins remain shipped');
-  for (const [dirName] of entries) {
-    const text = await readFile(join(vendorPluginsRoot, dirName, 'cordis.patch.yml'), 'utf8');
+test('VENDOR: every vendored built-in contributes its Loader row via a self-contained insert patch', async () => {
+  assert.ok(VENDOR.length >= 2, 'both vendored built-ins remain shipped');
+  for (const { dir } of VENDOR) {
+    const text = await readFile(join(vendorPluginsRoot, dir, 'cordis.patch.yml'), 'utf8');
     assert.ok(
       isSelfContainedPatch(text),
-      `${dirName}/cordis.patch.yml must be a self-contained root insert`,
+      `${dir}/cordis.patch.yml must be a self-contained root insert`,
     );
   }
 });
 
-test('VENDOR regression: the retired built-ins must be gone from the vendored map', () => {
-  for (const retired of RETIRED_BUILTINS) {
-    assert.ok(
-      !Object.values(BUILTIN_VENDOR_PLUGINS).includes(retired),
-      `retired built-in ${retired} must not ship as a vendored built-in`,
-    );
+test('VENDOR regression: retired built-ins must be gone from the vendored registry', () => {
+  const vendorPackages = VENDOR.map((entry) => entry.package);
+  for (const name of RETIRED) {
+    assert.ok(!vendorPackages.includes(name), `retired ${name} must not ship as vendored`);
   }
 });
 
 test('VENDOR regression: the skin ships the standalone dsh-deep-whale distribution, not the retired builtin-row one', () => {
-  assert.equal(
-    BUILTIN_VENDOR_PLUGINS['dsh-deep-whale'],
-    '@dsh-external/dsh-client-ui-skin-maid-atelier',
-  );
+  const skin = VENDOR.find((entry) => entry.dir === 'dsh-deep-whale');
+  assert.equal(skin?.package, '@dsh-external/dsh-client-ui-skin-maid-atelier');
   assert.ok(
-    !('deep-whale-day-night-theme' in BUILTIN_VENDOR_PLUGINS),
+    !VENDOR.some((entry) => entry.dir === 'deep-whale-day-night-theme'),
     'the retired deep-whale-day-night-theme source must be gone',
   );
   assert.ok(
-    expectedBuiltinBundles(BUILTIN_NPM_PLUGINS, BUILTIN_VENDOR_PLUGINS).includes(
-      '@dsh-external/dsh-client-ui-skin-maid-atelier',
-    ),
+    expectedBuiltinBundles().includes('@dsh-external/dsh-client-ui-skin-maid-atelier'),
     'the skin package name stays an expected bundle',
   );
 });
 
-/** Write one vendored built-in's source package.json under a vendor root. */
-async function writeVendorSource(vendorRootDir, dirName, version) {
-  const dest = join(vendorRootDir, dirName);
-  await mkdir(dest, { recursive: true });
-  await writeFile(join(dest, 'package.json'), `${JSON.stringify({ name: dirName, version })}\n`);
+// ---------------------------------------------------------------------------
+// STALE — the unified copyBuiltinsStale detects drift for BOTH kinds
+// ---------------------------------------------------------------------------
+
+/** Every copy-based built-in with its source root. */
+function copyEntries() {
+  return [
+    ...VENDOR.map((entry) => ({ ...entry, root: 'vendor' })),
+    ...WORKSPACE.map((entry) => ({ ...entry, root: 'workspace' })),
+  ];
 }
 
-/** Write one vendored built-in's installed copy into a profile's node_modules. */
-async function writeInstalledVendor(profileDir, pkgName, version) {
+/** Write one copy built-in's source package.json under its kind's root. */
+async function writeCopySource(rootDir, dir, version) {
+  const dest = join(rootDir, dir);
+  await mkdir(dest, { recursive: true });
+  await writeFile(join(dest, 'package.json'), `${JSON.stringify({ name: dir, version })}\n`);
+}
+
+/** Write one copy built-in's installed copy into a profile's node_modules. */
+async function writeInstalledCopy(profileDir, pkgName, version) {
   const dest = join(profileDir, 'node_modules', ...pkgName.split('/'));
   await mkdir(dest, { recursive: true });
   await writeFile(join(dest, 'package.json'), `${JSON.stringify({ name: pkgName, version })}\n`);
 }
 
-/** Build a profile + vendor fixture where every vendored built-in is present,
- * optionally drifting exactly one of them. Returns the profile dir. */
+/** Build a profile + vendor/workspace fixture where every copy built-in is
+ * present, optionally drifting exactly one of them. Returns the fixture. */
 async function staleFixture({ driftDir }) {
-  const dir = await mkdtemp(join(tmpdir(), 'uniterra-vendor-'));
+  const dir = await mkdtemp(join(tmpdir(), 'uniterra-stale-'));
   const vendor = join(dir, 'vendor');
+  const source = join(dir, 'source');
   const profile = join(dir, 'profiles', 'web');
   await mkdir(profile, { recursive: true });
   await writeProfileManifest(dir, []);
-  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
-    await writeVendorSource(vendor, dirName, '1.0.0');
-    const version = dirName === driftDir ? '1.0.1' : '1.0.0';
-    await writeInstalledVendor(profile, pkgName, version);
+  for (const entry of copyEntries()) {
+    const root = entry.root === 'vendor' ? vendor : source;
+    await writeCopySource(root, entry.dir, '1.0.0');
+    const version = entry.dir === driftDir ? '1.0.1' : '1.0.0';
+    await writeInstalledCopy(profile, entry.package, version);
   }
-  return { dir, vendor, profile };
+  return { dir, vendor, source, profile };
 }
 
-test('STALE: a vendored copy matching the source is fresh; a single drift is stale', async () => {
+test('STALE: a copy matching the source is fresh; a single drift (either kind) is stale', async () => {
   await fc.assert(
     fc.asyncProperty(
-      fc.constantFrom(...Object.keys(BUILTIN_VENDOR_PLUGINS), null),
+      fc.constantFrom(...copyEntries().map((entry) => entry.dir), null),
       async (driftDir) => {
-        const { dir, vendor, profile } = await staleFixture({ driftDir });
+        const { dir, vendor, source, profile } = await staleFixture({ driftDir });
         try {
-          assert.equal(vendoredPluginsStale(profile, vendor), driftDir !== null);
+          assert.equal(copyBuiltinsStale(profile, vendor, source), driftDir !== null);
         } finally {
           await rm(dir, { recursive: true, force: true });
         }
@@ -280,22 +344,24 @@ test('STALE: a vendored copy matching the source is fresh; a single drift is sta
 });
 
 test('STALE: a missing or illegible installed copy is stale (forces re-provision)', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'uniterra-vendor-'));
+  const dir = await mkdtemp(join(tmpdir(), 'uniterra-stale-'));
   try {
     const vendor = join(dir, 'vendor');
+    const source = join(dir, 'source');
     const profile = join(dir, 'profiles', 'web');
     await mkdir(profile, { recursive: true });
     await writeProfileManifest(dir, []);
-    for (const [dirName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
-      await writeVendorSource(vendor, dirName, '1.0.0');
+    for (const entry of copyEntries()) {
+      const root = entry.root === 'vendor' ? vendor : source;
+      await writeCopySource(root, entry.dir, '1.0.0');
     }
     // No installed copies at all → stale.
-    assert.equal(vendoredPluginsStale(profile, vendor), true);
+    assert.equal(copyBuiltinsStale(profile, vendor, source), true);
     // One illegible installed package.json → stale.
     const skin = join(profile, 'node_modules', '@dsh-external', 'dsh-client-ui-skin-maid-atelier');
     await mkdir(skin, { recursive: true });
     await writeFile(join(skin, 'package.json'), 'not json at all');
-    assert.equal(vendoredPluginsStale(profile, vendor), true);
+    assert.equal(copyBuiltinsStale(profile, vendor, source), true);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -309,7 +375,7 @@ test('STALE: a missing or illegible installed copy is stale (forces re-provision
 
 test('RETIRED: removeRetiredBuiltins removes exactly the retired rows, deps, and installed copies', async () => {
   await fc.assert(
-    fc.asyncProperty(fc.subarray(RETIRED_BUILTINS, { minLength: 0 }), async (retired) => {
+    fc.asyncProperty(fc.subarray(RETIRED, { minLength: 0 }), async (retired) => {
       const dir = await mkdtemp(join(tmpdir(), 'uniterra-retired-'));
       try {
         const profile = join(dir, 'profiles', 'web');
@@ -344,7 +410,7 @@ test('RETIRED: removeRetiredBuiltins removes exactly the retired rows, deps, and
         assert.equal(removeRetiredBuiltins(profile), false);
 
         const manifest = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
-        for (const name of RETIRED_BUILTINS) {
+        for (const name of RETIRED) {
           assert.ok(!manifest.dsh.profile.bundles.includes(name), `${name} row removed`);
           assert.ok(!(name in manifest.dependencies), `${name} dependency removed`);
         }
@@ -353,7 +419,7 @@ test('RETIRED: removeRetiredBuiltins removes exactly the retired rows, deps, and
           assert.ok(name in manifest.dependencies, `${name} dependency untouched`);
         }
         assert.ok(manifest.dsh.profile.bundles.includes('dsh-better-sidebar'));
-        for (const name of RETIRED_BUILTINS) {
+        for (const name of RETIRED) {
           assert.equal(
             existsSync(join(profile, 'node_modules', ...name.split('/'))),
             false,
@@ -379,7 +445,7 @@ test('RETIRED: an illegible manifest never throws — node_modules cleanup still
   try {
     const profile = join(dir, 'profiles', 'web');
     await mkdir(profile, { recursive: true });
-    const name = RETIRED_BUILTINS[0];
+    const name = RETIRED[0];
     const dest = join(profile, 'node_modules', ...name.split('/'));
     await mkdir(dest, { recursive: true });
     await writeFile(join(profile, 'package.json'), 'not json at all {{{');

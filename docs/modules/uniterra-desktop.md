@@ -10,7 +10,7 @@ Source: `packages/uniterra-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/main.ts`                       | Electron main entry: single-instance lock, dev test-home mirror, built-in provisioning, dsh child supervision + crash restart, BrowserWindow, startup update check                              |
 | `src/dsh-process.ts`                | dsh runtime supervision: spawn bundled CLI, await readiness URL, own shutdown                                                                                                                   |
-| `src/builtin.ts`                    | Built-in provisioning: npm `dsh plugin add`, vendored/workspace copy, staleness detection, bundle rows                                                                                          |
+| `src/builtin.ts`                    | Declarative `registerBuiltinPlugin()` registry: npm `dsh plugin add`, vendored/workspace copy, kind-aware staleness + retired heal, bundle rows                                                 |
 | `src/profile.ts`                    | LEGACY manifest constants — not imported by `main.ts`/`builtin.ts`; consumed only by `test/profile.test.mjs`. Constants disagree with the live `builtin.ts` lists (see Gotchas). Do not extend. |
 | `scripts/electron-before-build.cjs` | electron-builder `beforeBuild` hook: returns `false` so node_modules are never reinstalled (the extracted source tree already has them)                                                         |
 
@@ -26,7 +26,7 @@ Source: `packages/uniterra-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.
 | `startDsh`          | `(options: DshRuntimeOptions) => Promise<DshRuntimeHandle>`               | Spawn `node <cli> --profile <profile>` with `DSH_HOME`, `DSH_BUNDLED_SKILL_DIR`, `ELECTRON_RUN_AS_NODE=1`, `NO_COLOR=1`; await readiness |
 | `stopDsh`           | `(child: ChildProcess, timeoutMs = 10_000) => Promise<void>`              | SIGTERM, race exit vs timeout, SIGKILL if still alive                                                                                    |
 
-`src/builtin.ts` — see [vendor-plugins.md](vendor-plugins.md) for the exact built-in lists and provisioning semantics; exports: `BUILTIN_NPM_PLUGINS`, `BUILTIN_VENDOR_PLUGINS`, `BUILTIN_WORKSPACE_PLUGINS`, `builtinPackageName`, `expectedBuiltinBundles`, `hasAllBuiltins`, `vendoredPluginsStale`, `workspacePluginsStale`, `ensureBuiltinPlugins`, `builtinSkillsDir` (exported but unused — `main.ts` uses its own `skillsDir()`).
+`src/builtin.ts` — see [vendor-plugins.md](vendor-plugins.md) for the exact built-in lists and provisioning semantics; exports: `registerBuiltinPlugin` (declarative registry of `NpmBuiltin` / `CopyBuiltin` / `RetiredBuiltin` entries), `builtinPlugins`, `npmBuiltinSpecs`, `copyBuiltins`, `retiredBuiltinNames`, `builtinPackageName`, `expectedBuiltinBundles`, `hasAllBuiltins`, `copyBuiltinsStale` (unified vendored/workspace staleness), `removeRetiredBuiltins`, `ensureBuiltinPlugins`, `builtinSkillsDir` (exported but unused — `main.ts` uses its own `skillsDir()`).
 
 ## Boot Flow
 
@@ -66,7 +66,7 @@ Source: `packages/uniterra-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.
 - Readiness regex requires a non-digit terminator (`(?=[^0-9])`) so a chunk boundary inside the port digits never yields a truncated URL — regression-locked in `builtin-pbt.test.mjs`.
 - `ensureBuiltinPlugins` returns early when the profile dir doesn't exist — it enriches an existing profile, never scaffolds one.
 - Vendored plugins are copied, not `dsh plugin add`-ed (peers only exist in the dsh source workspace); workspace built-ins ship pre-built with no pnpm install — a missing `packages/uniterra-provider/lib/` breaks boot (0.6.1 regression).
-- Staleness is content identity (installed vs source `package.json` version), not bundle-list — a fixed distribution can ship under the same package name.
+- Staleness is kind-aware in `copyBuiltinsStale()`: content identity against the pinned source for vendored copies, installed-vs-source `package.json` version for workspace copies — never bundle-list; a fixed distribution can ship under the same package name.
 - `profile.ts` is legacy: `PROFILE_PLUGINS` lists 6 specs while `builtin.ts`'s live set is 9 npm + 2 vendored (+ 1 workspace); `profileManifest()` still has the scoped-name split bug `p.split('@')[0]` that `builtinPackageName` fixes. Do not use as a source of truth.
 - `scripts/prepare-runtime.mjs` is orphaned (the 0.5.0 `vendor/dsh-runtime` model); its plugin list is inconsistent with `builtin.ts`. `vendor/dsh-runtime/` itself is a legacy snapshot not on the current boot path.
 - No code signing: macOS sets `hardenedRuntime: false` + `identity: null` (no quarantine needed); Windows sets `signAndEditExecutable: false` — Uniterra ships unsigned, and skipping the sign step also stops electron-builder from downloading/extracting its `winCodeSign` tool, whose 7z archive contains macOS symlinks that 7-Zip cannot create on Windows without Developer Mode / administrator privileges (electron-builder#8149).
