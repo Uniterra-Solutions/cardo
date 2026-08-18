@@ -71,22 +71,23 @@ Platform notes:
 
 ## Decisions
 
-| Decision                                                                         | Rationale                                                                                   |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Source is the artifact — CI prebuilds it into the asset, the CLI skips the build | Matches the repo exactly; skips the multi-minute tsc/esbuild on user machines               |
-| Asset absent → auto-generated archive fallback                                   | Releases predating the asset keep building from the raw tarball                             |
-| Windows ships `win-unpacked/` (`--win --dir`), not NSIS                          | The source is embedded AFTER packaging; an installer image can't carry it                   |
-| Windows installs per-user under `%LOCALAPPDATA%\Programs\Cardo`                  | No elevation needed; mirrors `~/Applications`                                               |
-| Start Menu shortcut is best-effort                                               | A missing shortcut must never fail the install                                              |
-| `--source <dir>` local checkout mode                                             | Windows CI verifies the REAL CLI end-to-end without downloading a release                   |
-| `cardo update` = CLI self-update + full rebuild + relaunch (one command)         | The desktop's Update Now quits and runs exactly this — no separate `cardo setup` for users  |
-| `cardo update` refreshes the CLI FIRST                                           | npm/permission problems fail fast, before the multi-minute build                            |
-| `CI=true` injected into pnpm install                                             | pnpm 11 aborts without a TTY                                                                |
-| pnpm self-provisioned via `npx pnpm@<pin>` when absent                           | The CLI runs on node (npm/npx bundled), so pnpm is the only runtime dep that can be missing |
-| Subprocess failures surface stderr + exit code                                   | `electron-builder`'s real reason (e.g. a binary download) must never be swallowed           |
-| `/releases/latest` 404 → fall back to `releases?per_page=1`                      | `/releases/latest` excludes prereleases; beta tags must still install                       |
-| `CARDO_GITHUB_REPO` env override                                                 | Point the installer at a fork/mirror in tests                                               |
-| Version stamp: release tag without `v`; `--source`: source desktop version       | Align app metadata with the release tag                                                     |
+| Decision                                                                             | Rationale                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source is the artifact — CI prebuilds it into the asset, the CLI skips the build     | Matches the repo exactly; skips the multi-minute tsc/esbuild on user machines                                                                 |
+| Asset absent → auto-generated archive fallback                                       | Releases predating the asset keep building from the raw tarball                                                                               |
+| Windows ships `win-unpacked/` (`--win --dir`), not NSIS                              | The source is embedded AFTER packaging; an installer image can't carry it                                                                     |
+| Windows packages unsigned (`signAndEditExecutable: false` in `electron-builder.yml`) | Cardo ships unsigned; the skip also avoids the winCodeSign 7z symlink-extraction failure without Developer Mode/admin (electron-builder#8149) |
+| Windows installs per-user under `%LOCALAPPDATA%\Programs\Cardo`                      | No elevation needed; mirrors `~/Applications`                                                                                                 |
+| Start Menu shortcut is best-effort                                                   | A missing shortcut must never fail the install                                                                                                |
+| `--source <dir>` local checkout mode                                                 | Windows CI verifies the REAL CLI end-to-end without downloading a release                                                                     |
+| `cardo update` = CLI self-update + full rebuild + relaunch (one command)             | The desktop's Update Now quits and runs exactly this — no separate `cardo setup` for users                                                    |
+| `cardo update` refreshes the CLI FIRST                                               | npm/permission problems fail fast, before the multi-minute build                                                                              |
+| `CI=true` injected into pnpm install                                                 | pnpm 11 aborts without a TTY                                                                                                                  |
+| pnpm self-provisioned via `npx pnpm@<pin>` when absent                               | The CLI runs on node (npm/npx bundled), so pnpm is the only runtime dep that can be missing                                                   |
+| Subprocess failures surface stderr + exit code                                       | `electron-builder`'s real reason (e.g. a binary download) must never be swallowed                                                             |
+| `/releases/latest` 404 → fall back to `releases?per_page=1`                          | `/releases/latest` excludes prereleases; beta tags must still install                                                                         |
+| `CARDO_GITHUB_REPO` env override                                                     | Point the installer at a fork/mirror in tests                                                                                                 |
+| Version stamp: release tag without `v`; `--source`: source desktop version           | Align app metadata with the release tag                                                                                                       |
 
 ## Dependencies
 

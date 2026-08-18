@@ -69,7 +69,7 @@ Source: `packages/cardo-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.ts`
 - Staleness is content identity (installed vs source `package.json` version), not bundle-list — a fixed distribution can ship under the same package name.
 - `profile.ts` is legacy: `PROFILE_PLUGINS` lists 6 specs while `builtin.ts`'s live set is 9 npm + 2 vendored (+ 1 workspace); `profileManifest()` still has the scoped-name split bug `p.split('@')[0]` that `builtinPackageName` fixes. Do not use as a source of truth.
 - `scripts/prepare-runtime.mjs` is orphaned (the 0.5.0 `vendor/dsh-runtime` model); its plugin list is inconsistent with `builtin.ts`. `vendor/dsh-runtime/` itself is a legacy snapshot not on the current boot path.
-- No Apple code signing (`hardenedRuntime: false`, `identity: null`) — no quarantine needed (macOS); Windows ships unsigned unpacked binaries.
+- No code signing: macOS sets `hardenedRuntime: false` + `identity: null` (no quarantine needed); Windows sets `signAndEditExecutable: false` — Cardo ships unsigned, and skipping the sign step also stops electron-builder from downloading/extracting its `winCodeSign` tool, whose 7z archive contains macOS symlinks that 7-Zip cannot create on Windows without Developer Mode / administrator privileges (electron-builder#8149).
 - On Windows the CLI probe and Update Now spawn npm shims (`cardo` / `npx` as `.cmd`) with `shell: process.platform === 'win32'` — execFile cannot launch `.cmd` shims directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT (args are fixed, no quoting risk).
 
 ## Decisions
