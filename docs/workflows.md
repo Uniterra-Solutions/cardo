@@ -34,7 +34,7 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Add a Built-in npm Plugin
 
-1. Add the pinned spec to `BUILTIN_NPM_PLUGINS` in `packages/uniterra-desktop/src/builtin.ts`.
+1. Add the pinned spec as a `registerBuiltinPlugin({ kind: 'npm', spec })` entry in `packages/uniterra-desktop/src/builtin.ts`.
 2. Add it to the root `pnpm-workspace.yaml` `minimumReleaseAgeExclude`.
 3. Extend `packages/uniterra-desktop/test/builtin-pbt.test.mjs` and update [modules/vendor-plugins.md](modules/vendor-plugins.md).
 
