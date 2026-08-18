@@ -68,7 +68,7 @@ graph TD
 
 1. User prompt → dsh Web UI (loopback) → dsh runtime agent loop.
 2. LLM call → cardo-provider adapter → protocol resolved per model (`chat-completions` | `responses`).
-3. Serialize harness messages → wire body → POST to the configured gateway → parse SSE → translate to harness chunks (no loss / no duplication of reasoning).
+3. Serialize harness messages → wire body → POST to the configured gateway → parse SSE → translate to harness chunks (no loss / no duplication of reasoning; thinking-mode reasoning passed back on every tool-call continuation).
 4. Agent loop continues with tools/skills; skills resolved from `DSH_BUNDLED_SKILL_DIR` (bundled, rank 600) and the user's own skills dir.
 
 ### Install / update
