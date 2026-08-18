@@ -551,6 +551,63 @@ test('agent-loop: Chat serialization replays reasoning_content on tool-call turn
   ]);
 });
 
+test('agent-loop: Chat serialization sends an empty reasoning marker on later tool-call turns', () => {
+  // DeepSeek thinking mode is all-or-nothing: once any assistant message
+  // carries reasoning_content, every later tool-call message must carry the
+  // field too — a turn the model answered without reasoning (reasoning_tokens
+  // 0) must round-trip as the empty marker, or the next request fails with
+  // "The `reasoning_content` … must be passed back to the API".
+  const wire = serializeChatRequest({
+    model: 'm1',
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'reasoning', text: 'think' },
+          { type: 'tool-call', id: 'c1', name: 'f', arguments: '{}' },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: 'ok' }] },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: 'c2', name: 'f', arguments: '{}' }],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool-result', toolCallId: 'c2', content: [{ type: 'text', text: 'ok' }] },
+        ],
+      },
+    ],
+  });
+  const assistants = wire.messages.filter((message) => message.role === 'assistant');
+  assert.equal(assistants[0].reasoning_content, 'think');
+  assert.equal(assistants[1].reasoning_content, '');
+});
+
+test('agent-loop: Chat serialization keeps reasoning on plain turns once thinking is active', () => {
+  const wire = serializeChatRequest({
+    model: 'm1',
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'reasoning', text: 'think' },
+          { type: 'text', text: 'first answer' },
+        ],
+      },
+    ],
+  });
+  const assistant = wire.messages.find((message) => message.role === 'assistant');
+  assert.equal(assistant.reasoning_content, 'think');
+  assert.equal(assistant.content, 'first answer');
+});
+
 test('agent-loop: Responses serialization replays reasoning on tool-call turns', () => {
   // DeepSeek's Responses API in thinking mode rejects a multi-turn tool-call
   // continuation with "The `reasoning_text` … must be passed back to the API"
@@ -588,6 +645,83 @@ test('agent-loop: Responses serialization replays reasoning on tool-call turns',
   ]);
 });
 
+test('agent-loop: Responses serialization carries reasoning forward on reasoningless tool-call turns', () => {
+  // DeepSeek's Responses API in thinking mode rejects the continuation of any
+  // tool-call turn that lacks reasoning_text — including a turn the model
+  // answered with zero reasoning (empty reasoning items are rejected too).
+  // The serializer must carry the conversation's most recent real chain of
+  // thought forward onto such turns.
+  const wire = serializeResponsesRequest({
+    model: 'm1',
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'solve' }] },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'reasoning', text: 'think' },
+          { type: 'tool-call', id: 'c1', name: 'f', arguments: '{}' },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: 'ok' }] },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: 'c2', name: 'f', arguments: '{}' }],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool-result', toolCallId: 'c2', content: [{ type: 'text', text: 'ok' }] },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'reasoning', text: '' },
+          { type: 'tool-call', id: 'c3', name: 'f', arguments: '{}' },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'tool-result', toolCallId: 'c3', content: [{ type: 'text', text: 'ok' }] },
+        ],
+      },
+    ],
+  });
+  assert.deepEqual(wire.input, [
+    { role: 'user', content: [{ type: 'input_text', text: 'solve' }] },
+    {
+      type: 'reasoning',
+      id: 'reasoning_1',
+      content: [{ type: 'reasoning_text', text: 'think' }],
+      summary: [{ type: 'summary_text', text: 'think' }],
+    },
+    { type: 'function_call', call_id: 'c1', name: 'f', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'c1', output: 'ok' },
+    {
+      type: 'reasoning',
+      id: 'reasoning_4',
+      content: [{ type: 'reasoning_text', text: 'think' }],
+      summary: [{ type: 'summary_text', text: 'think' }],
+    },
+    { type: 'function_call', call_id: 'c2', name: 'f', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'c2', output: 'ok' },
+    {
+      type: 'reasoning',
+      id: 'reasoning_7',
+      content: [{ type: 'reasoning_text', text: 'think' }],
+      summary: [{ type: 'summary_text', text: 'think' }],
+    },
+    { type: 'function_call', call_id: 'c3', name: 'f', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'c3', output: 'ok' },
+  ]);
+});
+
 test('property: Responses serialization never drops assistant reasoning', () => {
   const rand = mulberry32(0x5eed);
   const pick = (items) => items[Math.floor(rand() * items.length)];
@@ -596,22 +730,40 @@ test('property: Responses serialization never drops assistant reasoning', () => 
     const messages = [];
     const expectedReasoning = [];
     const turnCount = 1 + Math.floor(rand() * 6);
+    let sawReasoning = false;
+    let lastReasoning = '';
     for (let turn = 0; turn < turnCount; turn += 1) {
       const content = [];
       if (rand() < 0.7) {
-        const text = pick(['r1', 'r2', 'r3', 'r4']);
+        const text = pick(['r1', 'r2', 'r3', 'r4', '']);
         content.push({ type: 'reasoning', text });
-        expectedReasoning.push(text);
+        sawReasoning = true;
+        if (text.length > 0) lastReasoning = text;
       }
       if (rand() < 0.4) content.push({ type: 'text', text: pick(['a1', 'a2']) });
       const toolCall = rand() < 0.6;
       if (toolCall) content.push({ type: 'tool-call', id: `c${turn}`, name: 'f', arguments: '{}' });
+      const hasReasoning = content.some((block) => block.type === 'reasoning');
+      const ownReasoning = content
+        .filter((block) => block.type === 'reasoning')
+        .map((block) => block.text)
+        .join('');
+      const mustReplay = hasReasoning || (toolCall && sawReasoning);
+      if (mustReplay) {
+        const text =
+          ownReasoning.length > 0 ? ownReasoning : lastReasoning.length > 0 ? lastReasoning : ' ';
+        expectedReasoning.push(text);
+      }
       messages.push({ role: 'assistant', content });
       if (toolCall) {
         messages.push({
           role: 'user',
           content: [
-            { type: 'tool-result', toolCallId: `c${turn}`, content: [{ type: 'text', text: 'ok' }] },
+            {
+              type: 'tool-result',
+              toolCallId: `c${turn}`,
+              content: [{ type: 'text', text: 'ok' }],
+            },
           ],
         });
       }
@@ -625,8 +777,75 @@ test('property: Responses serialization never drops assistant reasoning', () => 
     assert.deepEqual(
       wireReasoning,
       expectedReasoning,
-      `run ${run}: assistant reasoning lost or duplicated across a tool-call turn`,
+      `run ${run}: assistant reasoning lost, duplicated, or not carried forward across a tool-call turn`,
     );
+    // Every reasoning item must be adjacent to the items it annotates: its
+    // content rides immediately before function_call items or a message item.
+    for (let at = 0; at < wire.input.length; at += 1) {
+      if (wire.input[at].type !== 'reasoning') continue;
+      const next = wire.input[at + 1];
+      assert.ok(
+        next !== undefined && (next.type === 'function_call' || next.role === 'assistant'),
+        `run ${run}: reasoning item at ${at} is not adjacent to a function_call or assistant message`,
+      );
+    }
+  }
+});
+
+test('property: Chat serialization never drops reasoning markers once thinking is active', () => {
+  const rand = mulberry32(0xca11d);
+  const pick = (items) => items[Math.floor(rand() * items.length)];
+
+  for (let run = 0; run < 300; run += 1) {
+    const messages = [];
+    const expected = [];
+    const turnCount = 1 + Math.floor(rand() * 6);
+    let sawReasoning = false;
+    for (let turn = 0; turn < turnCount; turn += 1) {
+      const content = [];
+      if (rand() < 0.7) {
+        content.push({ type: 'reasoning', text: pick(['r1', 'r2', 'r3', 'r4', '']) });
+        sawReasoning = true;
+      }
+      if (rand() < 0.4) content.push({ type: 'text', text: pick(['a1', 'a2']) });
+      const toolCall = rand() < 0.6;
+      if (toolCall) content.push({ type: 'tool-call', id: `c${turn}`, name: 'f', arguments: '{}' });
+      const hasReasoning = content.some((block) => block.type === 'reasoning');
+      const ownReasoning = content
+        .filter((block) => block.type === 'reasoning')
+        .map((block) => block.text)
+        .join('');
+      const mustReplay = hasReasoning || (toolCall && sawReasoning);
+      expected.push(mustReplay ? ownReasoning : undefined);
+      messages.push({ role: 'assistant', content });
+      if (toolCall) {
+        messages.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: `c${turn}`,
+              content: [{ type: 'text', text: 'ok' }],
+            },
+          ],
+        });
+      }
+    }
+
+    const wire = serializeChatRequest({ model: 'm1', messages });
+    const assistants = wire.messages.filter((message) => message.role === 'assistant');
+    for (let at = 0; at < assistants.length; at += 1) {
+      const want = expected[at];
+      const has = 'reasoning_content' in assistants[at];
+      assert.equal(has, want !== undefined, `run ${run}: assistant ${at} marker presence`);
+      if (want !== undefined) {
+        assert.equal(
+          assistants[at].reasoning_content,
+          want,
+          `run ${run}: assistant ${at} marker text`,
+        );
+      }
+    }
   }
 });
 
