@@ -1,8 +1,8 @@
 /**
- * Docker PBT suite for the cardo installer/desktop flow.
+ * Docker PBT suite for the uniterra installer/desktop flow.
  *
  * Runs inside the verify-cli-container image AFTER `pnpm install` +
- * `pnpm run build` on a pristine source tree (exactly what `cardo setup`
+ * `pnpm run build` on a pristine source tree (exactly what `uniterra setup`
  * does on a user machine). It locks the property that made v0.6.0's desktop
  * unbootable: the workspace build must produce the entry files the bundled
  * plugins' package.json declare, every built-in must be provisionable, and
@@ -35,13 +35,13 @@ import { pathToFileURL } from 'node:url';
 
 /** The pristine source tree this suite runs against (verify.sh exports it). */
 function sourceRoot() {
-  return process.env.CARDO_SOURCE_ROOT ?? process.cwd();
+  return process.env.UNITERRA_SOURCE_ROOT ?? process.cwd();
 }
 
 // The suite lives outside the workspace (verify.sh copies it next to the
 // image's fast-check install), so the compiled desktop dist is loaded from
 // the source tree by absolute path.
-const DESKTOP_DIST = pathToFileURL(join(sourceRoot(), 'packages', 'cardo-desktop', 'dist')).href;
+const DESKTOP_DIST = pathToFileURL(join(sourceRoot(), 'packages', 'uniterra-desktop', 'dist')).href;
 
 const {
   BUILTIN_NPM_PLUGINS,
@@ -74,7 +74,7 @@ test('SOURCE_ENTRY: every workspace built-in ships the entry its package.json de
       const entry = join(pkgDir, pkg.main);
       assert.ok(
         existsSync(entry),
-        `entry ${pkg.main} missing for ${relDir} — the workspace build must produce it (cardo setup runs pnpm run build)`,
+        `entry ${pkg.main} missing for ${relDir} — the workspace build must produce it (uniterra setup runs pnpm run build)`,
       );
       const expDefault = pkg.exports?.['.']?.default;
       if (expDefault !== undefined) {
@@ -135,7 +135,7 @@ function writeProfileManifest(dir, bundles) {
 test('BUNDLES_SET: hasAllBuiltins iff every expected bundle is present; order and extras are irrelevant', () => {
   fc.assert(
     fc.property(fc.array(bundleWordArb, { maxLength: 20 }), (bundles) => {
-      const dir = mkdtempSync(join(tmpdir(), 'cardo-set-'));
+      const dir = mkdtempSync(join(tmpdir(), 'uniterra-set-'));
       try {
         writeProfileManifest(dir, bundles);
         const expected = expectedBuiltinBundles(BUILTIN_NPM_PLUGINS, BUILTIN_VENDOR_PLUGINS);
@@ -162,7 +162,7 @@ test('BUNDLES_SET: malformed profiles are "not provisioned", never an exception'
   );
   fc.assert(
     fc.property(malformed, (body) => {
-      const dir = mkdtempSync(join(tmpdir(), 'cardo-set-'));
+      const dir = mkdtempSync(join(tmpdir(), 'uniterra-set-'));
       try {
         const profileDir = join(dir, 'profiles', 'web');
         mkdirSync(profileDir, { recursive: true });
@@ -198,7 +198,7 @@ test('STALE_DETECTION: a missing or version-mismatched copy of any built-in is s
       damageArb,
       ([kind, dirKey], damage) => {
         const root = sourceRoot();
-        const profileDir = join(mkdtempSync(join(tmpdir(), 'cardo-stale-')), 'profiles', 'web');
+        const profileDir = join(mkdtempSync(join(tmpdir(), 'uniterra-stale-')), 'profiles', 'web');
         mkdirSync(profileDir, { recursive: true });
         try {
           // Baseline: EVERY built-in gets a version-matching installed copy.
@@ -253,13 +253,13 @@ test(
   { timeout: 300_000 },
   async () => {
     const root = sourceRoot();
-    const home = join(tmpdir(), 'cardo-boot-home');
+    const home = join(tmpdir(), 'uniterra-boot-home');
     rmSync(home, { recursive: true, force: true });
 
     const dshCli = join(
       root,
       'packages',
-      'cardo-desktop',
+      'uniterra-desktop',
       'node_modules',
       '@deepseek-ai',
       'dsh',

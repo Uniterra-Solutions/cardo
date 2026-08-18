@@ -1,6 +1,6 @@
-# Cardo CLI flow container verification
+# Uniterra CLI flow container verification
 #
-# Reproduces, on a clean Linux machine, exactly what `cardo setup` does on a
+# Reproduces, on a clean Linux machine, exactly what `uniterra setup` does on a
 # user's Mac: take a pristine source tree (no .git, no node_modules — the
 # GitHub auto-generated source archive), `pnpm install --frozen-lockfile`,
 # `pnpm run build`, and assert the packaged app's runtime dependencies are

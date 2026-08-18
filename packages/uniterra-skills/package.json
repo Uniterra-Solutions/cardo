@@ -1,0 +1,23 @@
+{
+  "name": "@uniterra-solutions/uniterra-skills",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Uniterra built-in skill registry: bundles the company-standard skills (Jovaltus pipeline skills + Caelterra create-skill) and provisions them into the desktop app's agent skills directory.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && node scripts/copy-skills.mjs",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src",
+    "format": "prettier --write src",
+    "test": "pnpm run build && tsc -p tsconfig.test.json && node --test \"test/**/*.test.mts\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

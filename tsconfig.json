@@ -1,11 +1,11 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/cardo-systemprompt" },
-    { "path": "./packages/cardo-skills" },
-    { "path": "./packages/cardo-cli" },
-    { "path": "./packages/cardo-desktop" },
-    { "path": "./packages/cardo-updater" },
-    { "path": "./packages/cardo-provider" }
+    { "path": "./packages/uniterra-systemprompt" },
+    { "path": "./packages/uniterra-skills" },
+    { "path": "./packages/uniterra-cli" },
+    { "path": "./packages/uniterra-desktop" },
+    { "path": "./packages/uniterra-updater" },
+    { "path": "./packages/uniterra-provider" }
   ]
 }

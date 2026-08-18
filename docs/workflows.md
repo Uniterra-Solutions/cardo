@@ -4,26 +4,26 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Develop a Feature (company standard)
 
-1. Load the `cardo-plan` skill; clarify ≤5 open questions; write `<repo>/.plan/<YYYYMMDD>/<name>/clarify.md`.
+1. Load the `uniterra-plan` skill; clarify ≤5 open questions; write `<repo>/.plan/<YYYYMMDD>/<name>/clarify.md`.
 2. Dispatch PRD → Design subagents via a `workflow` script; artifacts `prd.md` / `design.md`.
 3. Write `execution-plan.json` (`serial` / `batched` / `parallel`; each task carries its explicit `requirements` list); present for approval.
-4. Load `cardo-implement`: simple tasks go inline (failing PBTs → code); complex tasks first write ALL failing property tests (red phase), then choose batched vs full-parallel by task overlap and run the `workflow` script.
-5. Run the fix ↔ review loop to `verdict: pass` — `cardo-review` (adversarial) and/or `cardo-simplify`, each with an explicit review scope.
-   Details: [modules/cardo-skills.md](modules/cardo-skills.md#cardo-plan).
+4. Load `uniterra-implement`: simple tasks go inline (failing PBTs → code); complex tasks first write ALL failing property tests (red phase), then choose batched vs full-parallel by task overlap and run the `workflow` script.
+5. Run the fix ↔ review loop to `verdict: pass` — `uniterra-review` (adversarial) and/or `uniterra-simplify`, each with an explicit review scope.
+   Details: [modules/uniterra-skills.md](modules/uniterra-skills.md#uniterra-plan).
 
 ## Debug a Bug (PBT-first)
 
-1. Load the `cardo-pbt-debugging` skill; read the business logic, find its invariants.
+1. Load the `uniterra-pbt-debugging` skill; read the business logic, find its invariants.
 2. Encode the invariants as a fast-check property; run it — it must FAIL (the counterexample is the reproduction). Refine until it fails.
 3. Fix the root cause; the PBT goes green; add a unit regression test for the concrete case; run the full suite.
-   Details: [modules/cardo-skills.md](modules/cardo-skills.md#cardo-pbt-debugging).
+   Details: [modules/uniterra-skills.md](modules/uniterra-skills.md#uniterra-pbt-debugging).
 
 ## Add a Bundled Skill
 
-1. Create `packages/cardo-skills/src/skills/<name>/SKILL.md` (use the `create-skill` skill).
-2. Add the name to `SKILL_NAMES` in `packages/cardo-skills/src/index.ts`.
+1. Create `packages/uniterra-skills/src/skills/<name>/SKILL.md` (use the `create-skill` skill).
+2. Add the name to `SKILL_NAMES` in `packages/uniterra-skills/src/index.ts`.
 3. `pnpm run build` (copy-skills refreshes `dist/skills/`).
-4. Extend `packages/cardo-skills/test/provision.test.mts`.
+4. Extend `packages/uniterra-skills/test/provision.test.mts`.
 
 ## Bump a Vendored Plugin
 
@@ -34,28 +34,28 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Add a Built-in npm Plugin
 
-1. Add the pinned spec to `BUILTIN_NPM_PLUGINS` in `packages/cardo-desktop/src/builtin.ts`.
+1. Add the pinned spec to `BUILTIN_NPM_PLUGINS` in `packages/uniterra-desktop/src/builtin.ts`.
 2. Add it to the root `pnpm-workspace.yaml` `minimumReleaseAgeExclude`.
-3. Extend `packages/cardo-desktop/test/builtin-pbt.test.mjs` and update [modules/vendor-plugins.md](modules/vendor-plugins.md).
+3. Extend `packages/uniterra-desktop/test/builtin-pbt.test.mjs` and update [modules/vendor-plugins.md](modules/vendor-plugins.md).
 
 ## Change the Provider
 
-1. Edit `packages/cardo-provider/src/` (translators, adapter, or settings page).
+1. Edit `packages/uniterra-provider/src/` (translators, adapter, or settings page).
 2. New wire shape → per-shape regression + seeded property in `test/reasoning-preservation.test.mjs`.
-3. `pnpm --filter @cardo/cardo-provider test`, then root `pnpm run build` — the desktop provisions the built `lib/`.
+3. `pnpm --filter @uniterra-solutions/uniterra-provider test`, then root `pnpm run build` — the desktop provisions the built `lib/`.
 
 ## Change an Installer/Desktop Behaviour
 
-1. Edit `packages/cardo-cli` or `packages/cardo-desktop`; extend the PBT lanes (platform branches included).
+1. Edit `packages/uniterra-cli` or `packages/uniterra-desktop`; extend the PBT lanes (platform branches included).
 2. `pnpm run build && pnpm run lint && pnpm run typecheck`; per-package tests.
 3. Installer/root-script changes additionally: `scripts/verify-cli-container/run.sh` (clean-container replay); Windows branches are exercised by `scripts/verify-windows-install/verify.ps1` in the release gate (windows-latest).
 
 ## Release a Version
 
-1. Bump `packages/cardo-cli/package.json` + `packages/cardo-desktop/package.json` versions (+ `CHANGELOG.md` entry), commit, push.
-2. Push tag `v<version>` — `release.yml` gates the publish on the full matrix (CI lint/typecheck/tests + clean-container installer replay + windows-latest install verification, all via `needs`); on success it publishes the CLI via npm trusted publishing, builds the workspace on Linux, and creates the GitHub Release carrying the `cardo-src-<tag>.tar.gz` source asset (built tree + `.cardo-prebuilt` marker).
-3. Version mismatch between tag and `packages/cardo-cli/package.json` fails the release.
-   Details: [modules/cardo-cli.md](modules/cardo-cli.md), [modules/cardo-updater.md](modules/cardo-updater.md).
+1. Bump `packages/uniterra-cli/package.json` + `packages/uniterra-desktop/package.json` versions (+ `CHANGELOG.md` entry), commit, push.
+2. Push tag `v<version>` — `release.yml` gates the publish on the full matrix (CI lint/typecheck/tests + clean-container installer replay + windows-latest install verification, all via `needs`); on success it publishes the CLI via npm trusted publishing, builds the workspace on Linux, and creates the GitHub Release carrying the `uniterra-src-<tag>.tar.gz` source asset (built tree + `.uniterra-prebuilt` marker).
+3. Version mismatch between tag and `packages/uniterra-cli/package.json` fails the release.
+   Details: [modules/uniterra-cli.md](modules/uniterra-cli.md), [modules/uniterra-updater.md](modules/uniterra-updater.md).
 
 ## Regenerate Documentation
 
@@ -71,5 +71,5 @@ Task recipes. Each links to the module/skill that owns the details.
 ## Find It Fast
 
 ```bash
-ls packages/cardo-skills/src/skills/   # skills referenced above
+ls packages/uniterra-skills/src/skills/   # skills referenced above
 ```

@@ -1,5 +1,5 @@
 {
-  "name": "cardo",
+  "name": "uniterra",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.17.0",
@@ -7,7 +7,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "build": "tsc -b && node packages/cardo-skills/scripts/copy-skills.mjs && pnpm --filter @cardo/cardo-provider build",
+    "build": "tsc -b && node packages/uniterra-skills/scripts/copy-skills.mjs && pnpm --filter @uniterra-solutions/uniterra-provider build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
