@@ -1,8 +1,0 @@
-# @cardo/cardo-provider bundle patch
-# 在 profile 组合中插入插件行：向 ctx.llm 注册 cardo 供应商路由
-# （host 层挂载；路由激活需 baseURL 配置，见 README「配置」）。
-# 支持 chat completions 与 responses 双协议，按模型 api 字段路由。
-
-- insert:
-    - id: llm-cardo
-      name: '@cardo/cardo-provider'

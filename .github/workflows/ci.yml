@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # Build BEFORE lint: workspace packages (@cardo/cardo-updater etc.) are
+      # Build BEFORE lint: workspace packages (@uniterra-solutions/uniterra-updater etc.) are
       # consumed via their dist/ outputs, which are gitignored build products.
       # Linting before building leaves their types unresolved and type-aware
       # rules (no-unsafe-*) fail on the fresh checkout.
@@ -74,8 +74,8 @@ jobs:
         run: pnpm run build
       - name: Tests
         run: |
-          pnpm --filter @cardo/cardo-systemprompt test
-          pnpm --filter @cardo/cardo-provider test
-          pnpm --filter @cardo/cardo-skills test
-          pnpm --filter @uniterra-solutions/cardo test
-          pnpm --filter @cardo/cardo-desktop test
+          pnpm --filter @uniterra-solutions/uniterra-systemprompt test
+          pnpm --filter @uniterra-solutions/uniterra-provider test
+          pnpm --filter @uniterra-solutions/uniterra-skills test
+          pnpm --filter @uniterra-solutions/uniterra test
+          pnpm --filter @uniterra-solutions/uniterra-desktop test

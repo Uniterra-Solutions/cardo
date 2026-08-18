@@ -4,14 +4,14 @@ Company-standard rules from `AGENTS.md`, `eslint.config.mjs`, `tsconfig.base.jso
 
 ## Language / Module System
 
-| Rule                                                                                       | Enforcement                                                                                                                                             |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node ≥ 22 (`.nvmrc` / `engines`)                                                           | Manual                                                                                                                                                  |
-| NodeNext ESM: internal imports carry `.js` extensions                                      | Node runtime failure                                                                                                                                    |
-| Named exports only; no default exports                                                     | Manual (AGENTS.md rule); single platform exception: `packages/cardo-systemprompt/src/index.ts` default-exports a factory (pi extension loader contract) |
-| No `any`                                                                                   | ESLint `no-explicit-any: error`                                                                                                                         |
-| Explicit function return types                                                             | ESLint `explicit-function-return-type: error`                                                                                                           |
-| Readonly-by-default (`prefer-readonly`), exhaustive switches, no floating/misused promises | ESLint strictTypeChecked + extra rules                                                                                                                  |
+| Rule                                                                                       | Enforcement                                                                                                                                                |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node ≥ 22 (`.nvmrc` / `engines`)                                                           | Manual                                                                                                                                                     |
+| NodeNext ESM: internal imports carry `.js` extensions                                      | Node runtime failure                                                                                                                                       |
+| Named exports only; no default exports                                                     | Manual (AGENTS.md rule); single platform exception: `packages/uniterra-systemprompt/src/index.ts` default-exports a factory (pi extension loader contract) |
+| No `any`                                                                                   | ESLint `no-explicit-any: error`                                                                                                                            |
+| Explicit function return types                                                             | ESLint `explicit-function-return-type: error`                                                                                                              |
+| Readonly-by-default (`prefer-readonly`), exhaustive switches, no floating/misused promises | ESLint strictTypeChecked + extra rules                                                                                                                     |
 
 ## TypeScript Config (shared)
 
@@ -19,13 +19,13 @@ Company-standard rules from `AGENTS.md`, `eslint.config.mjs`, `tsconfig.base.jso
 
 ## Dependencies
 
-| Rule                                                                                     | Reason                                                                                                                                      |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pin all `@deepseek-ai/*` at exact versions (no caret)                                    | dsh is a developer preview with breaking changes; `npm view X version` returns the stale `latest` tag — current family is on the `next` tag |
-| `pnpm install --frozen-lockfile` in CI (never bare `pnpm install`)                       | Reproducible installs                                                                                                                       |
-| `@cardo/*` exports point at built `dist` (never `./src`)                                 | Desktop consumes them as externalized deps; Node cannot load TS source                                                                      |
-| Exception: `@cardo/cardo-provider` exports point at `lib/` (esbuild bundle), not `dist/` | Self-contained host bundle ships into the profile; `eslint.config.mjs` ignores `**/lib/` alongside `**/dist/`                               |
-| Ask before adding new dependencies / changing lint or tsconfig rules                     | They encode the company standard                                                                                                            |
+| Rule                                                                                                     | Reason                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pin all `@deepseek-ai/*` at exact versions (no caret)                                                    | dsh is a developer preview with breaking changes; `npm view X version` returns the stale `latest` tag — current family is on the `next` tag |
+| `pnpm install --frozen-lockfile` in CI (never bare `pnpm install`)                                       | Reproducible installs                                                                                                                       |
+| `@uniterra-solutions/*` exports point at built `dist` (never `./src`)                                    | Desktop consumes them as externalized deps; Node cannot load TS source                                                                      |
+| Exception: `@uniterra-solutions/uniterra-provider` exports point at `lib/` (esbuild bundle), not `dist/` | Self-contained host bundle ships into the profile; `eslint.config.mjs` ignores `**/lib/` alongside `**/dist/`                               |
+| Ask before adding new dependencies / changing lint or tsconfig rules                                     | They encode the company standard                                                                                                            |
 
 ## Formatting (Prettier)
 
@@ -46,16 +46,16 @@ Single quotes, trailing commas, print width 100, LF line endings. Run `pnpm form
 | Tests per business logic | Every business-logic change ships with tests; property-based tests (fast-check) pin invariants                                                                                                                             |
 | Test lanes per package   | `pnpm --filter <pkg> test` builds first, then runs `node --test` on the compiled output                                                                                                                                    |
 | Hermetic verification    | `scripts/verify-cli-container/run.sh` replays the installer flow in Docker (no macOS runner needed); Windows branches are exercised by `scripts/verify-windows-install/verify.ps1` on windows-latest — both gate a release |
-| PBT-first bug fixes      | See [modules/cardo-skills.md](modules/cardo-skills.md#cardo-pbt-debugging) and [workflows.md](workflows.md#debug-a-bug-pbt-first)                                                                                          |
+| PBT-first bug fixes      | See [modules/uniterra-skills.md](modules/uniterra-skills.md#uniterra-pbt-debugging) and [workflows.md](workflows.md#debug-a-bug-pbt-first)                                                                                 |
 
 ## Build / Distribution
 
-| Rule                                                        | Detail                                                                                                                                                               |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop resolves consumed packages via their `dist` exports | After changing `cardo-systemprompt`, `cardo-skills`, or `cardo-updater` source, run `pnpm run build`                                                                 |
-| Provider ships via `lib/`                                   | After changing `cardo-provider` source, run `pnpm run build` (tsc + esbuild) or the profile ships a stale plugin                                                     |
-| Skills refresh via `copy-skills.mjs`                        | After changing `src/skills/*`, run `pnpm run build`; stale entries are removed so deleted skills stop shipping                                                       |
-| Installer-flow changes                                      | After changing `cardo setup` flow or root scripts, run `scripts/verify-cli-container/run.sh`; Windows branches are re-verified by the release gate on windows-latest |
+| Rule                                                        | Detail                                                                                                                                                                  |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop resolves consumed packages via their `dist` exports | After changing `uniterra-systemprompt`, `uniterra-skills`, or `uniterra-updater` source, run `pnpm run build`                                                           |
+| Provider ships via `lib/`                                   | After changing `uniterra-provider` source, run `pnpm run build` (tsc + esbuild) or the profile ships a stale plugin                                                     |
+| Skills refresh via `copy-skills.mjs`                        | After changing `src/skills/*`, run `pnpm run build`; stale entries are removed so deleted skills stop shipping                                                          |
+| Installer-flow changes                                      | After changing `uniterra setup` flow or root scripts, run `scripts/verify-cli-container/run.sh`; Windows branches are re-verified by the release gate on windows-latest |
 
 ## How to Update
 

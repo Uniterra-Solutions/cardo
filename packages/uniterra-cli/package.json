@@ -1,0 +1,35 @@
+{
+  "name": "@uniterra-solutions/uniterra",
+  "version": "0.8.4",
+  "description": "Uniterra desktop app installer: one-command setup and update for the Uniterra desktop app (macOS and Windows).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Uniterra-Solutions/uniterra.git"
+  },
+  "type": "module",
+  "bin": {
+    "uniterra": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src",
+    "format": "prettier --write src",
+    "test": "pnpm run build && tsc -p tsconfig.test.json && node --test \"test/**/*.test.mts\"",
+    "prepack": "pnpm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "fast-check": "^4.9.0"
+  }
+}

@@ -33,7 +33,7 @@ importers:
         specifier: ^8.46.0
         version: 8.67.0(eslint@9.39.5(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
 
-  packages/cardo-cli:
+  packages/uniterra-cli:
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -42,11 +42,11 @@ importers:
         specifier: ^4.9.0
         version: 4.9.0
 
-  packages/cardo-desktop:
+  packages/uniterra-desktop:
     dependencies:
-      '@cardo/cardo-updater':
+      '@uniterra-solutions/uniterra-updater':
         specifier: workspace:*
-        version: link:../cardo-updater
+        version: link:../uniterra-updater
     devDependencies:
       '@deepseek-ai/dsh':
         specifier: 0.1.0-rc.6
@@ -64,7 +64,7 @@ importers:
         specifier: ^4.9.0
         version: 4.9.0
 
-  packages/cardo-provider:
+  packages/uniterra-provider:
     dependencies:
       eventsource-parser:
         specifier: ^3.1.0
@@ -122,13 +122,13 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1
 
-  packages/cardo-skills:
+  packages/uniterra-skills:
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
 
-  packages/cardo-systemprompt:
+  packages/uniterra-systemprompt:
     dependencies:
       '@earendil-works/pi-coding-agent':
         specifier: ^0.84.1
@@ -138,7 +138,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
 
-  packages/cardo-updater:
+  packages/uniterra-updater:
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -4710,10 +4710,6 @@ packages:
     resolution: {integrity: sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==}
     engines: {node: 18 || 20 || >=22}
 
-  minimatch@10.2.6:
-    resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
-    engines: {node: 18 || 20 || >=22}
-
   minimatch@3.1.5:
     resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
 
@@ -9005,7 +9001,7 @@ snapshots:
 
   '@opentelemetry/api-logs@0.220.0':
     dependencies:
-      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/api': 1.9.1
 
   '@opentelemetry/api@1.9.0': {}
 
@@ -9354,8 +9350,8 @@ snapshots:
       '@typescript-eslint/types': 8.67.0
       '@typescript-eslint/visitor-keys': 8.67.0
       debug: 4.4.3(supports-color@7.2.0)
-      minimatch: 10.2.6
-      semver: 7.8.0
+      minimatch: 10.2.5
+      semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
@@ -9533,7 +9529,7 @@ snapshots:
       js-yaml: 4.3.1
       json5: 2.2.3
       lazy-val: 1.0.5
-      minimatch: 10.2.6
+      minimatch: 10.2.5
       resedit: 1.7.2
       sanitize-filename: 1.6.4
       semver: 7.8.5
@@ -10451,7 +10447,7 @@ snapshots:
 
   glob@13.0.6:
     dependencies:
-      minimatch: 10.2.6
+      minimatch: 10.2.5
       minipass: 7.1.3
       path-scurry: 2.0.2
 
@@ -11260,10 +11256,6 @@ snapshots:
   mimic-response@3.1.0: {}
 
   minimatch@10.2.5:
-    dependencies:
-      brace-expansion: 5.0.9
-
-  minimatch@10.2.6:
     dependencies:
       brace-expansion: 5.0.9
 

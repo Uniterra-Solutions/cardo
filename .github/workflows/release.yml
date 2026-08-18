@@ -21,12 +21,12 @@ permissions:
 #     (pristine source → pnpm install → build → runtime-dependency + dsh boot
 #     assertions),
 #   - verify-windows-install: the real Windows install on windows-latest
-#     (pnpm install/build on Windows → cardo setup --source → electron-builder
-#     --win --dir → embedded source → Start Menu shortcut → Cardo.exe boot
+#     (pnpm install/build on Windows → uniterra setup --source → electron-builder
+#     --win --dir → embedded source → Start Menu shortcut → Uniterra.exe boot
 #     smoke).
 # The publish job builds the workspace on Linux and uploads the built tree as
-# the `cardo-src-<tag>.tar.gz` release asset (dist/lib + `.cardo-prebuilt`
-# marker), so `cardo setup` skips the build on user machines; releases without
+# the `uniterra-src-<tag>.tar.gz` release asset (dist/lib + `.uniterra-prebuilt`
+# marker), so `uniterra setup` skips the build on user machines; releases without
 # the asset still build from the auto-generated archive. Both installer flows
 # must be proven before the source asset becomes the release artifact.
 
@@ -63,7 +63,7 @@ jobs:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: win-electron-cache-${{ runner.os }}-${{ hashFiles('packages/cardo-desktop/package.json') }}
+          key: win-electron-cache-${{ runner.os }}-${{ hashFiles('packages/uniterra-desktop/package.json') }}
       - name: Run Windows verification
         shell: pwsh
         run: scripts/verify-windows-install/verify.ps1
@@ -105,7 +105,7 @@ jobs:
 
       - name: Verify CLI package version matches tag
         run: |
-          PKG_VERSION="$(node -p "require('./packages/cardo-cli/package.json').version")"
+          PKG_VERSION="$(node -p "require('./packages/uniterra-cli/package.json').version")"
           if [ "$PKG_VERSION" != "${{ steps.version.outputs.version }}" ]; then
             echo "package.json version ($PKG_VERSION) != tag version (${{ steps.version.outputs.version }})" >&2
             exit 1
@@ -125,7 +125,7 @@ jobs:
       - name: Check if version already published
         id: check
         env:
-          PACKAGE_NAME: '@uniterra-solutions/cardo'
+          PACKAGE_NAME: '@uniterra-solutions/uniterra'
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           if npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
@@ -137,7 +137,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.check.outputs.exists != 'true'
-        working-directory: packages/cardo-cli
+        working-directory: packages/uniterra-cli
         # Trusted publishing (OIDC, npm >= 11.5.1) authenticates via the GitHub
         # OIDC token and auto-generates provenance — no --provenance flag and
         # no NODE_AUTH_TOKEN needed.
@@ -158,11 +158,11 @@ jobs:
               --generate-notes
           fi
 
-      # The desktop artifact: the built source tree. `cardo setup` downloads
+      # The desktop artifact: the built source tree. `uniterra setup` downloads
       # this asset and skips the build; the auto-generated archive remains the
       # fallback for releases created without it.
       - name: Upload the source asset
         env:
           GH_TOKEN: ${{ github.token }}
           REF_NAME: ${{ github.event.inputs.tag || github.ref_name }}
-        run: gh release upload "$REF_NAME" "cardo-src-${REF_NAME}.tar.gz" --clobber
+        run: gh release upload "$REF_NAME" "uniterra-src-${REF_NAME}.tar.gz" --clobber
