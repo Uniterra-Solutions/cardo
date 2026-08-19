@@ -39,6 +39,7 @@ import {
   pnpmVersionFromPackageJson,
   psSingleQuote,
   readVersion,
+  remapJunctionTarget,
   sourceArchiveUrl,
   sourceAssetName,
   sourceDownloadUrl,
@@ -346,10 +347,13 @@ test('findBuiltApp (windows): finds win-unpacked with an .exe, throws otherwise'
   await fc.assert(
     fc.asyncProperty(
       fc.array(fc.constantFrom('win-unpacked', 'win-x64', 'mac-arm64'), { maxLength: 3 }),
-      fc.array(fc.constantFrom('Uniterra.exe', 'Uniterra-0.6.2.exe', 'builder.yml', 'update.exe.bak'), {
-        minLength: 1,
-        maxLength: 5,
-      }),
+      fc.array(
+        fc.constantFrom('Uniterra.exe', 'Uniterra-0.6.2.exe', 'builder.yml', 'update.exe.bak'),
+        {
+          minLength: 1,
+          maxLength: 5,
+        },
+      ),
       fc.boolean(),
       async (dirs, entries, placeExe) => {
         const src = await mkdtemp(join(tmpdir(), 'uniterra-win-'));
@@ -633,6 +637,117 @@ test('commandErrorMessage: keeps the command line and surfaces the exit code + o
         }
       },
     ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// JUNCTION — remapJunctionTarget (dead pnpm junction re-root on Windows)
+// ---------------------------------------------------------------------------
+
+/** A Windows path segment with no separators and no `.` (so a segment can
+ * never be `..` — the escape `remapJunctionTarget` refuses), keeping the
+ * joined paths unambiguous and the property sound. */
+const winSegArb = fc
+  .array(fc.constantFrom(...'abcXYZ019-_'.split('')), { minLength: 1, maxLength: 6 })
+  .map((chars) => chars.join(''));
+
+function joinWin(parts: readonly string[]): string {
+  return parts.join('\\');
+}
+
+test('JUNCTION: a target under the staging root re-roots onto the embedded root, suffix intact', () => {
+  fc.assert(
+    fc.property(
+      fc.array(winSegArb, { minLength: 1, maxLength: 4 }),
+      fc.array(winSegArb, { minLength: 1, maxLength: 4 }),
+      fc.array(winSegArb, { minLength: 1, maxLength: 4 }),
+      (stagingSegs, embeddedSegs, suffixSegs) => {
+        const stagingRoot = joinWin(stagingSegs);
+        const embeddedRoot = joinWin(embeddedSegs);
+        const suffix = joinWin(suffixSegs);
+        const target = `${stagingRoot}\\${suffix}`;
+        assert.equal(
+          remapJunctionTarget(target, stagingRoot, embeddedRoot),
+          `${embeddedRoot}\\${suffix}`,
+          'the staging prefix is swapped for the embedded root and the suffix is preserved',
+        );
+      },
+    ),
+  );
+});
+
+test('JUNCTION: a target not under the staging root is left untouched (undefined)', () => {
+  fc.assert(
+    fc.property(
+      fc.array(winSegArb, { minLength: 1, maxLength: 3 }),
+      fc.array(winSegArb, { minLength: 1, maxLength: 3 }),
+      fc.array(winSegArb, { minLength: 1, maxLength: 3 }),
+      (stagingSegs, otherSegs, suffixSegs) => {
+        const stagingRoot = joinWin(stagingSegs);
+        const embeddedRoot = joinWin(otherSegs);
+        const other = joinWin([`x-${otherSegs.join('-')}`, ...suffixSegs]);
+        // The remap's prefix match is case-INSENSITIVE, so the overlap guard
+        // must be too — a `other` differing from stagingRoot only by case would
+        // otherwise slip through and remap (not undefined).
+        if (
+          other.toLowerCase().startsWith(stagingRoot.toLowerCase()) ||
+          stagingRoot.toLowerCase().startsWith(other.toLowerCase())
+        ) {
+          return; // degenerate overlap — not a valid "outside" sample
+        }
+        assert.equal(remapJunctionTarget(other, stagingRoot, embeddedRoot), undefined);
+      },
+    ),
+  );
+});
+
+test('JUNCTION: no suffix (target equals or is the bare staging root) is undefined', () => {
+  fc.assert(
+    fc.property(
+      fc.array(winSegArb, { minLength: 1, maxLength: 4 }),
+      fc.array(winSegArb, { minLength: 1, maxLength: 4 }),
+      (stagingSegs, embeddedSegs) => {
+        const stagingRoot = joinWin(stagingSegs);
+        const embeddedRoot = joinWin(embeddedSegs);
+        assert.equal(remapJunctionTarget(stagingRoot, stagingRoot, embeddedRoot), undefined);
+        assert.equal(remapJunctionTarget(`${stagingRoot}\\`, stagingRoot, embeddedRoot), undefined);
+      },
+    ),
+  );
+});
+
+test('JUNCTION regression: extended-length prefix and forward slashes normalize away', () => {
+  const stagingRoot = 'C:\\Users\\dev\\AppData\\Local\\Temp\\uniterra-abc\\src\\uniterra-v0.9.0';
+  const embeddedRoot = 'C:\\Users\\dev\\AppData\\Local\\Programs\\Uniterra\\resources\\src';
+  const suffix =
+    'node_modules\\.pnpm\\@deepseek-ai+dsh-app-boot@0_1\\node_modules\\@deepseek-ai\\dsh-app-boot';
+  const expected = `${embeddedRoot}\\${suffix}`;
+  assert.equal(
+    remapJunctionTarget(`${stagingRoot}\\${suffix}`.replace(/\\/g, '/'), stagingRoot, embeddedRoot),
+    expected,
+  );
+});
+
+test('JUNCTION regression: the prefix match is case-insensitive but the suffix casing is preserved', () => {
+  const stagingRoot = 'C:\\Users\\Dev\\Temp\\uniterra';
+  const embeddedRoot = 'D:\\Installed\\Uniterra';
+  const suffix = 'node_modules\\MyPkg';
+  assert.equal(
+    remapJunctionTarget(`c:\\users\\dev\\temp\\uniterra\\${suffix}`, stagingRoot, embeddedRoot),
+    `${embeddedRoot}\\${suffix}`,
+  );
+});
+
+test('JUNCTION regression: a suffix that escapes via `..` is refused', () => {
+  const stagingRoot = 'C:\\staging';
+  const embeddedRoot = 'D:\\installed\\src';
+  assert.equal(
+    remapJunctionTarget(`C:\\staging\\..\\outside`, stagingRoot, embeddedRoot),
+    undefined,
+  );
+  assert.equal(
+    remapJunctionTarget(`C:\\staging\\node_modules\\..\\outside`, stagingRoot, embeddedRoot),
+    undefined,
   );
 });
 
