@@ -5,7 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] — 2026-08-19
+
+### Changed
+
+- Declarative built-in plugin registry: the four parallel built-in constants (`BUILTIN_NPM_PLUGINS`, `BUILTIN_VENDOR_PLUGINS`, `BUILTIN_WORKSPACE_PLUGINS`, `RETIRED_BUILTINS`) and the two staleness helpers (`vendoredPluginsStale` / `workspacePluginsStale`) are replaced by one kind-aware `registerBuiltinPlugin()` registry; `copyBuiltinsStale()` unifies vendored/workspace staleness (content identity for vendored, version for workspace copies), and retirement is now a registry flag healed by `removeRetiredBuiltins()`. The built-in set itself is unchanged.
 
 ### Fixed
 
