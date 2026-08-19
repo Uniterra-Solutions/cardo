@@ -219,6 +219,48 @@ export function cmdQuote(arg: string): string {
   return /\s/.test(arg) ? `"${arg}"` : arg;
 }
 
+/** Normalize a Windows path for junction-target comparison: strip a leading
+ * `\\?\` extended-length prefix (defensive — `fs.readlink` returns a plain
+ * path on a junction) and unify separators to backslashes, so a target read
+ * back from the filesystem matches the path the CLI built. */
+function normalizeWindowsPath(p: string): string {
+  const bare = p.startsWith('\\\\?\\') ? p.slice(4) : p;
+  return bare.replace(/\//g, '\\');
+}
+
+/** Re-root a Windows pnpm junction target from the staging tree into the
+ * embedded tree. pnpm writes junctions with absolute targets into the
+ * directory `pnpm install` ran in (the CLI's staging tree); the same-volume
+ * `rename` that moves a downloaded source preserves those reparse points
+ * verbatim, so once the staging tree is deleted every junction is dead. The
+ * remap is deterministic: the target's suffix under the staging root is
+ * re-joined onto the embedded root. Returns undefined when the target is not
+ * under the staging root (including a suffix that escapes via a `..` segment)
+ * — an unexpected target that must be left untouched. */
+export function remapJunctionTarget(
+  target: string,
+  stagingRoot: string,
+  embeddedRoot: string,
+): string | undefined {
+  const t = normalizeWindowsPath(target);
+  const s = normalizeWindowsPath(stagingRoot).replace(/\\+$/, '');
+  const e = normalizeWindowsPath(embeddedRoot).replace(/\\+$/, '');
+  if (s.length === 0 || t.length <= s.length) {
+    return undefined;
+  }
+  if (t.slice(0, s.length).toLowerCase() !== s.toLowerCase()) {
+    return undefined;
+  }
+  if (t.charAt(s.length) !== '\\') {
+    return undefined;
+  }
+  const suffix = t.slice(s.length + 1);
+  if (suffix.length === 0 || suffix.split('\\').includes('..')) {
+    return undefined;
+  }
+  return `${e}\\${suffix}`;
+}
+
 export interface StartMenuShortcut {
   readonly lnkPath: string;
   readonly script: string;

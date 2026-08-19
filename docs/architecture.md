@@ -63,6 +63,7 @@ graph TD
 3. `ensureBuiltinPlugins` — no-op if fresh; else `dsh plugin add` npm built-ins + copy vendored/workspace built-ins + bundle rows.
 4. `startDsh({ profile: 'web', dshBundledSkillDir })` → spawn → `awaitReadiness` (60 s) → URL.
 5. `createWindow(url)`; schedule update check (5 s delay); wire crash backoff.
+6. Boot failure → append to `userData/startup-error.log` + (first boot) `dialog.showErrorBox` → quit.
 
 ### One agent turn
 
@@ -73,7 +74,7 @@ graph TD
 
 ### Install / update
 
-- `uniterra setup`: GitHub source archive (or `--source` checkout) → pnpm install → build → electron-builder `--mac` / `--win --dir` → embed source (`Contents/Resources/src` / `resources/src`) → install (`~/Applications/Uniterra.app` / `%LOCALAPPDATA%\Programs\Uniterra` + Start Menu shortcut).
+- `uniterra setup`: GitHub source archive (or `--source` checkout) → pnpm install → build → electron-builder `--mac` / `--win --dir` → embed source (`Contents/Resources/src` / `resources/src`) → install (`~/Applications/Uniterra.app` / `%LOCALAPPDATA%\Programs\Uniterra` + Start Menu shortcut). On Windows, after the install the CLI re-points pnpm junctions whose absolute targets still reference the staging tree, so the installed source is self-contained.
 - Update check probes GitHub release + npm dist-tag; Update Now quits the app and runs `uniterra update` detached — `uniterra update` refreshes the CLI, rebuilds + reinstalls the app, and relaunches it when done; Skip persists to `userData/uniterra-update-state.json`.
 
 ## Key Decisions

@@ -15,7 +15,7 @@
  */
 
 import { app, BrowserWindow, dialog, shell } from 'electron';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startDsh, stopDsh, type DshRuntimeHandle } from './dsh-process.js';
@@ -351,6 +351,35 @@ function createWindow(url: string): BrowserWindow {
   return win;
 }
 
+/** The packaged app surfaces startup failures only to stderr, which no one
+ * sees — the reported symptom was a ~60 s hang then a silent exit. Write the
+ * failure (including the dsh child's captured stderr, which {@link startDsh}
+ * already folds into the error message) to a log under userData, and on the
+ * first boot also raise a native dialog so a broken install is diagnosable. */
+function startupLogPath(): string {
+  return path.join(app.getPath('userData'), 'startup-error.log');
+}
+
+function reportStartupFailure(err: unknown, showDialog: boolean): void {
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  const logPath = startupLogPath();
+  try {
+    // On a broken first boot the userData dir may not exist yet — ensure it so
+    // the primary diagnostic artifact is never lost to ENOENT.
+    mkdirSync(path.dirname(logPath), { recursive: true });
+    appendFileSync(logPath, `${new Date().toISOString()} ${detail}\n\n`);
+  } catch (writeErr) {
+    console.error('uniterra: failed to write the startup log:', writeErr);
+  }
+  console.error('uniterra: startup failed:', err);
+  if (showDialog) {
+    dialog.showErrorBox(
+      'Uniterra failed to start',
+      `${detail}\n\nA log was written to:\n${logPath}`,
+    );
+  }
+}
+
 async function boot(): Promise<void> {
   // Uniterra IS the dsh desktop surface: it runs against the user's dsh config.
   // Dev uses a mirrored test home (never touches the real ~/.dsh); the
@@ -399,7 +428,7 @@ async function boot(): Promise<void> {
       restarts += 1;
       setTimeout(() => {
         void boot().catch((err: unknown) => {
-          console.error('uniterra: dsh restart failed:', err);
+          reportStartupFailure(err, false);
         });
       }, backoff);
     }
@@ -425,7 +454,7 @@ if (!gotLock) {
 
   void app.whenReady().then(() => {
     void boot().catch((err: unknown) => {
-      console.error('uniterra: startup failed:', err);
+      reportStartupFailure(err, true);
       app.quit();
     });
   });

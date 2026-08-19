@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Pre-rename leftovers in existing profiles: the rename shipped the same provider and skills under new names, but old profiles kept loading BOTH — `RETIRED_BUILTINS` now heals `@cardo/cardo-provider` (removed alongside its bundle row), and the skills provisioner now removes the retired `cardo-*` skill dirs (`cardo-plan`, `cardo-implement`, `cardo-simplify`, `cardo-review`, `cardo-pbt-debugging`, `cardo-qa`, plus legacy `cardo-planmode` / `qa`) so `uniterra-*` is the only copy left
+- Windows install shipped dead pnpm junctions — the desktop showed no window and exited silently after the 60 s readiness timeout: `uniterra setup` embedded the source via robocopy/rename, which preserve pnpm's absolute junction targets verbatim, so every `.pnpm` link pointed at the deleted staging dir and dsh boot died with `ERR_MODULE_NOT_FOUND`. The installer now re-points junctions after embedding (`remapJunctionTarget`), and the desktop surfaces startup failures to `userData/startup-error.log` plus a first-boot error dialog instead of quitting silently
 
 ## [0.9.0] — 2026-08-18
 
