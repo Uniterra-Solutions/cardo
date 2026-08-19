@@ -37,8 +37,18 @@
  */
 
 import { execFile, spawn, type ExecFileException } from 'node:child_process';
-import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
+import { createWriteStream, existsSync, type Dirent } from 'node:fs';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  rename,
+  rm,
+  symlink,
+  unlink,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -61,6 +71,7 @@ import {
   pnpmInvocation,
   pnpmVersionFromPackageJson,
   readVersion,
+  remapJunctionTarget,
   sourceDownloadUrl,
   startMenuShortcut,
   type InstallPlatform,
@@ -326,6 +337,71 @@ async function moveArtifact(
   await run('/bin/mv', [appPath, staged]);
 }
 
+/** Windows-only: re-point every pnpm junction whose absolute target still
+ * points into the staging tree, so the installed source is self-contained.
+ * A same-volume `rename` (how a downloaded source is embedded AND how the app
+ * is installed) preserves junction reparse points verbatim, so after the
+ * staging tree is deleted every junction is a dead link (ERR_MODULE_NOT_FOUND
+ * on boot). The remap is {@link remapJunctionTarget}: strip the staging prefix
+ * and re-root it under the installed source dir. A tree already materialized
+ * by robocopy carries no junctions, so the walk is a no-op there. */
+async function repointJunctions(embeddedSrc: string, stagingSrc: string): Promise<void> {
+  if (process.platform !== 'win32') {
+    return;
+  }
+  await repointJunctionTree(embeddedSrc, stagingSrc, embeddedSrc);
+}
+
+async function repointJunctionTree(
+  dir: string,
+  stagingRoot: string,
+  embeddedRoot: string,
+): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    // An unreadable directory (most critically the embedded source root, which
+    // would skip the whole re-point) must not fail silently.
+    console.warn(`uniterra: skipping unreadable directory ${dir} during junction re-point:`, error);
+    return;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      // A junction is reported as a link — re-point it, never descend into it.
+      await repointOneJunction(full, stagingRoot, embeddedRoot);
+    } else if (entry.isDirectory()) {
+      await repointJunctionTree(full, stagingRoot, embeddedRoot);
+    }
+  }
+}
+
+async function repointOneJunction(
+  path: string,
+  stagingRoot: string,
+  embeddedRoot: string,
+): Promise<void> {
+  let target: string;
+  try {
+    target = await readlink(path);
+  } catch {
+    return; // not a readable link — leave it
+  }
+  const remapped = remapJunctionTarget(target, stagingRoot, embeddedRoot);
+  if (remapped === undefined) {
+    return; // target not under staging — an unexpected link we must not touch
+  }
+  // Create the replacement at a temp name FIRST so a failure to create it
+  // (e.g. an over-long target) leaves the original junction in place, then
+  // swap it over. Either failure propagates — a broken link must abort the
+  // install rather than ship silently.
+  const tmpPath = `${path}.uniterra-repoint`;
+  await symlink(remapped, tmpPath, 'junction');
+  await unlink(path);
+  await rename(tmpPath, path);
+}
+
 /** Embed the source tree into the packaged app's resources dir. A DOWNLOADED
  * source on Windows is renamed into the app (same volume — instant, robocopy
  * fallback on EXDEV/EPERM); a `--source` checkout is always copied so the
@@ -455,6 +531,14 @@ async function buildInstallApp(options: InstallOptions): Promise<string | undefi
     const destination = installDestination(platform, process.env, staged);
     process.stdout.write(`Installing to ${destination}...\n`);
     await copyInstalled(staged, destination, platform);
+    if (platform === 'windows') {
+      // The same-volume renames that embedded and installed the source
+      // preserved pnpm's junction reparse points verbatim, so they still name
+      // the (now-deleted) staging tree. Re-point them against the FINAL
+      // installed source dir — the embed-time path is wrong because the
+      // install rename breaks it again.
+      await repointJunctions(join(embedResourcesDir(platform, destination), 'src'), src);
+    }
     await rm(staged, { recursive: true, force: true });
     if (platform === 'windows') {
       await createStartMenuShortcutBestEffort(destination);
