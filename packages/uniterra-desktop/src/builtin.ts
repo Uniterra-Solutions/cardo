@@ -3,6 +3,12 @@
  * are ensured in the profile the user actually runs (dev → the mirrored test
  * home, packaged → ~/.dsh's `web` profile).
  *
+ * A built-in is declared ONCE, through {@link registerBuiltinPlugin}, under one
+ * of the three existing mechanisms — npm, vendored, or workspace — or flagged
+ * retired. Every consumer (expected bundles, the provisioning loops, stale
+ * detection, and the retirement heal) derives from that single registry, so
+ * adding a built-in never means wiring a second code path.
+ *
  * Idempotent: a profile that already carries every built-in is left alone, so
  * user-installed extras and edits are never touched.
  */
@@ -11,49 +17,118 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 
-/** npm-published built-in plugins, pinned exact, as `dsh plugin add` specs. */
-export const BUILTIN_NPM_PLUGINS: readonly string[] = [
-  'dshmarket@1.9.0',
-  'dsh-notifier@0.6.2',
-  'dsh-better-sidebar@0.12.2',
-  'dsh-file-upload@0.4.2',
-  'dsh-find-plugin@0.3.6',
-  'dsh-subagent-model-picker@0.1.1',
-  'dsh-tool-git@0.1.3',
-  'dsh-browser-playwright@0.1.1',
-  'dsh-computer-use@0.1.0',
-] as const;
+/** One npm-published built-in, pinned exact, as a `dsh plugin add` spec. */
+export interface NpmBuiltin {
+  readonly kind: 'npm';
+  readonly spec: string;
+}
 
-/** Vendored (non-npm) built-ins: source dir → package name. The loader
- * resolves a bundle row by the package.json `name`, which can differ from
- * the repo dir. They are copied into the profile's node_modules (not
- * pnpm-installed) because some declare peers that only exist in the dsh
- * source workspace and pnpm would fail fetching them.
- *
- * The skin is the `dsh-deep-whale` standalone distribution (`maid-atelier`
- * package) — self-inserting, host is a no-op, art embedded. The earlier
- * `deep-whale-day-night-theme` builtin-row distribution was retired: it
- * augmented a base row only shipped by `dsh-client-ui-theme-plugins` (absent
- * on the pinned rc.6 family), so its patch silently no-oped and the skin
- * never loaded. See `vendor/dsh-plugins/VENDOR.md`. */
-export const BUILTIN_VENDOR_PLUGINS: Readonly<Record<string, string>> = {
-  'dsh-deep-whale': '@dsh-external/dsh-client-ui-skin-maid-atelier',
-  'dsh-shortcuts': 'dsh-shortcuts',
-};
+/** One copy-based built-in: vendored (third-party, under `vendor/dsh-plugins`)
+ * or in-house workspace (`packages/*`, this repo's own). Copied into the
+ * profile's node_modules under its package name (not pnpm-installed) because
+ * some declare peers that only exist in the dsh source workspace and pnpm
+ * would fail fetching them. The package name can differ from the repo dir. */
+export interface CopyBuiltin {
+  readonly kind: 'vendor' | 'workspace';
+  readonly dir: string;
+  readonly package: string;
+}
 
-/** In-house (this repo's own) built-ins: source dir (relative to the source
- * root — dev → the monorepo root, packaged → `Contents/Resources/src`) →
- * package name, matching {@link BUILTIN_VENDOR_PLUGINS}'s direction. They
- * ship built — the workspace build must have run before provisioning — and
- * their host bundles are self-contained (runtime deps inlined), so copying
- * the package dir is enough: the profile gets `package.json` + `lib/` +
- * `cordis.patch.yml` with no pnpm install. Unlike the vendored plugins
- * (third-party, pinned commits), these live in this repo under `packages/`,
- * which is why they resolve from the source root instead of
- * `vendor/dsh-plugins`. */
-export const BUILTIN_WORKSPACE_PLUGINS: Readonly<Record<string, string>> = {
-  'packages/uniterra-provider': '@uniterra-solutions/uniterra-provider',
-};
+/** A built-in dropped from the profile (or folded into another). Declared in
+ * the SAME registry with a `retired` flag so the heal and the expected-bundle
+ * computation derive from one source of truth instead of a separate
+ * RETIRED_BUILTINS list. The heal removes exactly this package name. */
+export interface RetiredBuiltin {
+  readonly retired: true;
+  readonly package: string;
+  /** Why it was dropped / what replaced it, for the record. */
+  readonly comment?: string;
+}
+
+/** One registry entry: active (npm / vendor / workspace) or retired. */
+export type BuiltinPlugin = NpmBuiltin | CopyBuiltin | RetiredBuiltin;
+
+/** A non-retired registry entry. */
+export type ActiveBuiltin = NpmBuiltin | CopyBuiltin;
+
+/** The single registry every built-in is declared through. */
+const registry: BuiltinPlugin[] = [];
+
+/**
+ * Declare one built-in. This is the ONLY place a built-in is wired: adding a
+ * plugin is a single call here, and every derived consumer picks it up.
+ */
+export function registerBuiltinPlugin(plugin: BuiltinPlugin): void {
+  registry.push(plugin);
+}
+
+function isRetired(entry: BuiltinPlugin): entry is RetiredBuiltin {
+  return (entry as { retired?: unknown }).retired === true;
+}
+
+// ---------------------------------------------------------------------------
+// Registry declarations — the full built-in set, one entry per plugin.
+// ---------------------------------------------------------------------------
+
+registerBuiltinPlugin({ kind: 'npm', spec: 'dshmarket@1.9.0' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-notifier@0.6.2' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-better-sidebar@0.12.2' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-file-upload@0.4.2' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-find-plugin@0.3.6' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-subagent-model-picker@0.1.1' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-tool-git@0.1.3' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-browser-playwright@0.1.1' });
+registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-computer-use@0.1.0' });
+
+// The skin is the `dsh-deep-whale` standalone distribution (`maid-atelier`
+// package) — self-inserting, host is a no-op, art embedded. The earlier
+// `deep-whale-day-night-theme` builtin-row distribution was retired: it
+// augmented a base row only shipped by `dsh-client-ui-theme-plugins` (absent
+// on the pinned rc.6 family), so its patch silently no-oped and the skin
+// never loaded. See `vendor/dsh-plugins/VENDOR.md`.
+registerBuiltinPlugin({
+  kind: 'vendor',
+  dir: 'dsh-deep-whale',
+  package: '@dsh-external/dsh-client-ui-skin-maid-atelier',
+});
+registerBuiltinPlugin({ kind: 'vendor', dir: 'dsh-shortcuts', package: 'dsh-shortcuts' });
+
+// In-house workspace built-ins ship built — the workspace build must have run
+// before provisioning — and their host bundles are self-contained (runtime
+// deps inlined), so copying the package dir is enough: the profile gets
+// `package.json` + `lib/` + `cordis.patch.yml` with no pnpm install.
+registerBuiltinPlugin({
+  kind: 'workspace',
+  dir: 'packages/uniterra-provider',
+  package: '@uniterra-solutions/uniterra-provider',
+});
+
+registerBuiltinPlugin({
+  retired: true,
+  package: 'dsh-hotkeys',
+  comment: 'Keyboard hotkeys: overlapped by the vendored dsh-shortcuts.',
+});
+registerBuiltinPlugin({
+  retired: true,
+  package: '@leetoners/dsh-ui-subagent-monitor',
+  comment: 'Live subagent monitor: covered by dsh-better-sidebar Tasks page.',
+});
+registerBuiltinPlugin({
+  retired: true,
+  package: 'dsh-git-graph',
+  comment: 'Embedded git graph: covered by dsh-better-sidebar Git panel.',
+});
+registerBuiltinPlugin({
+  retired: true,
+  package: 'dsh-thinking-effort',
+  comment:
+    'Third-party reasoning-effort editor: the provider declares reasoningEfforts from models.dev.',
+});
+registerBuiltinPlugin({
+  retired: true,
+  package: '@cardo/cardo-provider',
+  comment: 'Pre-rename workspace built-in: now shipped as @uniterra-solutions/uniterra-provider.',
+});
 
 /** The pnpm settings every profile needs for plugin installs. */
 const PROFILE_PNPM_WORKSPACE = [
@@ -87,19 +162,42 @@ export function builtinPackageName(spec: string): string {
   return at <= 0 ? spec : spec.slice(0, at);
 }
 
+/** Every declared registry entry, in declaration order (a snapshot copy). */
+export function builtinPlugins(): readonly BuiltinPlugin[] {
+  return [...registry];
+}
+
+/** Active (non-retired) registry entries, in declaration order. */
+function activeBuiltins(): readonly ActiveBuiltin[] {
+  return registry.filter((entry): entry is ActiveBuiltin => !isRetired(entry));
+}
+
+/** The npm built-in specs, in declaration order. */
+export function npmBuiltinSpecs(): readonly string[] {
+  return activeBuiltins()
+    .filter((entry): entry is NpmBuiltin => entry.kind === 'npm')
+    .map((entry) => entry.spec);
+}
+
+/** The copy-based built-ins of one kind, in declaration order. */
+export function copyBuiltins(kind: 'vendor' | 'workspace'): readonly CopyBuiltin[] {
+  return activeBuiltins().filter((entry): entry is CopyBuiltin => entry.kind === kind);
+}
+
+/** The package names of every retired built-in, in declaration order. */
+export function retiredBuiltinNames(): readonly string[] {
+  return registry.filter(isRetired).map((entry) => entry.package);
+}
+
 /** The expected bundle rows of a fully provisioned uniterra profile: the
- * official dsh bundles plus every built-in plugin's package name. */
-export function expectedBuiltinBundles(
-  npmPlugins: readonly string[],
-  vendorPlugins: Readonly<Record<string, string>>,
-  workspacePlugins: Readonly<Record<string, string>> = BUILTIN_WORKSPACE_PLUGINS,
-): string[] {
+ * official dsh bundles plus every active built-in plugin's package name. */
+export function expectedBuiltinBundles(): string[] {
   return [
     '@deepseek-ai/dsh-base',
     '@deepseek-ai/dsh-web-app',
-    ...npmPlugins.map(builtinPackageName),
-    ...Object.values(vendorPlugins),
-    ...Object.values(workspacePlugins),
+    ...npmBuiltinSpecs().map(builtinPackageName),
+    ...copyBuiltins('vendor').map((entry) => entry.package),
+    ...copyBuiltins('workspace').map((entry) => entry.package),
   ];
 }
 
@@ -111,26 +209,34 @@ export function hasAllBuiltins(profileDirPath: string): boolean {
     };
     const raw = manifest.dsh?.profile?.bundles;
     const bundles = new Set(Array.isArray(raw) ? (raw as unknown[]) : []);
-    const expected = expectedBuiltinBundles(BUILTIN_NPM_PLUGINS, BUILTIN_VENDOR_PLUGINS);
-    return expected.every((name) => bundles.has(name));
+    return expectedBuiltinBundles().every((name) => bundles.has(name));
   } catch {
     return false;
   }
 }
 
-/** Whether any built-in vendored plugin's installed copy in the profile has
- * drifted from the current source. The bundle list alone cannot tell — a
- * plugin can ship a fixed distribution under the SAME package name (the skin
- * swap), so a stale node_modules copy must be detected by content identity
- * (package.json `version`). A missing or illegible installed copy is stale.
- * Returns false only when every installed copy matches the current source. */
-export function vendoredPluginsStale(profileDirPath: string, vendorRoot: string): boolean {
-  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
-    const sourcePkg = path.join(vendorRoot, dirName, 'package.json');
+/** Whether any copy-based built-in's installed copy in the profile has drifted
+ * from the current source. The bundle list alone cannot tell — a plugin can
+ * ship a fixed distribution under the SAME package name (the skin swap), so a
+ * stale node_modules copy must be detected by content identity (package.json
+ * `version`). A missing or illegible installed copy is stale. Kind-aware:
+ * vendored sources resolve under `vendorRoot`, workspace sources under
+ * `sourceRoot`. Returns false only when every installed copy matches. */
+export function copyBuiltinsStale(
+  profileDirPath: string,
+  vendorRoot: string,
+  sourceRoot: string,
+): boolean {
+  for (const entry of activeBuiltins()) {
+    if (entry.kind === 'npm') {
+      continue;
+    }
+    const root = entry.kind === 'vendor' ? vendorRoot : sourceRoot;
+    const sourcePkg = path.join(root, entry.dir, 'package.json');
     const installedPkg = path.join(
       profileDirPath,
       'node_modules',
-      ...pkgName.split('/'),
+      ...entry.package.split('/'),
       'package.json',
     );
     try {
@@ -145,56 +251,6 @@ export function vendoredPluginsStale(profileDirPath: string, vendorRoot: string)
   }
   return false;
 }
-
-/** Whether any in-house (workspace) built-in's installed copy has drifted
- * from the current source. Same content-identity check as
- * {@link vendoredPluginsStale}, but the source lives inside the source root
- * (`packages/*`) rather than `vendor/dsh-plugins`. A missing or illegible
- * installed copy is stale. Returns false only when every installed copy
- * matches the current source. */
-export function workspacePluginsStale(profileDirPath: string, sourceRoot: string): boolean {
-  for (const [relDir, pkgName] of Object.entries(BUILTIN_WORKSPACE_PLUGINS)) {
-    const sourcePkg = path.join(sourceRoot, relDir, 'package.json');
-    const installedPkg = path.join(
-      profileDirPath,
-      'node_modules',
-      ...pkgName.split('/'),
-      'package.json',
-    );
-    try {
-      const sourceVersion = (readJson(sourcePkg) as { version?: string }).version;
-      const installedVersion = (readJson(installedPkg) as { version?: string }).version;
-      if (sourceVersion !== installedVersion) {
-        return true;
-      }
-    } catch {
-      return true; // cannot read either copy → assume stale, re-provision
-    }
-  }
-  return false;
-}
-
-/** Built-in plugins retired from the uniterra profile (dropped, or their
- * function folded into another built-in). A profile provisioned by an older
- * uniterra still carries their bundle rows and installed copies; because
- * {@link hasAllBuiltins} deliberately ignores extras, those rows would stay
- * loaded forever without an explicit heal. Removal targets exactly these
- * names — user-installed plugins are never touched. */
-export const RETIRED_BUILTINS: readonly string[] = [
-  // Keyboard hotkeys: overlapped by the vendored `dsh-shortcuts`.
-  'dsh-hotkeys',
-  // Live subagent monitor: covered by dsh-better-sidebar's Tasks page.
-  '@leetoners/dsh-ui-subagent-monitor',
-  // Embedded git graph: covered by dsh-better-sidebar's Git panel.
-  'dsh-git-graph',
-  // Third-party reasoning-effort editor: @uniterra-solutions/uniterra-provider declares
-  // reasoningEfforts from models.dev and edits them in its own settings page.
-  'dsh-thinking-effort',
-  // Pre-rename workspace built-in: the project rename ships the same plugin as
-  // @uniterra-solutions/uniterra-provider, so old profiles must not keep
-  // loading both provider rows.
-  '@cardo/cardo-provider',
-];
 
 /**
  * Remove retired built-ins from one profile: their bundle rows, their
@@ -205,8 +261,9 @@ export const RETIRED_BUILTINS: readonly string[] = [
  * @returns true when anything was removed or rewritten.
  */
 export function removeRetiredBuiltins(profileDirPath: string): boolean {
+  const retired = retiredBuiltinNames();
   let changed = false;
-  for (const name of RETIRED_BUILTINS) {
+  for (const name of retired) {
     const dest = path.join(profileDirPath, 'node_modules', ...name.split('/'));
     if (existsSync(dest)) {
       rmSync(dest, { recursive: true, force: true });
@@ -223,7 +280,7 @@ export function removeRetiredBuiltins(profileDirPath: string): boolean {
     const profile = manifest.dsh?.profile;
     if (profile !== undefined && Array.isArray(profile.bundles)) {
       const kept = (profile.bundles as unknown[]).filter(
-        (name) => typeof name !== 'string' || !RETIRED_BUILTINS.includes(name),
+        (name) => typeof name !== 'string' || !retired.includes(name),
       );
       if (kept.length !== profile.bundles.length) {
         profile.bundles = kept;
@@ -233,7 +290,7 @@ export function removeRetiredBuiltins(profileDirPath: string): boolean {
     if (manifest.dependencies !== undefined) {
       const keptDeps: Record<string, string> = {};
       for (const [name, version] of Object.entries(manifest.dependencies)) {
-        if (!RETIRED_BUILTINS.includes(name)) {
+        if (!retired.includes(name)) {
           keptDeps[name] = version;
         }
       }
@@ -279,11 +336,7 @@ export function ensureBuiltinPlugins(
   // Heal retired built-ins first: an already-full profile early-returns
   // below, so this is the only pass that can remove them.
   removeRetiredBuiltins(dir);
-  if (
-    hasAllBuiltins(dir) &&
-    !vendoredPluginsStale(dir, vendorRoot) &&
-    !workspacePluginsStale(dir, sourceRoot)
-  ) {
+  if (hasAllBuiltins(dir) && !copyBuiltinsStale(dir, vendorRoot, sourceRoot)) {
     return;
   }
 
@@ -291,16 +344,16 @@ export function ensureBuiltinPlugins(
   writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), PROFILE_PNPM_WORKSPACE, 'utf8');
 
   const env = { ...process.env, DSH_HOME: dshHome, ELECTRON_RUN_AS_NODE: '1' };
-  for (const spec of BUILTIN_NPM_PLUGINS) {
+  for (const spec of npmBuiltinSpecs()) {
     execFileSync(nodeExec, [dshCli, 'plugin', '--profile', profile, 'add', spec], {
       env,
       stdio: 'inherit',
     });
   }
 
-  // Vendored plugins: copy under their package name and append the bundle rows
-  // to the profile manifest (dsh plugin add can't be used — the vendored
-  // packages declare peers that are not on npm).
+  // Copy-based built-ins (vendor + workspace): copy under their package name
+  // and append the bundle rows to the profile manifest (dsh plugin add can't
+  // be used — these packages declare peers that are not on npm).
   const manifestPath = path.join(dir, 'package.json');
   const manifest = readJson(manifestPath) as {
     name?: string;
@@ -325,19 +378,12 @@ export function ensureBuiltinPlugins(
     cpSync(sourceDir, dest, { recursive: true });
   };
 
-  // Vendored plugins: copy under their package name and append the bundle rows
-  // to the profile manifest (dsh plugin add can't be used — the vendored
-  // packages declare peers that are not on npm).
-  for (const [dirName, pkgName] of Object.entries(BUILTIN_VENDOR_PLUGINS)) {
-    copyBuiltin(path.join(vendorRoot, dirName), pkgName);
-  }
-
-  // In-house workspace built-ins: same copy semantics, but the source lives in
-  // the source root (`packages/*`). The workspace build must have produced the
-  // package's lib/ before this runs — the copy carries the built bundle, the
-  // package.json, and cordis.patch.yml, so the profile needs no pnpm install.
-  for (const [relDir, pkgName] of Object.entries(BUILTIN_WORKSPACE_PLUGINS)) {
-    copyBuiltin(path.join(sourceRoot, relDir), pkgName);
+  for (const entry of activeBuiltins()) {
+    if (entry.kind === 'npm') {
+      continue;
+    }
+    const root = entry.kind === 'vendor' ? vendorRoot : sourceRoot;
+    copyBuiltin(path.join(root, entry.dir), entry.package);
   }
   writeJson(manifestPath, manifest);
 }
