@@ -34,6 +34,16 @@ verdict to disk** as `verdict.json`.
    - **pass** — you could not find material defects.
    - **fix** — concrete defects or risks need addressing.
 
+## Verification rule (mandatory)
+
+A finding that depends on HOW a platform / OS / third-party API actually
+behaves — e.g. Node's `fs.*` on Windows junctions (libuv `src/win/fs.c`), a
+library's undocumented behavior, an OS-specific flag — is a defect ONLY if you
+verify that behavior against its authoritative source: the real implementation
+or the OS documentation. If you cannot verify it, prefix the finding with
+`[UNVERIFIED]` and do NOT let it drive a fix. Guessing platform behavior
+produces false positives that push the fix agent to add unreachable branches.
+
 ## Deliverable
 
 Write `[[run_dir]]/verdict.json` — exactly this shape (JSON):
