@@ -230,7 +230,14 @@ test('STALE_DETECTION: a missing or version-mismatched copy of any built-in is s
           join(root, 'vendor', 'dsh-plugins'),
           root,
         );
+        assert.equal(
+          stale,
+          damage !== 'version-match',
+          `${target.kind}/${target.dir} damage=${damage}`,
+        );
+      } finally {
         rmSync(join(profileDir, '..', '..'), { recursive: true, force: true });
+      }
     }),
   );
 });
