@@ -2,10 +2,11 @@
 name: uniterra-plan
 description: >
   Company-standard planning phase on DeepSeek Harness (Jovaltus methodology).
-  Turns raw requirements into an approved, test-ready execution plan: clarify
-  open questions with the user, dispatch PRD + design subagents through a
-  dynamic workflow, and emit execution-plan.json whose tasks carry an
-  explicit requirements list for uniterra-implement. LOAD when:
+  Turns raw requirements into reviewed planning artifacts: clarify the
+  requirements and architecture interactively with the user, write prd.md /
+  design.md / acceptance.md, then dispatch three parallel review agents
+  (requirement feasibility, design over-engineering, acceptance verifiability)
+  to review them. LOAD when:
   - User asks to plan a feature or task (prd / design / plan / 規劃 / 計畫)
   - User references Jovaltus planning or asks for an execution plan
   Do NOT use for:
@@ -13,72 +14,54 @@ description: >
   - Reviewing or simplifying changes (uniterra-review / uniterra-simplify)
 ---
 
-# Uniterra Plan — turn requirements into an approved, test-ready plan
+# Uniterra Plan — turn requirements into reviewed planning artifacts
 
 Pipeline position: **plan → implement → simplify/review**. This skill owns the
-plan phase only; the red phase (writing the FAILING property tests) belongs to
-`uniterra-implement`, which consumes the artifacts produced here.
+plan phase only: it produces `prd.md`, `design.md`, and `acceptance.md`, then
+reviews them with three parallel agents before handoff.
 
-Everything is artifact-driven and lives under a **run directory**:
-`<repo>/.plan/<YYYYMMDD>/<plan-name>/`. The run dir holds `prd.md`,
-`design.md`, and `execution-plan.json`.
+Artifacts live under a **run directory**: `<repo>/.plan/<YYYYMMDD>/<plan-name>/`,
+holding `prd.md`, `design.md`, and `acceptance.md`.
 
 ## Steps
 
-1. Read the user's requirements; before drafting, **clarify open questions**
-   with the user via `ask_user_question` (options + Other), one at a time, at
-   most 5. Save answers to `<run_dir>/clarify.md`.
-2. Run a `workflow` script that dispatches two subagents in order:
-   - **PRD agent** — read `references/prompts/prd.md` for the role prompt;
-     writes `<run_dir>/prd.md` (its Functional Requirements list is the
-     project-level requirements list).
-   - **Design agent** — read `references/prompts/design.md`; writes
-     `<run_dir>/design.md` (its Business logic surface + PBT plan sections
-     tell uniterra-implement which invariants the red tests must encode).
-3. Write `execution-plan.json` — the batch-major execution plan. Every task
-   entry carries a `requirements` list (see schema below): the explicit,
-   self-contained requirement list the implementing agent must satisfy.
-   Derive each task's requirements from the PRD's FR list; every FR must be
-   covered by at least one task.
-4. Present the complete plan — PRD, design, execution plan — to the user for
-   **approval** before any implementation. If they ask for changes, revise
-   and re-present.
+### 1. Understand requirements and design interactively
 
-## execution-plan.json schema
+- Read the user's requirements.
+- Clarify with the user via `ask_user_question` (options + Other), one at a time,
+  to complete the requirements list AND the architecture design: what to build,
+  module boundaries, data shapes, external dependencies.
 
-```json
-{
-  "execution_mode": "batched",
-  "batches": [
-    [
-      {
-        "id": "db-schema",
-        "task_prompt": "Create the schema migration ...",
-        "requirements": [
-          "REQ-1: the migration is idempotent and re-runnable",
-          "REQ-3: every table row carries created_at/updated_at"
-        ]
-      }
-    ]
-  ]
-}
-```
+### 2. Produce prd.md, design.md, acceptance.md
 
-- `serial` = N batches × 1 agent (linear chain); `batched` = batches run
-  serially, agents within a batch in parallel; `parallel` = one batch with
-  every agent.
-- `requirements`: REQUIRED, non-empty array of strings — the explicit
-  requirement list this task must satisfy, copied from the PRD FRs and made
-  self-contained. `uniterra-implement` writes its failing property tests against
-  this list.
-- ids match `/^[A-Za-z0-9_-]+$/`, globally unique; task_prompt non-empty and
-  self-contained (PRD + design are injected into every dispatched agent's
-  context by uniterra-implement).
+Write them yourself in the main session (no authoring subagents):
+
+- `prd.md` — the Functional Requirements list (project-level requirements).
+- `design.md` — the architecture design (module boundaries, data shapes, the
+  business-logic surface).
+- `acceptance.md` — the acceptance criteria: one entry per requirement, each naming
+  an objective, verifiable piece of evidence (a test, a command output, an observable
+  behavior).
+
+### 3. Review the documents with the fixed workflow
+
+- Run the fixed workflow in `scripts/review-workflow.md` with
+  `args = { prd_dir, design_dir, acceptance_dir }` (in practice all three are the
+  run directory).
+- It dispatches three parallel review agents, each fed all three dirs:
+  - **requirement-list-review** (`prompts/requirement-list-review.md`) — technical
+    feasibility + contradictions between requirements.
+  - **design-review** (`prompts/design-review.md`) — over-engineering, minimal
+    complexity, minimal invasiveness, necessary vs unnecessary external libraries.
+  - **acceptance-review** (`prompts/acceptance-review.md`) — clarity + an objective,
+    verifiable piece of evidence per criterion.
+- If any agent returns `pass: false` (or `null`), apply its `issues` to the docs and
+  re-run until all three pass.
 
 ## Files
 
-- `references/plan-workflow.md` — full plan guidance (clarify rules, run-dir
-  naming, schema details).
-- `references/prompts/prd.md`, `references/prompts/design.md` — the two
-  subagent role prompts (substitute `[[run_dir]]`, `[[repo_root]]`,
-  `[[user_requirements]]`).
+- `scripts/review-workflow.md` — the fixed review workflow script (embeds the three
+  fixed prompts; `args` carries the three directory paths).
+- `prompts/requirement-list-review.md` — requirement feasibility + contradiction agent.
+- `prompts/design-review.md` — design over-engineering / minimal-invasiveness agent.
+- `prompts/acceptance-review.md` — acceptance clarity + verifiable-evidence agent.
