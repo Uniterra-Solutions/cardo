@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] — 2026-08-21
+
+### Fixed
+
+- CI: all four GitHub Actions in the workflows (checkout / setup-node / cache / pnpm-action-setup) targeted the deprecated Node 20 action runtime, which the runner force-runs on Node 24 with no compatibility guarantee — on the v0.11.1 release the `verify-windows-install` job's setup-node post-run cache save failed with "Path Validation Error" (the Windows verification itself passed, but the gate blocked the release). The actions are upgraded to their Node-24-native majors (checkout v7, setup-node v7, cache v6, pnpm-action-setup v6), and the Windows job now pins the pnpm store to the runner temp volume before setup-node runs, so the cache path it computes (`pnpm store path`) always matches the store that installs actually use.
+
 ## [0.11.1] — 2026-08-21
 
 ### Changed

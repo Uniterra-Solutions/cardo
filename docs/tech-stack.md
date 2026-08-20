@@ -24,8 +24,8 @@ All versions are the spec ranges from `package.json` / `pnpm-workspace.yaml`; th
 
 | Package                                   | Version | Purpose                                                        |
 | ----------------------------------------- | ------- | -------------------------------------------------------------- |
-| @uniterra-solutions/uniterra-desktop      | 0.11.1  | Electron shell over the bundled dsh CLI; built-in provisioning |
-| @uniterra-solutions/uniterra              | 0.11.1  | Public npm installer CLI (bin `uniterra`)                      |
+| @uniterra-solutions/uniterra-desktop      | 0.11.2  | Electron shell over the bundled dsh CLI; built-in provisioning |
+| @uniterra-solutions/uniterra              | 0.11.2  | Public npm installer CLI (bin `uniterra`)                      |
 | @uniterra-solutions/uniterra-provider     | 0.1.3   | In-house dual-protocol LLM provider plugin                     |
 | @uniterra-solutions/uniterra-skills       | 0.5.0   | Built-in skill registry (10 company skills)                    |
 | @uniterra-solutions/uniterra-systemprompt | 0.5.0   | pi-agent extension: app-wide working rules                     |
