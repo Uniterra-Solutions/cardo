@@ -30,6 +30,12 @@ NOT by `execution-plan.json`.
 These may come from the plan docs (`prd.md`, `design.md`, `acceptance.md`) or be
 written by you directly for simple tasks. Any block may be empty.
 
+The `design` block is AUTHORITATIVE: the simplification must never contradict the
+plan's architecture or engineering needs. Design-mandated machinery (layers,
+interfaces, config flags, guards, error paths) and stated engineering needs
+(testability, observability, security, error handling, performance) are not
+over-engineering — never propose removing them.
+
 ## 2. Run the simplify workflow
 
 Use `assets/workflow-template.md` with `args = { goal, context }`. Two stages:
@@ -61,6 +67,10 @@ applies. Skipped items are never dropped and are returned with the result.
 - Fix agents leave changes UNCOMMITTED and preserve behaviour exactly.
 - A `risky` recommendation must be pinned by equivalence tests BEFORE it is
   applied — never skipped merely for being risky.
+- The `design` context is authoritative: never propose a simplification that
+  contradicts the plan's architecture or engineering needs. Design-mandated
+  machinery and stated engineering needs are not simplification opportunities;
+  the checklist applies only where the design is silent.
 
 ## Files
 

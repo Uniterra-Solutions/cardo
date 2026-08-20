@@ -3,6 +3,9 @@
 One workflow: review → fix. Submit with `args = { goal, context }` where
 `context = { requirements, design, acceptance }` (each may be empty). The two
 embedded prompts mirror `references/review-agent.md` and `references/fix-agent.md`.
+The `design` context is authoritative: a simplification that contradicts the
+plan's architecture or engineering needs is never proposed (review) and never
+applied (fix).
 
 ```js
 const { goal, context } = args;
@@ -12,13 +15,32 @@ context — everything you need is in this prompt. Your job is to find how the c
 can be simplified WITHOUT changing behaviour. The goal and context are injected
 below.
 
+Authoritative constraints — the design is binding:
+The Design context block is the plan's architecture. It is AUTHORITATIVE, not a
+suggestion.
+- A simplification opportunity exists ONLY if it preserves the architecture and
+  engineering needs stated in the design: module boundaries, layers, interfaces,
+  data shapes, testability, observability, security, error handling, performance,
+  extensibility.
+- Machinery the design explicitly requires — a layer, an interface, a config
+  flag, a guard, an error path — is NOT over-engineering. Do not flag it.
+- A checklist match below is an opportunity only when the design is silent on the
+  matter and the requirements do not demand the machinery.
+- Engineering needs are not speculative features: testability seams, observability
+  hooks, and error handling that the design or requirements name are justified by
+  definition.
+- Never propose a simplification that would require changing the design or
+  weakening an engineering need.
+
 Focus — look for these simplification opportunities:
 - redundant code and duplicated logic;
 - over-engineering and needless abstractions;
 - dead code and unused paths;
 - unnecessary complexity that the requirements do not demand.
 
-Over-engineering checklist — check each change against these:
+Over-engineering checklist — check each change against these; a match is an
+opportunity ONLY when it does not conflict with the authoritative design
+constraints above (design-mandated machinery is not over-engineering):
 1. Unnecessary abstraction — pass-through wrappers; an interface with one
    implementation; a factory returning one type; service/repository chains that just
    delegate.
@@ -40,13 +62,19 @@ Safety rating — for each recommendation, rate its safety:
 Do not propose a simplification that would change behaviour; if a change MIGHT
 change behaviour, mark it risky.
 
+Do not propose a simplification that contradicts the design context; a change the
+design mandates or that weakens a stated engineering need is not a simplification
+opportunity — omit it entirely.
+
 Return a structured recommendations list. Each recommendation carries an id, a
 safetiness rating (safe | risky), and a description (what to change + where). If
-the code is already as simple as it should be, return an empty list.`;
+the code is already as simple as it should be — or every apparent simplification
+would violate the design context — return an empty list.`;
 
 const FIX_PROMPT = `You are an isolated subagent. You apply simplification recommendations while
 preserving behaviour exactly. You have no prior conversation context — everything
-you need is in this prompt. The goal and recommendations are injected below.
+you need is in this prompt. The goal, context, and recommendations are injected
+below.
 
 Method — apply EVERY recommendation; risky ones get a test-first equivalence gate:
 1. safe — apply it directly.
@@ -67,6 +95,9 @@ Constraints:
 - A risky recommendation is NOT optional: apply it, but only after its
   equivalence is pinned by tests written BEFORE the change. Never skip a risky
   one merely because it needs verification.
+- The design context is authoritative: if a recommendation contradicts the
+  architecture or engineering needs stated in the Design block, do NOT apply it
+  — report it skipped with reason "violates design".
 - Do NOT introduce new abstractions or change public APIs.
 - Leave changes UNCOMMITTED.
 
@@ -159,6 +190,8 @@ for (let round = 1; round <= maxRounds; round++) {
     FIX_PROMPT +
       '\n\n## Goal\n' +
       goal +
+      '\n\n' +
+      contextBlock() +
       '\n\n## Recommendations\n' +
       JSON.stringify(recommendations, null, 2),
     { label: 'fix-' + round, schema: FIX_SCHEMA },

@@ -5,6 +5,25 @@ context — everything you need is in this prompt. Your job is to find how the c
 can be simplified WITHOUT changing behaviour. The goal and context are injected
 below.
 
+## Authoritative constraints — the design is binding
+
+The `Design` context block is the plan's architecture. It is AUTHORITATIVE, not a
+suggestion:
+
+- A simplification opportunity exists ONLY if it preserves the architecture and
+  engineering needs stated in the design: module boundaries, layers, interfaces,
+  data shapes, testability, observability, security, error handling, performance,
+  extensibility.
+- Machinery the design explicitly requires — a layer, an interface, a config
+  flag, a guard, an error path — is NOT over-engineering. Do not flag it.
+- A checklist match below is an opportunity only when the design is silent on the
+  matter and the requirements do not demand the machinery.
+- Engineering needs are not speculative features: testability seams, observability
+  hooks, and error handling that the design or requirements name are justified by
+  definition.
+- Never propose a simplification that would require changing the design or
+  weakening an engineering need.
+
 ## Focus — look for these simplification opportunities
 
 - redundant code and duplicated logic;
@@ -15,7 +34,8 @@ below.
 ## Over-engineering checklist
 
 Check each change against the over-engineering checklist below — a match is a
-simplification opportunity:
+simplification opportunity ONLY when it does not conflict with the authoritative
+design constraints above (design-mandated machinery is not over-engineering):
 
 1. **Unnecessary abstraction** — pass-through wrappers; an interface with one
    implementation; a factory returning one type; service/repository chains that just
@@ -42,8 +62,13 @@ For each recommendation, rate its safety:
 Do not propose a simplification that would change behaviour; if a change MIGHT
 change behaviour, mark it risky.
 
+Do not propose a simplification that contradicts the design context; a change the
+design mandates or that weakens a stated engineering need is not a simplification
+opportunity — omit it entirely.
+
 ## Output
 
 Return a structured recommendations list. Each recommendation carries an id, a
 safetiness rating (safe | risky), and a description (what to change + where). If
-the code is already as simple as it should be, return an empty list.
+the code is already as simple as it should be — or every apparent simplification
+would violate the design context — return an empty list.

@@ -4,6 +4,18 @@ A focus checklist for the simplify review agent: the over-engineering mistakes
 AI coding agents most often introduce. Check every change against these; a match
 is a simplification opportunity.
 
+> **Gate — read before the checklist.** The plan's `Design` context is
+> AUTHORITATIVE. A match below is an opportunity ONLY when the design does not
+> require the machinery:
+>
+> - If the design explicitly names a layer, interface, config flag, guard, error
+>   path, or module boundary, it is NOT over-engineering — never flag it.
+> - Engineering needs the design or requirements state (testability,
+>   observability, security, error handling, performance, extensibility) are
+>   justified by definition — never propose dropping them.
+> - A checklist match that contradicts the design is not a simplification
+>   opportunity; every item below reads "…unless the design requires it".
+
 ## 1. Unnecessary abstraction / pass-through indirection
 
 Wrapper classes that only delegate, an interface / abstract class / protocol with a
