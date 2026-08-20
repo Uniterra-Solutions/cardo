@@ -2,12 +2,12 @@
 name: uniterra-review
 description: >
   Company-standard adversarial review on DeepSeek Harness. Usable whenever
-  there is a review scope — no plan required: establish the scope (uncommitted
-  changes by default, or the files/refs the user names), then run a
-  repro-first loop — review finds bugs, each bug is pinned as a FAILING
-  property/regression test, then the fix agent only makes that test pass —
-  until the reviewer passes. Small scopes default to a single deep review.
-  LOAD when:
+  there is a review scope — no plan required. Assemble the goal + context
+  (requirements, design, acceptance — from docs or your own input for simple
+  tasks), then run a review workflow: a review agent grades findings by
+  severity (critical / high / medium / low), a repro agent pins each as a
+  failing property test (invalid findings dropped), and a fix agent repairs
+  only the verified findings. LOAD when:
   - User asks to review changes, hunt for bugs, or run the review phase
     (review / 審查 / code review)
   - User asks to verify uncommitted work against its requirements
@@ -15,73 +15,64 @@ description: >
   (uniterra-plan), or implementing (uniterra-implement).
 ---
 
-# Uniterra Review — scope-bound adversarial review loop
+# Uniterra Review — requirements/design/acceptance-driven adversarial review
 
-Pipeline position: after `uniterra-implement`, or standalone. Only two things
-are needed to run it: a **review scope** and the uncommitted working tree.
-Both the fix and review agents run inside ONE dynamic workflow script.
+Pipeline position: after `uniterra-implement`, or standalone. The review is
+driven by a goal + three context blocks (requirements, design, acceptance) —
+NOT by `execution-plan.json`.
 
-## 1. Establish the review scope (required)
+## 1. Assemble goal and context
 
-Before dispatching anything, pin down exactly WHAT gets reviewed:
+- **goal** — one line: what the change should achieve.
+- **context.requirements** — the requirements list.
+- **context.design** — the architecture/design.
+- **context.acceptance** — the acceptance criteria list.
+- **task** — what to review: the scope (default: uncommitted changes) + focus.
 
-- **Default**: the uncommitted changes — `git status`, `git diff`.
-- The user may name files, directories, or a ref (e.g. `src/foo.ts`,
-  `packages/bar/`, `git diff HEAD~2`). Convert that into the concrete
-  command(s) the reviewer will run.
-- When a plan exists, also point the reviewer at the requirements
-  (`<run_dir>/prd.md` + `execution-plan.json`) so findings can cite contract
-  violations.
-- Substitute the scope into the review prompt's `[[review_scope]]` token; the
-  reviewer inspects ONLY the scope and reports findings against it.
+The three context blocks may come from the plan docs (`prd.md`, `design.md`,
+`acceptance.md`) OR be written by you directly when no plan exists (simple
+tasks). Any block may be empty — the review agent treats an empty block as "no
+contract on that axis".
 
-Write the verdict artifact into a review dir: `<run_dir>` when running as
-the pipeline phase after a plan, otherwise `<repo>/.review/<YYYYMMDD>/<slug>/`.
+## 2. Run the review workflow
 
-## 2. Run the dynamic workflow
+Use `assets/workflow-template.md` with `args = { goal, context, task }`. One
+workflow, three stages:
 
-Write a `workflow` script implementing the loop (see
-`references/review-workflow.md` for the skeleton and rules). The loop is
-**repro-first** — the fix agent never touches source until the finding is
-pinned as a failing test:
+1. **review agent** (`references/review-agent.md`) — comprehensive adversarial
+   review covering correctness AND security (`references/security-checklist.md`);
+   returns findings graded critical / high / medium / low.
+2. **repro agent** (`references/repro-agent.md`) — one per finding, parallel;
+   pins each as a failing property test; un-reproducible findings are INVALID
+   and dropped.
+3. **fix agent** (`references/fix-agent.md`) — repairs only the verified findings
+   under constraints (no weakened tests, no broken business logic).
 
-- **Review agent**: prompt from `references/prompts/review.md`; call `agent()`
-  with a `schema` so it returns `{ verdict: 'pass'|'fix', findings }` as
-  structured output. Read-only.
-- **Repro agent** (after a `fix` verdict): for each finding, add a FAILING
-  property/regression test that captures the defect and run the suite to
-  confirm it FAILS (red). Read-only with respect to source.
-- **Fix agent**: make ONLY the failing repro tests pass (green), minimal
-  change, inside the scope. Leaves changes uncommitted.
-- On `pass`, return `{ status: 'done', rounds }`. On `fix`, feed the findings
-  into repro → fix and re-review. Cap at `maxRounds` (e.g. 8); past the cap
-  return `{ status: 'blocked', lastVerdict: 'fix', lastFindings }` — findings
-  must be returned, never dropped.
+The workflow loops **review → repro → fix → re-review** until a review round
+returns no findings (or every finding is an invalid false positive), or the round
+cap (`maxRounds`, default 8) is hit.
 
-### Small scope → single deep review
+## Severity levels
 
-When the scope is small (≤ 3 files, no plan), prefer ONE deep review over the
-loop: a single adversarial pass that verifies platform/OS/API-behavior claims
-against source catches more than several fix-agent rounds (an unconstrained fix
-agent over-engineers). Only enter the repro-first loop if that single review
-returns `fix`.
+- **critical** — wrong results, data loss/corruption, a security hole, or a core
+  requirement entirely unmet. Blocks delivery.
+- **high** — fails on a common path, violates a stated requirement or acceptance
+  criterion, or deviates from the design in a harmful way. Likely user-visible.
+- **medium** — fails on an edge/error path, missing or weak test coverage, or a
+  clear maintainability debt. Concrete risk, no immediate breakage.
+- **low** — style/naming/readability, a harmless design deviation, non-blocking
+  suggestions. No correctness impact.
 
 ## Rules
 
-- Review agents are READ-ONLY: they never modify code.
-- Repro agents add FAILING tests only — they never modify source.
-- Fix agents leave changes UNCOMMITTED (the next review reads the diff).
-- Fix agents make the MINIMAL change so the repro tests pass: no unrelated
-  refactors, no new abstractions/dependency injection, no changed platform
-  semantics unless a finding demands it.
-- Reviewers verify platform/OS/API-behavior claims against the authoritative
-  source (libuv/OS docs/library source) and mark unverifiable claims
-  `[UNVERIFIED]`; `[UNVERIFIED]` findings must NOT drive a fix.
-- Reviewers are adversarial but fair: every finding references a concrete
-  location inside the scope and a concrete failure mode.
+- Review and repro agents never modify source (repro only adds failing tests).
+- Fix agent leaves changes UNCOMMITTED and never weakens the repro tests.
+- Findings must reference a concrete location + failure mode.
 
 ## Files
 
-- `references/review-workflow.md` — the loop skeleton and scope rules.
-- `references/prompts/review.md` — the reviewer role prompt (substitute
-  `[[run_dir]]`, `[[repo_root]]`, `[[review_scope]]`).
+- `assets/workflow-template.md` — the review → repro → fix workflow script.
+- `references/review-agent.md`, `references/repro-agent.md`,
+  `references/fix-agent.md` — the three agent prompts.
+- `references/security-checklist.md` — the focus checklist of common AI-agent
+  code-security mistakes.

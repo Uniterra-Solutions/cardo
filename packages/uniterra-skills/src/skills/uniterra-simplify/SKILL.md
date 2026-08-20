@@ -2,10 +2,11 @@
 name: uniterra-simplify
 description: >
   Company-standard simplification review on DeepSeek Harness. Usable whenever
-  there is a review scope — no plan required: establish the scope (uncommitted
-  changes by default, or the files/refs the user names), then run a dynamic
-  workflow fix ↔ simplify-review loop until the reviewer passes or the round
-  cap is hit. LOAD when:
+  there is a review scope — no plan required. Assemble the goal + context
+  (requirements, design, acceptance — from docs or your own input), then run a
+  simplify workflow: a review agent finds simplification opportunities (each
+  rated safe / risky), and a fix agent applies them while preserving behaviour.
+  LOAD when:
   - User asks to simplify code, cut over-engineering, or reduce complexity
     (simplify / 簡化 / 精簡 / 重構減量)
   - User asks to run the simplify phase after implementation
@@ -13,49 +14,51 @@ description: >
   (uniterra-plan), or implementing (uniterra-implement).
 ---
 
-# Uniterra Simplify — scope-bound simplification loop
+# Uniterra Simplify — behaviour-preserving simplification
 
-Pipeline position: after `uniterra-implement`, or standalone. Only two things
-are needed to run it: a **review scope** and the uncommitted working tree.
-Both the fix and review agents run inside ONE dynamic workflow script.
+Pipeline position: after `uniterra-implement`, or standalone. The review is
+driven by a goal + three context blocks (requirements, design, acceptance) —
+NOT by `execution-plan.json`.
 
-## 1. Establish the review scope (required)
+## 1. Assemble goal and context
 
-Before dispatching anything, pin down exactly WHAT gets reviewed:
+- **goal** — one line: what the change should achieve.
+- **context.requirements** — the requirements list.
+- **context.design** — the architecture/design.
+- **context.acceptance** — the acceptance criteria list.
 
-- **Default**: the uncommitted changes — `git status`, `git diff`.
-- The user may name files, directories, or a ref (e.g. `src/foo.ts`,
-  `packages/bar/`, `git diff HEAD~2`). Convert that into the concrete
-  command(s) the reviewer will run.
-- Substitute the scope into the review prompt's `[[review_scope]]` token; the
-  reviewer inspects ONLY the scope and reports findings against it.
+These may come from the plan docs (`prd.md`, `design.md`, `acceptance.md`) or be
+written by you directly for simple tasks. Any block may be empty.
 
-Write the verdict artifact into a review dir: `<run_dir>` when running as
-the pipeline phase after a plan, otherwise `<repo>/.review/<YYYYMMDD>/<slug>/`.
+## 2. Run the simplify workflow
 
-## 2. Run the dynamic workflow
+Use `assets/workflow-template.md` with `args = { goal, context }`. Two stages:
 
-Write a `workflow` script implementing the loop (see
-`references/simplify-workflow.md` for the skeleton and rules):
+1. **review agent** (`references/review-agent.md`) — finds simplification
+   opportunities against the over-engineering checklist
+   (`references/overengineering-checklist.md`); returns recommendations, each rated
+   `safe` or `risky`.
+2. **fix agent** (`references/fix-agent.md`) — applies the recommendations while
+   preserving behaviour exactly.
 
-- **Fix agent** (round ≥ 2): address the previous reviewer's findings against
-  the working tree, staying inside the review scope.
-- **Simplify-review agent**: prompt from
-  `references/prompts/simplify-review.md`; call `agent()` with a `schema` so
-  it returns `{ verdict: 'pass'|'fix', findings }` as structured output.
-- On `pass`, return `{ status: 'done', rounds }`. On `fix`, feed the findings
-  into the next round. Cap at `maxRounds` (e.g. 8); past the cap return
-  `{ status: 'blocked' }`.
+The workflow loops **review → fix → re-review** until a review round returns no
+recommendations, or the round cap (`maxRounds`, default 8) is hit.
+
+## Safety levels
+
+- **safe** — the simplification provably preserves behaviour (dead code, identical
+  duplication, a redundant abstraction).
+- **risky** — the simplification may alter behaviour; needs tests or judgment.
 
 ## Rules
 
-- Review agents are READ-ONLY: they never modify code.
-- Fix agents leave changes UNCOMMITTED (the next round reads the diff).
-- Simplification must preserve behaviour — the reviewer flags any suggested
-  change that would alter semantics.
+- Review agents are READ-ONLY.
+- Fix agents leave changes UNCOMMITTED and preserve behaviour exactly.
+- A `risky` recommendation must not be applied blindly.
 
 ## Files
 
-- `references/simplify-workflow.md` — the loop skeleton and scope rules.
-- `references/prompts/simplify-review.md` — the reviewer role prompt
-  (substitute `[[run_dir]]`, `[[repo_root]]`, `[[review_scope]]`).
+- `assets/workflow-template.md` — the review → fix workflow script.
+- `references/review-agent.md`, `references/fix-agent.md` — the two agent prompts.
+- `references/overengineering-checklist.md` — the focus checklist of common
+  AI-agent over-engineering mistakes.
