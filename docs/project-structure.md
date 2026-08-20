@@ -34,7 +34,7 @@ Directory map for the uniterra monorepo. Locate code by task, not by grepping.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `uniterra-plan`          | Planning phase: clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents                            |
 | `uniterra-implement`     | PBT-first execution: write ALL failing PBTs → decompose into a task list → batched / full-parallel workflow of subagents                                     |
-| `uniterra-simplify`      | Behaviour-preserving simplification: goal + context → review (over-engineering checklist) → fix → re-review loop                                             |
+| `uniterra-simplify`      | Behaviour-preserving simplification: goal + context → review (over-engineering checklist — plan design is authoritative) → fix → re-review loop              |
 | `uniterra-review`        | Adversarial review: goal + context → review (correctness + security) → repro (pin findings as failing tests) → fix → re-review loop                          |
 | `uniterra-pbt-debugging` | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests                                              |
 | `project-documentation`  | Generate/maintain the structured `docs/` tree                                                                                                                |
