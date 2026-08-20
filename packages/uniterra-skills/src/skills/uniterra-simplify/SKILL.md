@@ -44,6 +44,11 @@ Use `assets/workflow-template.md` with `args = { goal, context }`. Two stages:
 The workflow loops **review → fix → re-review** until a review round returns no
 recommendations, or the round cap (`maxRounds`, default 8) is hit.
 
+Recommendations a fix round cannot apply (the `skipped` list) are carried into the
+next review round and **accumulate** — the reviewer always sees the full skip
+history (id + reason + round) and re-raises an item only when its reason no longer
+applies. Skipped items are never dropped and are returned with the result.
+
 ## Safety levels
 
 - **safe** — the simplification provably preserves behaviour (dead code, identical
@@ -54,7 +59,8 @@ recommendations, or the round cap (`maxRounds`, default 8) is hit.
 
 - Review agents are READ-ONLY.
 - Fix agents leave changes UNCOMMITTED and preserve behaviour exactly.
-- A `risky` recommendation must not be applied blindly.
+- A `risky` recommendation must be pinned by equivalence tests BEFORE it is
+  applied — never skipped merely for being risky.
 
 ## Files
 

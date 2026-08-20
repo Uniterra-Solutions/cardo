@@ -48,20 +48,33 @@ const FIX_PROMPT = `You are an isolated subagent. You apply simplification recom
 preserving behaviour exactly. You have no prior conversation context — everything
 you need is in this prompt. The goal and recommendations are injected below.
 
-Method:
-1. Apply each recommendation: remove the redundant / over-engineered code.
-2. Run the test suite and lint; confirm every test still passes (behaviour
-   preserved).
+Method — apply EVERY recommendation; risky ones get a test-first equivalence gate:
+1. safe — apply it directly.
+2. risky — pin the current behaviour with tests BEFORE changing anything:
+   a. Write a behaviour-pinning test capturing the current logic (a fast-check
+      property test, or a deterministic equivalence/regression test asserting the
+      new shape equals the old logic over generated inputs).
+   b. Run it against the CURRENT code and confirm it PASSES (it pins behaviour
+      as-is).
+   c. Apply the simplification, then run the pinning tests again — they must
+      STILL pass. Green = equivalence confirmed.
+   d. If a pinning test fails after the change, the simplification altered
+      behaviour: REVERT it and report it skipped with the evidence.
+3. Run the full test suite and lint; confirm every test still passes.
 
 Constraints:
 - Preserve behaviour EXACTLY — no test may change result.
-- Apply safe recommendations confidently; treat risky ones carefully — verify
-  equivalence with tests, and skip a risky one you cannot confirm.
+- A risky recommendation is NOT optional: apply it, but only after its
+  equivalence is pinned by tests written BEFORE the change. Never skip a risky
+  one merely because it needs verification.
 - Do NOT introduce new abstractions or change public APIs.
 - Leave changes UNCOMMITTED.
 
-Return: status ("fixed" | "failed"), applied_recommendations (the ids applied),
-skipped (the ids skipped and why), and a short summary.`;
+Return: status ("fixed" | "failed"), applied_recommendations (the ids applied,
+including risky ones that passed their equivalence tests), skipped (a list of
+{ id, reason } for the ones NOT applied — only a genuine reason: an equivalence
+test failed and the change was reverted, or the code is already in the
+recommended shape), and a short summary.`;
 
 const REVIEW_SCHEMA = {
   type: 'object',
@@ -88,7 +101,17 @@ const FIX_SCHEMA = {
   properties: {
     status: { type: 'string', enum: ['fixed', 'failed'] },
     applied_recommendations: { type: 'array', items: { type: 'string' } },
-    skipped: { type: 'array', items: { type: 'string' } },
+    skipped: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'reason'],
+        properties: {
+          id: { type: 'string' },
+          reason: { type: 'string' },
+        },
+      },
+    },
     summary: { type: 'string' },
   },
 };
@@ -106,18 +129,30 @@ function contextBlock() {
 }
 
 const maxRounds = args.maxRounds ?? 8;
+// Skipped recommendations accumulate across rounds — nothing is ever dropped.
+const accumulatedSkipped = [];
 
 for (let round = 1; round <= maxRounds; round++) {
   phase('round-' + round);
 
-  // Stage 1 — review
-  const review = await agent(REVIEW_PROMPT + '\n\n## Goal\n' + goal + '\n\n' + contextBlock(), {
-    label: 'review-' + round,
-    schema: REVIEW_SCHEMA,
-  });
-  if (review === null) return { status: 'blocked', reason: 'review agent failed', round };
+  // Stage 1 — review (every round sees the full skip history from earlier fix rounds)
+  const skippedBlock = accumulatedSkipped.length
+    ? '\n\n## Previously skipped recommendations (from earlier fix rounds)\n' +
+      'These were considered and deliberately NOT applied. Do NOT re-raise an item ' +
+      'unless its reason no longer holds — if the code has since changed so the ' +
+      'simplification is now safe, re-raise it with an updated safety rating and a ' +
+      'note that the previous reason no longer applies.\n' +
+      JSON.stringify(accumulatedSkipped, null, 2)
+    : '';
+  const review = await agent(
+    REVIEW_PROMPT + '\n\n## Goal\n' + goal + '\n\n' + contextBlock() + skippedBlock,
+    { label: 'review-' + round, schema: REVIEW_SCHEMA },
+  );
+  if (review === null)
+    return { status: 'blocked', reason: 'review agent failed', round, skipped: accumulatedSkipped };
   const recommendations = review.recommendations;
-  if (recommendations.length === 0) return { status: 'done', rounds: round };
+  if (recommendations.length === 0)
+    return { status: 'done', rounds: round, skipped: accumulatedSkipped };
 
   // Stage 2 — fix
   const fix = await agent(
@@ -129,16 +164,39 @@ for (let round = 1; round <= maxRounds; round++) {
     { label: 'fix-' + round, schema: FIX_SCHEMA },
   );
   if (fix === null)
-    return { status: 'blocked', reason: 'fix agent failed', round, recommendations };
-  if (fix.status === 'failed') return { status: 'failed', round, recommendations };
+    return {
+      status: 'blocked',
+      reason: 'fix agent failed',
+      round,
+      recommendations,
+      skipped: accumulatedSkipped,
+    };
+  if (fix.status === 'failed')
+    return { status: 'failed', round, recommendations, skipped: accumulatedSkipped };
+
+  // Accumulate this round's skips so the next review round sees them (dedupe by id)
+  for (const s of fix.skipped ?? []) {
+    const entry = { round, id: s.id, reason: s.reason };
+    const existing = accumulatedSkipped.findIndex((e) => e.id === s.id);
+    if (existing >= 0) accumulatedSkipped[existing] = entry;
+    else accumulatedSkipped.push(entry);
+  }
 }
 
-return { status: 'blocked', reason: 'max rounds reached', rounds: maxRounds };
+return {
+  status: 'blocked',
+  reason: 'max rounds reached',
+  rounds: maxRounds,
+  skipped: accumulatedSkipped,
+};
 ```
 
 ## Reading the result
 
 - `rounds` — number of rounds run.
-- `status: 'done'` — a review round returned no recommendations (already simple).
+- `skipped` — the accumulated recommendations that were considered but not applied
+  (id + reason + round), carried across rounds and never dropped.
+- `status: 'done'` — a review round returned no new recommendations (already
+  simple); any residual items are in `skipped`.
 - `status: 'blocked'` — the round cap was hit with recommendations still open.
 - `status: 'failed'` — the fix agent could not apply a recommendation.
