@@ -63,11 +63,17 @@ export async function hasPrebuiltSource(root: string): Promise<boolean> {
 
 /** How `embedSource` places the source into the packaged app: a DOWNLOADED
  * source on Windows sits on the same volume as the staging dir, so a
- * same-volume rename (robocopy fallback) is instant; every other case
- * copies — a `--source` checkout must NEVER be moved away from the user's
- * tree, whatever volume it is on. */
-export function embedStrategy(platform: InstallPlatform, downloaded: boolean): 'move' | 'copy' {
-  return platform === 'windows' && downloaded ? 'move' : 'copy';
+ * same-volume rename (robocopy fallback) is instant; a `--source` checkout
+ * must NEVER be moved away from the user's tree, whatever volume it is on —
+ * unless the caller explicitly opts in via `--move-source` (the checkout is
+ * disposable, e.g. the Windows CI verification replaying the closer-to-real
+ * user flow), which makes it move exactly like a downloaded source. */
+export function embedStrategy(
+  platform: InstallPlatform,
+  downloaded: boolean,
+  moveSource: boolean = false,
+): 'move' | 'copy' {
+  return platform === 'windows' && (downloaded || moveSource) ? 'move' : 'copy';
 }
 
 /** Build the message for a failed subprocess: the command line, its exit
@@ -327,12 +333,16 @@ export interface ParsedArgs {
   readonly dryRun: boolean;
   /** Local source tree for `setup` (skips the release download). */
   readonly source?: string;
+  /** Opt-in: treat a `--source` checkout as disposable and embed it via a
+   * same-volume move instead of a copy (only meaningful with `--source`). */
+  readonly moveSource: boolean;
 }
 
 export function parseArgs(args: readonly string[]): ParsedArgs {
   let open = true;
   let dryRun = false;
   let source: string | undefined;
+  let moveSource = false;
   const positional: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -340,6 +350,8 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
       open = false;
     } else if (arg === '--dry-run') {
       dryRun = true;
+    } else if (arg === '--move-source') {
+      moveSource = true;
     } else if (arg === '--source') {
       const value = args[i + 1];
       if (value === undefined) {
@@ -351,15 +363,18 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
       positional.push(arg);
     }
   }
+  if (moveSource && source === undefined) {
+    throw new Error('--move-source requires --source');
+  }
   if (positional.some((arg) => arg === '--version' || arg === '-v')) {
-    return { command: 'version', open, dryRun, source };
+    return { command: 'version', open, dryRun, source, moveSource };
   }
   const command = positional[0];
   if (command === undefined || command === '--help' || command === '-h') {
-    return { command: 'help', open, dryRun, source };
+    return { command: 'help', open, dryRun, source, moveSource };
   }
   if (command === 'setup' || command === 'update') {
-    return { command, open, dryRun, source };
+    return { command, open, dryRun, source, moveSource };
   }
   throw new Error(`Unknown command: ${command} (run "uniterra --help" for usage)`);
 }

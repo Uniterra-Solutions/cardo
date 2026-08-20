@@ -27,6 +27,10 @@
  *
  * `uniterra setup --source <dir>` builds from a local workspace checkout
  * instead of downloading a release — the Windows CI verification path.
+ * `--move-source` opts a disposable `--source` checkout into the same
+ * same-volume move (instant) that a downloaded release source gets, instead
+ * of the always-copy default, so the verification replays the closer-to-real
+ * user flow instead of paying for a full-tree robocopy.
  *
  * `uniterra update` is the one-command full update: it refreshes the CLI
  * itself (`npm install -g`), then rebuilds + reinstalls the desktop app
@@ -251,6 +255,8 @@ interface InstallOptions {
   readonly open: boolean;
   readonly dryRun: boolean;
   readonly source?: string;
+  /** Opt-in: embed a `--source` checkout via same-volume move (disposable). */
+  readonly moveSource: boolean;
 }
 
 interface ResolvedSource {
@@ -526,7 +532,12 @@ async function buildInstallApp(options: InstallOptions): Promise<string | undefi
     // embedded node_modules) — the line before it keeps the install log
     // readable.
     process.stdout.write('Embedding source tree into the app...\n');
-    await embedSource(staged, src, platform, embedStrategy(platform, resolved.downloaded));
+    await embedSource(
+      staged,
+      src,
+      platform,
+      embedStrategy(platform, resolved.downloaded, options.moveSource),
+    );
 
     const destination = installDestination(platform, process.env, staged);
     process.stdout.write(`Installing to ${destination}...\n`);
@@ -637,6 +648,9 @@ function printHelp(): void {
       '  uniterra --help                           Print this help',
       '',
       '    --source <dir>  build from a local uniterra workspace instead of downloading the latest release',
+      '    --move-source   treat the --source checkout as disposable and move it into the app (same-volume',
+      '                    rename) instead of copying — for throwaway checkouts only (CI verification); the',
+      '                    tree must not be a working copy you want to keep',
       '    --no-open       install without launching the app',
       '    --dry-run       resolve the source and report without installing',
       '',
@@ -663,6 +677,7 @@ async function main(): Promise<void> {
         open: parsed.open,
         dryRun: parsed.dryRun,
         source: parsed.source,
+        moveSource: parsed.moveSource,
       });
       return;
   }
