@@ -4,7 +4,7 @@
  * Business invariants locked here:
  *  - PARSE: parseArgs is a pure flag/command decoder — flags commute, the
  *    command is the first positional, `--version`/`-v` anywhere wins, unknown
- *    commands throw.
+ *    commands throw, `--move-source` requires `--source`.
  *  - URL: sourceArchiveUrl always points at the GitHub auto-generated source
  *    tarball for the given tag and the tag round-trips through encoding.
  *  - ROOT: findSourceRoot accepts exactly one `uniterra-*` directory.
@@ -50,7 +50,7 @@ import {
 // PARSE — parseArgs
 // ---------------------------------------------------------------------------
 
-const flagArb = fc.constantFrom('--no-open', '--dry-run');
+const flagArb = fc.constantFrom('--no-open', '--dry-run', '--move-source');
 const versionFlagArb = fc.constantFrom('--version', '-v');
 const helpArb = fc.constantFrom('--help', '-h');
 const commandArb = fc.constantFrom('setup', 'update');
@@ -63,10 +63,12 @@ function modelParse(args: readonly string[]): {
   open: boolean;
   dryRun: boolean;
   source?: string;
+  moveSource: boolean;
 } {
   let open = true;
   let dryRun = false;
   let source: string | undefined;
+  let moveSource = false;
   const positional: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -74,6 +76,8 @@ function modelParse(args: readonly string[]): {
       open = false;
     } else if (arg === '--dry-run') {
       dryRun = true;
+    } else if (arg === '--move-source') {
+      moveSource = true;
     } else if (arg === '--source') {
       // --source consumes the NEXT token as its path value.
       const value = args[i + 1];
@@ -86,15 +90,18 @@ function modelParse(args: readonly string[]): {
       positional.push(arg);
     }
   }
+  if (moveSource && source === undefined) {
+    throw new Error('--move-source requires --source');
+  }
   if (positional.some((a) => a === '--version' || a === '-v')) {
-    return { command: 'version', open, dryRun, source };
+    return { command: 'version', open, dryRun, source, moveSource };
   }
   const command = positional[0];
   if (command === undefined || command === '--help' || command === '-h') {
-    return { command: 'help', open, dryRun, source };
+    return { command: 'help', open, dryRun, source, moveSource };
   }
   if (command === 'setup' || command === 'update') {
-    return { command, open, dryRun, source };
+    return { command, open, dryRun, source, moveSource };
   }
   throw new Error(`Unknown command: ${command} (run "uniterra --help" for usage)`);
 }
@@ -595,20 +602,48 @@ test('hasPrebuiltSource: a missing root reports no marker (the caller builds)', 
 
 // ---------------------------------------------------------------------------
 // EMBED — only a DOWNLOADED Windows source may be renamed into the app;
-// a --source checkout must never be moved away from the user's tree
+// a --source checkout is copied unless the caller explicitly opts in with
+// `--move-source` (disposable checkout — the closer-to-real CI verification)
 // ---------------------------------------------------------------------------
 
-test('embedStrategy: only a downloaded Windows source moves; every other case copies', () => {
+test('embedStrategy: downloaded or explicitly-movable Windows sources move; every other case copies', () => {
   fc.assert(
-    fc.property(fc.constantFrom('macos', 'windows'), fc.boolean(), (platform, downloaded) => {
-      const strategy = embedStrategy(platform, downloaded);
-      if (platform === 'windows' && downloaded) {
-        assert.equal(strategy, 'move', 'downloaded Windows source uses the rename fast path');
-      } else {
-        assert.equal(strategy, 'copy', '--source checkouts and macOS never move the source');
-      }
-    }),
+    fc.property(
+      fc.constantFrom('macos', 'windows'),
+      fc.boolean(),
+      fc.boolean(),
+      (platform, downloaded, moveSource) => {
+        const strategy = embedStrategy(platform, downloaded, moveSource);
+        if (platform === 'windows' && (downloaded || moveSource)) {
+          assert.equal(strategy, 'move', 'Windows rename fast path for movable sources');
+        } else {
+          assert.equal(
+            strategy,
+            'copy',
+            '--source checkouts (without the opt-in) and macOS never move the source',
+          );
+        }
+      },
+    ),
   );
+});
+
+test('embedStrategy: the default is the historical two-arg decision (no opt-in)', () => {
+  assert.equal(embedStrategy('windows', false), 'copy');
+  assert.equal(embedStrategy('windows', true), 'move');
+  assert.equal(embedStrategy('macos', true), 'copy');
+});
+
+test('parseArgs: --move-source is only meaningful with --source', () => {
+  assert.deepEqual(parseArgs(['setup', '--source', '/tmp/repo', '--move-source', '--no-open']), {
+    command: 'setup',
+    open: false,
+    dryRun: false,
+    source: '/tmp/repo',
+    moveSource: true,
+  });
+  assert.throws(() => parseArgs(['setup', '--move-source']), /--move-source requires --source/);
+  assert.throws(() => parseArgs(['--version', '--move-source']), /--move-source requires --source/);
 });
 
 // ---------------------------------------------------------------------------
