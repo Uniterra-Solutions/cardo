@@ -21,9 +21,9 @@ permissions:
 #     (pristine source → pnpm install → build → runtime-dependency + dsh boot
 #     assertions),
 #   - verify-windows-install: the real Windows install on windows-latest
-#     (pnpm install/build on Windows → uniterra setup --source → electron-builder
-#     --win --dir → embedded source → Start Menu shortcut → Uniterra.exe boot
-#     smoke).
+#     (relocate checkout to the TEMP volume → pnpm install/build on Windows →
+#     uniterra setup --source --move-source → electron-builder --win --dir →
+#     move-embedded source → Start Menu shortcut → Uniterra.exe boot smoke).
 # The publish job builds the workspace on Linux and uploads the built tree as
 # the `uniterra-src-<tag>.tar.gz` release asset (dist/lib + `.uniterra-prebuilt`
 # marker), so `uniterra setup` skips the build on user machines; releases without

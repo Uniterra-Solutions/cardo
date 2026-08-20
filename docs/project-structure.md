@@ -4,18 +4,18 @@ Directory map for the uniterra monorepo. Locate code by task, not by grepping.
 
 ## Root
 
-| Path                                                         | Responsibility                                                                                                                                                     |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/*`                                                 | pnpm workspace packages (6 packages, see below)                                                                                                                    |
-| `vendor/dsh-plugins/`                                        | Pinned community dsh plugins not on npm (5 plugins; `VENDOR.md` pin ledger)                                                                                        |
-| `vendor/dsh-runtime/`                                        | LEGACY 0.5.0 runtime snapshot — not on the current boot path (the app resolves the dsh CLI from `packages/uniterra-desktop/node_modules`); keep for reference only |
-| `scripts/verify-cli-container/`                              | Docker harness replaying the `uniterra setup` flow in a clean container                                                                                            |
-| `scripts/verify-windows-install/`                            | PowerShell harness: real `uniterra setup --source` + `Uniterra.exe` boot smoke on windows-latest (release gate)                                                    |
-| `AGENTS.md`                                                  | Company-standard agent rules (the coding rulebook)                                                                                                                 |
-| `CHANGELOG.md`                                               | Keep a Changelog + SemVer                                                                                                                                          |
-| `eslint.config.mjs` / `tsconfig.base.json` / `tsconfig.json` | Shared lint / compile rules; every package extends them                                                                                                            |
-| `.github/workflows/ci.yml`                                   | PR regression net: parallel lint / typecheck / tests; callable from the release workflow                                                                           |
-| `.github/workflows/release.yml`                              | `v*` tag release: gates publish on ci + container + windows verification, then CLI npm publish (OIDC) + GitHub Release                                             |
+| Path                                                         | Responsibility                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/*`                                                 | pnpm workspace packages (6 packages, see below)                                                                                                                                                            |
+| `vendor/dsh-plugins/`                                        | Pinned community dsh plugins not on npm (5 plugins; `VENDOR.md` pin ledger)                                                                                                                                |
+| `vendor/dsh-runtime/`                                        | LEGACY 0.5.0 runtime snapshot — not on the current boot path (the app resolves the dsh CLI from `packages/uniterra-desktop/node_modules`); keep for reference only                                         |
+| `scripts/verify-cli-container/`                              | Docker harness replaying the `uniterra setup` flow in a clean container                                                                                                                                    |
+| `scripts/verify-windows-install/`                            | PowerShell harness: real `uniterra setup --source --move-source` (closer-to-real flow: the source is move-embedded like a downloaded release) + `Uniterra.exe` boot smoke on windows-latest (release gate) |
+| `AGENTS.md`                                                  | Company-standard agent rules (the coding rulebook)                                                                                                                                                         |
+| `CHANGELOG.md`                                               | Keep a Changelog + SemVer                                                                                                                                                                                  |
+| `eslint.config.mjs` / `tsconfig.base.json` / `tsconfig.json` | Shared lint / compile rules; every package extends them                                                                                                                                                    |
+| `.github/workflows/ci.yml`                                   | PR regression net: parallel lint / typecheck / tests; callable from the release workflow                                                                                                                   |
+| `.github/workflows/release.yml`                              | `v*` tag release: gates publish on ci + container + windows verification, then CLI npm publish (OIDC) + GitHub Release                                                                                     |
 
 ## Workspace Packages
 

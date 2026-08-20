@@ -11,7 +11,7 @@ uniterra setup            # download source → build → package → install �
 
 Install targets: macOS `~/Applications/Uniterra.app`; Windows `%LOCALAPPDATA%\Programs\Uniterra` (plus a Start Menu shortcut). Prerequisites on both platforms: Node ≥ 22, pnpm, git; Windows 10+ ships `tar` built in.
 
-`uniterra setup` flags: `--source <dir>` (build a local workspace checkout instead of downloading a release), `--no-open` (skip launch), `--dry-run` (print the plan, install nothing). Re-running `uniterra setup` reinstalls the app. `uniterra update` is the one-command update: it refreshes the CLI itself, then rebuilds + reinstalls the app from the latest source and relaunches it (same flags as `setup`; `--no-open` skips the relaunch). The desktop's Update Now quits the app and runs `uniterra update` automatically — the relaunch IS the restart. See [modules/uniterra-cli.md](modules/uniterra-cli.md).
+`uniterra setup` flags: `--source <dir>` (build a local workspace checkout instead of downloading a release), `--move-source` (treat the `--source` checkout as disposable and move it into the app instead of copying — throwaway checkouts only, e.g. CI verification; the checkout must not be a working copy you want to keep), `--no-open` (skip launch), `--dry-run` (print the plan, install nothing). Re-running `uniterra setup` reinstalls the app. `uniterra update` is the one-command update: it refreshes the CLI itself, then rebuilds + reinstalls the app from the latest source and relaunches it (same flags as `setup`; `--no-open` skips the relaunch). The desktop's Update Now quits the app and runs `uniterra update` automatically — the relaunch IS the restart. See [modules/uniterra-cli.md](modules/uniterra-cli.md).
 
 ## Developer Setup
 
