@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-08-20
+
+### Changed
+
+- Redesigned the four bundled pipeline skills (`uniterra-plan` → `uniterra-implement` → `uniterra-simplify` / `uniterra-review`) from an `execution-plan.json`-centric subagent pipeline to workflow-based agent orchestration. `uniterra-plan` writes `prd.md` / `design.md` / `acceptance.md` and reviews them with three parallel agents (feasibility, over-engineering, verifiable acceptance); `uniterra-implement` decomposes into a task list and runs a batched / full-parallel workflow of subagents (each returning structured changed-files / satisfied-requirements / deviations); `uniterra-review` loops review → repro → fix with findings graded critical/high/medium/low and pinned as failing property tests; `uniterra-simplify` loops review → fix against an over-engineering checklist. `execution-plan.json` is no longer produced or consumed.
+
+### Added
+
+- `uniterra-review`: a 12-item code-security checklist (injection, prompt injection, IDOR, SSRF, insecure deserialization, broken auth/JWT, hardcoded secrets, weak crypto/randomness, path traversal, information disclosure, TOCTOU races, insecure dependencies).
+- `uniterra-simplify`: a 10-item over-engineering checklist (unnecessary abstraction, premature generalization, design patterns for their own sake, premature architecture, premature optimization, speculative features, excessive defensiveness, reinventing the wheel, boilerplate ceremony, copy-paste drift).
+
 ## [0.10.1] — 2026-08-19
 
 ### Changed
