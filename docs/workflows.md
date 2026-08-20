@@ -4,11 +4,10 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Develop a Feature (company standard)
 
-1. Load the `uniterra-plan` skill; clarify ≤5 open questions; write `<repo>/.plan/<YYYYMMDD>/<name>/clarify.md`.
-2. Dispatch PRD → Design subagents via a `workflow` script; artifacts `prd.md` / `design.md`.
-3. Write `execution-plan.json` (`serial` / `batched` / `parallel`; each task carries its explicit `requirements` list); present for approval.
-4. Load `uniterra-implement`: simple tasks go inline (failing PBTs → code); complex tasks first write ALL failing property tests (red phase), then choose batched vs full-parallel by task overlap and run the `workflow` script.
-5. Run the fix ↔ review loop to `verdict: pass` — `uniterra-review` (adversarial) and/or `uniterra-simplify`, each with an explicit review scope.
+1. Load the `uniterra-plan` skill; clarify the requirements list AND architecture design interactively; write `prd.md` / `design.md` / `acceptance.md` under `<repo>/.plan/<YYYYMMDD>/<name>/`.
+2. Run the plan's review workflow — three parallel review agents (feasibility, over-engineering, verifiable acceptance) — until all pass.
+3. Load `uniterra-implement`: write ALL failing property tests (red phase), decompose into a task list, run the batched / full-parallel `workflow` script; confirm the full suite is green.
+4. Run `uniterra-review` (adversarial: correctness + security, findings pinned as failing tests before fixing) and/or `uniterra-simplify` (over-engineering checklist, behaviour-preserving) — each loops until its review passes.
    Details: [modules/uniterra-skills.md](modules/uniterra-skills.md#uniterra-plan).
 
 ## Debug a Bug (PBT-first)

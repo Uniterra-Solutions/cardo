@@ -33,10 +33,10 @@ Provision order (`SKILL_NAMES`): `uniterra-pbt-debugging`, `uniterra-plan`, `uni
 
 | Skill                                             | Trigger (LOAD when)                                                                 | Workflow                                                                                                                                                                                         |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [uniterra-plan](#uniterra-plan)                   | Plan a feature/task (prd/design/plan/規劃/計畫)                                     | Clarify ≤5 questions → workflow: PRD → design subagents → execution-plan.json (per-task requirements list) → user approval                                                                       |
-| [uniterra-implement](#uniterra-implement)         | Execute an approved plan (execute_plan/執行計畫); implement a well-specified task   | Requirements list → classify: simple = failing PBTs + inline fix; complex = ALL failing PBTs → overlap → batched/parallel workflow                                                               |
-| [uniterra-simplify](#uniterra-simplify)           | Simplify code / cut over-engineering / run the simplify phase (with a review scope) | Establish review scope → workflow fix ↔ simplify-review loop ({verdict, findings} via schema) → pass or round cap                                                                                |
-| [uniterra-review](#uniterra-review)               | Adversarial review / hunt for bugs / run the review phase (with a review scope)     | Establish review scope → workflow fix ↔ adversarial-review loop ({verdict, findings} via schema) → pass or round cap                                                                             |
+| [uniterra-plan](#uniterra-plan)                   | Plan a feature/task (prd/design/plan/規劃/計畫)                                     | Clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents (feasibility / over-engineering / verifiable acceptance)                       |
+| [uniterra-implement](#uniterra-implement)         | Execute an approved plan (execute_plan/執行計畫); implement a well-specified task   | Requirements + design → write ALL failing PBTs → decompose into a task list → batched/parallel workflow of subagents → full suite green                                                          |
+| [uniterra-simplify](#uniterra-simplify)           | Simplify code / cut over-engineering / run the simplify phase (with a review scope) | goal + context (requirements/design/acceptance) → review (over-engineering checklist, safe/risky) → fix → re-review loop                                                                         |
+| [uniterra-review](#uniterra-review)               | Adversarial review / hunt for bugs / run the review phase (with a review scope)     | goal + context → review (correctness + security, critical/high/medium/low) → repro (pin findings as failing tests) → fix → re-review loop                                                        |
 | [uniterra-pbt-debugging](#uniterra-pbt-debugging) | Bug report / test failure / wrong behavior in business-logic code                   | Read logic → define invariants → failing PBT reproduction → fix → regression tests                                                                                                               |
 | uniterra-qa                                       | Verify an app against its PRD (qa/test/驗收/試用)                                   | UI: playwright DOM geometry → screenshot pixel analysis → external-tool UI operation (or playwright E2E); backend: clean-container install + smoke boot → API journeys → fix loop → qa-report.md |
 | project-documentation                             | Generate/update/rebuild project docs (寫文檔/更新文檔/重建文檔/項目文檔)            | SCAN → ANALYZE → GENERATE (12 files in dependency order) → VERIFY audit; existing docs → incremental git-diff update                                                                             |
@@ -46,28 +46,27 @@ Provision order (`SKILL_NAMES`): `uniterra-pbt-debugging`, `uniterra-plan`, `uni
 
 ### uniterra-plan
 
-The planning phase (Jovaltus methodology). Artifacts live under `<repo>/.plan/<YYYYMMDD>/<plan-name>/`: `clarify.md`, `prd.md`, `design.md`, `execution-plan.json`.
+The planning phase (Jovaltus methodology). Artifacts live under `<repo>/.plan/<YYYYMMDD>/<plan-name>/`: `prd.md`, `design.md`, `acceptance.md`.
 
-1. **Clarify** — ≤5 open questions one at a time (`ask_user_question`).
-2. **PRD + Design subagents** — a `workflow` run dispatches them in order (prompts in `references/prompts/`); the PRD's Functional Requirements list is the project-level requirements list, the design's Business logic surface + PBT plan tell uniterra-implement which invariants the red tests must encode.
-3. **execution-plan.json** — `execution_mode: serial | batched | parallel`; batches of `{id, task_prompt, requirements}` where `requirements` is the explicit, self-contained requirement list per task (derived from the PRD FRs; every FR covered by ≥1 task); ids `/^[A-Za-z0-9_-]+$/` globally unique.
-4. **Approval** — present PRD + design + execution plan to the user before any implementation.
+1. **Clarify** — interactively complete the requirements list AND the architecture design with the user (`ask_user_question`).
+2. **Write the three docs yourself** (no authoring subagents) — `prd.md` (Functional Requirements list), `design.md` (architecture), `acceptance.md` (one acceptance criterion per requirement, each naming an objective verifiable piece of evidence).
+3. **Review workflow** (`scripts/review-workflow.md`) — three parallel review agents, each fed `prd_dir` / `design_dir` / `acceptance_dir`: requirement-list-review (technical feasibility + contradictions), design-review (over-engineering / minimal complexity / minimal invasiveness / necessary vs unnecessary libraries), acceptance-review (clarity + objective verifiable evidence). Re-run until all pass.
 
 ### uniterra-implement
 
 PBT-first implementation against an explicit requirements list. The failing property tests are written HERE (red phase), never in the plan.
 
-- **Requirements list first** — from `execution-plan.json` (`requirements` per task) or derived standalone (REQ-1…, confirmed with the user if ambiguous). Every failing test traces to a requirement.
-- **Simple tasks** (single-module function changes) — define the business logic as invariants, write the FAILING property tests, implement inline until green. No subagents.
-- **Complex tasks** (cross-module features) — write ALL failing property tests first (the whole red suite), then choose the execution mode by task overlap: overlapping tasks → **batched** (parallel within a batch, serial across batches; overlapping tasks in DIFFERENT batches); mutually independent tasks → **full parallel** (one batch, all agents). A `workflow` script mirrors the mode; each agent gets `references/prompts/execute-agent.md` with its `task_prompt` + `requirements` substituted. After the workflow the full suite must be green before review.
+1. **Requirements + design** — read the plan's `prd.md` + `design.md`, or build them interactively (`ask_user_question`) when no design exists; clarify any ambiguous requirement.
+2. **Write ALL failing property tests** in the main session (the red suite), then decompose requirements + design into a **task list** (`assets/task-list-example.md`): one entry per task with its requirements (each pointing at the covering test), context files, conventions, and owned / forbidden file sets.
+3. **Workflow** (`assets/workflow-script-example.md`) — full parallel when tasks are independent, batched (parallel within a batch, serial across batches) when they overlap; each subagent gets a self-contained JSON (goal + context + task + constraints) and returns `{changed_files, satisfied_requirements, deviations}` via schema. After the workflow the full suite must be green before review.
 
 ### uniterra-simplify
 
-Scope-bound simplification review — usable standalone, no plan required. Establishes an explicit review scope (default: uncommitted changes; or the files/refs the user names), then a `workflow` script runs the fix ↔ simplify-review loop: reviewer returns structured `{verdict:'pass'|'fix', findings}` via `schema`; read-only reviewers, uncommitted fixes, cap at `maxRounds` (e.g. 8). Behaviour must be preserved exactly.
+Behaviour-preserving simplification — usable standalone, no plan required. Assemble a goal + context (requirements / design / acceptance, from docs or written directly), then a `workflow` loops review → fix → re-review: the review agent finds simplification opportunities against the over-engineering checklist (`references/overengineering-checklist.md`), each rated `safe` (provably behaviour-preserving) or `risky`; the fix agent applies them, preserving behaviour exactly. Cap at `maxRounds` (default 8).
 
 ### uniterra-review
 
-Scope-bound adversarial review — usable standalone, no plan required. Same shape as uniterra-simplify, but the reviewer tries to BREAK the changes (bugs, security, races, contract violations) inside the review scope; when a plan exists its requirements are cited in findings.
+Adversarial review — usable standalone, no plan required. Assemble a goal + context (requirements / design / acceptance) + task, then a `workflow` loops review → repro → fix → re-review: the review agent grades findings critical / high / medium / low, covering correctness AND security (`references/security-checklist.md`); a repro agent pins each finding as a failing property test (un-reproducible findings are invalid and dropped); the fix agent repairs only the verified findings. Cap at `maxRounds` (default 8).
 
 ### uniterra-pbt-debugging
 

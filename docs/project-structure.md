@@ -32,10 +32,10 @@ Directory map for the uniterra monorepo. Locate code by task, not by grepping.
 
 | Skill dir                | Purpose                                                                                                                                                      |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `uniterra-plan`          | Planning phase: clarify → PRD/design subagents → execution-plan.json with per-task requirements → user approval                                              |
-| `uniterra-implement`     | PBT-first execution: simple tasks inline; complex tasks write ALL failing PBTs then batched/full-parallel dynamic workflow                                   |
-| `uniterra-simplify`      | Scope-bound simplification review: explicit review scope → fix ↔ simplify-review dynamic workflow loop                                                       |
-| `uniterra-review`        | Scope-bound adversarial review: explicit review scope → fix ↔ adversarial-review dynamic workflow loop                                                       |
+| `uniterra-plan`          | Planning phase: clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents                            |
+| `uniterra-implement`     | PBT-first execution: write ALL failing PBTs → decompose into a task list → batched / full-parallel workflow of subagents                                     |
+| `uniterra-simplify`      | Behaviour-preserving simplification: goal + context → review (over-engineering checklist) → fix → re-review loop                                             |
+| `uniterra-review`        | Adversarial review: goal + context → review (correctness + security) → repro (pin findings as failing tests) → fix → re-review loop                          |
 | `uniterra-pbt-debugging` | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests                                              |
 | `project-documentation`  | Generate/maintain the structured `docs/` tree                                                                                                                |
 | `uniterra-qa`            | PRD-driven acceptance testing: UI apps = playwright geometry + pixel checks then UI operation; backend = clean-container install + smoke boot + API journeys |
