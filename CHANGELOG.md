@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] — 2026-08-21
+
+### Changed
+
+- `verify-windows-install` replays the closer-to-real user flow instead of the always-copy `--source` dev path (issue #3): the job first relocates the fresh checkout onto the TEMP volume (the runner workspace is on another volume, `D:\a`, so without this every embed would cross volumes), then the new `--move-source` opt-in lets the disposable checkout be embedded via the same same-volume rename a downloaded release source gets — dropping the full-tree robocopies that were ~96% of the job's ~18 min. The install-destination dir (`%LOCALAPPDATA%\Programs`) is added to the runner's Defender exclusions so the final `copyInstalled` rename no longer degrades to a robocopy fallback under AV locks; the junction re-point (`remapJunctionTarget`) is now exercised end-to-end by the gate (a moved tree preserves pnpm junctions, which a robocopy-materialized tree never did). `embedStrategy(platform, downloaded, moveSource?)` and `parseArgs` (`--move-source` requires `--source`) are PBT-locked.
+- `uniterra-simplify`: a fix round now applies EVERY recommendation — `risky` ones go through a test-first equivalence gate (behaviour pinned with property/equivalence tests before the change, kept green after; revert with evidence otherwise) instead of being skippable, and skipped items accumulate across rounds as `{ id, reason }` so the reviewer always sees the full skip history.
+
 ## [0.11.0] — 2026-08-20
 
 ### Changed
