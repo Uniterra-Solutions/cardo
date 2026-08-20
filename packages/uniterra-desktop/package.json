@@ -1,6 +1,6 @@
 {
   "name": "@uniterra-solutions/uniterra-desktop",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "private": true,
   "description": "Uniterra desktop shell: supervises a bundled DeepSeek Harness (dsh) CLI and hosts its Web UI in an Electron window. Runs dsh against the user's normal ~/.dsh (dev uses a mirrored test home); built-ins are ensured into the profile at startup.",
   "type": "module",

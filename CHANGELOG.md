@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] — 2026-08-21
+
+### Changed
+
+- `uniterra-simplify`: the plan's `design` context is now an AUTHORITATIVE constraint for both workflow agents. The review agent only proposes simplifications that preserve the architecture and engineering needs stated in the design (module boundaries, layers, interfaces, data shapes, testability, observability, security, error handling, performance, extensibility) — design-mandated machinery (a layer, interface, config flag, guard, or error path) is not over-engineering and is never flagged, and the over-engineering checklist applies only where the design is silent. The fix agent receives the Design block too and refuses (skipped with reason `violates design`) any recommendation that contradicts it. Aligns SKILL.md, the review/fix agent prompts, the checklist, and the workflow template.
+
 ## [0.11.2] — 2026-08-21
 
 ### Fixed
