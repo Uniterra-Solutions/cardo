@@ -5,7 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.11.4] — 2026-08-21
+## [0.11.5] — 2026-08-21
+
+### Fixed
+
+- `uniterra-provider`: the harness-selected reasoning effort was dropped at serialization — the effort selector had no effect on the wire. Chat Completions now carries `reasoning_effort`, Responses carries `reasoning: { effort }`, both passed through verbatim.
+- `uniterra-provider`: a catalog row without an explicit `defaultReasoningEffort` defaulted to the highest declared rung (`max` when available), which over-thinks routine tasks. The default is now `high` when the model offers it (the officially recommended default across DeepSeek and Anthropic), with the settings-page dropdown mirroring the same preference.
+- `uniterra-systemprompt`: the app-wide working rules now frame thinking as a cost — reason only far enough to set direction, then verify conclusions against the real system (run code, read files, execute tests, query APIs) and correct them from the evidence; a conclusion the evidence contradicts is a dropped hypothesis, not a defended fact. Output rules are tightened to essentials only (outcome, evidence, next step), cutting filler and process recap.
 
 ### Changed
 
