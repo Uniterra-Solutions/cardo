@@ -1,18 +1,21 @@
-# Review Workflow — fixed script (three parallel review agents)
+# Review Workflow — fixed script (three parallel review agents + a repair agent)
 
 A fixed workflow script: it reviews `prd.md`, `design.md`, and `acceptance.md` with
-three parallel agents. Only the three directory paths vary; the prompts are fixed
-(mirrors of `prompts/requirement-list-review.md`, `prompts/design-review.md`, and
-`prompts/acceptance-review.md`).
+three parallel agents, then hands the failing axes' issues to a single repair agent
+that applies them to the documents itself. A review axis that already passed is
+NEVER re-dispatched — as fixes progress, the number of review agents dispatched each
+round shrinks from 3 toward 0. Only the three directory paths vary; the prompts are
+fixed (mirrors of `prompts/requirement-list-review.md`, `prompts/design-review.md`,
+and `prompts/acceptance-review.md`).
 
 Submit it with the `workflow` tool as:
-`meta: { name: 'plan-review', description: 'Review plan documents with three parallel agents' }`,
+`meta: { name: 'plan-review', description: 'Review plan documents, repair issues, and re-review only the failed axes until all pass' }`,
 `script: <the JS below>`, and `args: { prd_dir, design_dir, acceptance_dir }`.
 
 Note: `meta` is a separate required tool parameter, never part of the script. dsh
 accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
 with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
-with `META_INVALID`.
+with `META_INVALID`. `args` may carry an optional `maxRounds`.
 
 ```js
 const { prd_dir, design_dir, acceptance_dir } = args;
@@ -71,6 +74,26 @@ Return verdict: "pass" only if every criterion is clear and verifiable. Otherwis
 return verdict: "fail" and one issues entry per finding: cite the criterion id, the
 problem, and a suggested fix.`;
 
+const REPAIR_PROMPT = `You are an isolated repair subagent. You apply the review issues to the plan documents
+yourself. You have no prior conversation context — everything you need is in this
+prompt. The issues are injected below as a list of { reviewer, doc, dir, issues }.
+
+Method:
+1. For EACH entry, read the document named by \`doc\` inside \`dir\` (e.g. read
+   \`<dir>/prd.md\`), and apply every issue in its \`issues\` list. Each issue carries
+   a \`where\`, a \`problem\`, and a \`suggestion\`.
+2. Make the MINIMAL edit that resolves each issue, following the suggestion where it
+   is sensible. Preserve the document's existing structure, formatting, and voice.
+3. Do NOT touch a document that has no issues this round, and do NOT rewrite unrelated
+   content or invent new problems.
+
+Constraints:
+- Only apply the listed issues; do not expand scope.
+- Keep changes minimal and consistent with the rest of the document.
+- Leave the edited documents on disk (do not commit).
+
+Return: status ("fixed" | "failed") and a short summary of what was applied.`;
+
 const REVIEW_SCHEMA = {
   type: 'object',
   required: ['verdict', 'issues'],
@@ -91,6 +114,15 @@ const REVIEW_SCHEMA = {
   },
 };
 
+const REPAIR_SCHEMA = {
+  type: 'object',
+  required: ['status'],
+  properties: {
+    status: { type: 'string', enum: ['fixed', 'failed'] },
+    summary: { type: 'string' },
+  },
+};
+
 function inputs() {
   return [
     '## Inputs',
@@ -100,26 +132,92 @@ function inputs() {
   ].join('\n');
 }
 
-const [requirement, design, acceptance] = await parallel([
-  () =>
-    agent(REQUIREMENT_PROMPT + '\n\n' + inputs(), {
-      label: 'requirement-list-review',
-      schema: REVIEW_SCHEMA,
-    }),
-  () => agent(DESIGN_PROMPT + '\n\n' + inputs(), { label: 'design-review', schema: REVIEW_SCHEMA }),
-  () =>
-    agent(ACCEPTANCE_PROMPT + '\n\n' + inputs(), {
-      label: 'acceptance-review',
-      schema: REVIEW_SCHEMA,
-    }),
-]);
+const REVIEWERS = [
+  {
+    key: 'requirement',
+    label: 'requirement-list-review',
+    prompt: REQUIREMENT_PROMPT,
+    doc: 'prd.md',
+    dir: prd_dir,
+  },
+  {
+    key: 'design',
+    label: 'design-review',
+    prompt: DESIGN_PROMPT,
+    doc: 'design.md',
+    dir: design_dir,
+  },
+  {
+    key: 'acceptance',
+    label: 'acceptance-review',
+    prompt: ACCEPTANCE_PROMPT,
+    doc: 'acceptance.md',
+    dir: acceptance_dir,
+  },
+];
 
-const pass = [requirement, design, acceptance].every((r) => r !== null && r.verdict === 'pass');
-return { pass, requirement, design, acceptance };
+const maxRounds = args.maxRounds ?? 8;
+const passed = new Set();
+
+for (let round = 1; round <= maxRounds; round++) {
+  phase('round-' + round);
+
+  // Only re-review the axes that have not passed yet. A passed axis is never dispatched again,
+  // so the number of review agents per round shrinks from 3 toward 0 as fixes land.
+  const pending = REVIEWERS.filter((r) => !passed.has(r.key));
+  if (pending.length === 0) return { status: 'done', rounds: round, pass: true };
+
+  const results = await parallel(
+    pending.map(
+      (r) => () => agent(r.prompt + '\n\n' + inputs(), { label: r.label, schema: REVIEW_SCHEMA }),
+    ),
+  );
+
+  const failures = [];
+  pending.forEach((r, i) => {
+    const res = results[i];
+    if (res === null) {
+      failures.push({ reviewer: r, issues: [] });
+    } else if (res.verdict !== 'pass') {
+      failures.push({ reviewer: r, issues: res.issues ?? [] });
+    } else {
+      passed.add(r.key);
+    }
+  });
+
+  if (failures.length === 0) return { status: 'done', rounds: round, pass: true };
+
+  // Repair only the axes that actually produced issues; an axis whose agent returned null
+  // carries no actionable issues and is simply re-reviewed next round.
+  const toRepair = failures.filter((f) => f.issues.length > 0);
+  if (toRepair.length > 0) {
+    const repairInput = toRepair.map((f) => ({
+      reviewer: f.reviewer.key,
+      doc: f.reviewer.doc,
+      dir: f.reviewer.dir,
+      issues: f.issues,
+    }));
+    const repair = await agent(
+      REPAIR_PROMPT + '\n\n## Issues to repair\n' + JSON.stringify(repairInput, null, 2),
+      { label: 'repair-' + round, schema: REPAIR_SCHEMA },
+    );
+    if (repair === null) return { status: 'blocked', reason: 'repair agent failed', round };
+    if (repair.status === 'failed') return { status: 'failed', round, failures };
+  }
+}
+
+return { status: 'blocked', reason: 'max rounds reached', rounds: maxRounds };
 ```
 
 ## Reading the result
 
-- `pass: true` → all three reviews are clean; hand off to `uniterra-implement`.
-- `pass: false` → apply each agent's `issues` to the corresponding doc, then re-run.
-- A `null` slot means that agent failed to return a valid report — treat as `fail`.
+- `status: 'done'` and `pass: true` → all three review axes passed; hand off to
+  `uniterra-implement`.
+- `status: 'done'` is only returned when `pending.length === 0` or a round had no
+  failures — a passed axis is never re-dispatched.
+- `status: 'failed'` → the repair agent could not resolve a round's issues; inspect the
+  round's `failures`.
+- `status: 'blocked'` → the round cap was hit with an axis still failing (or an agent
+  kept returning `null`); inspect the last round's work.
+- `rounds` — number of rounds run. `failures` carries the failing axes (each with its
+  `reviewer` and `issues`) for the round that produced them.

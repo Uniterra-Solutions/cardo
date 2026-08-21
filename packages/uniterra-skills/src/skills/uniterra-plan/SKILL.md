@@ -55,13 +55,17 @@ Write them yourself in the main session (no authoring subagents):
     complexity, minimal invasiveness, necessary vs unnecessary external libraries.
   - **acceptance-review** (`prompts/acceptance-review.md`) — clarity + an objective,
     verifiable piece of evidence per criterion.
-- If any agent returns `pass: false` (or `null`), apply its `issues` to the docs and
-  re-run until all three pass.
+- A failing axis's `issues` are handed to a single **repair agent** that applies them
+  to the documents itself (no manual editing in the main session).
+- After a repair, only the axes that FAILED the previous round are re-dispatched — an
+  axis that already passed is never re-reviewed. So as fixes land, the number of review
+  agents dispatched each round shrinks from 3 toward 0. The loop ends when all three
+  pass (or `maxRounds`, default 8, is hit).
 
 ## Files
 
 - `scripts/review-workflow.md` — the fixed review workflow script (embeds the three
-  fixed prompts; `args` carries the three directory paths).
+  fixed prompts + the repair agent; `args` carries the three directory paths).
 - `prompts/requirement-list-review.md` — requirement feasibility + contradiction agent.
 - `prompts/design-review.md` — design over-engineering / minimal-invasiveness agent.
 - `prompts/acceptance-review.md` — acceptance clarity + verifiable-evidence agent.
