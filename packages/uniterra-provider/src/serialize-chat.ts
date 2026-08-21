@@ -138,5 +138,9 @@ export function serializeRequest(options: GenerateOptions): ChatRequest {
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
     ...(options.maxTokens === undefined ? {} : { max_tokens: options.maxTokens }),
     ...(options.stop !== undefined ? { stop: options.stop } : {}),
+    // Reasoning effort rides the OpenAI-compatible `reasoning_effort` field
+    // (DeepSeek/Qwen/GLM gateways expose the same name); the adapter-owned
+    // effort id is passed through verbatim — no re-mapping here.
+    ...(options.reasoningEffort === undefined ? {} : { reasoning_effort: options.reasoningEffort }),
   };
 }
