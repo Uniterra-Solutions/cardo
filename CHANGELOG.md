@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.8] — 2026-08-21
+
+### Changed
+
+- `uniterra-plan`: the review workflow no longer stops at "apply the issues yourself and re-run all three". A failing axis's `issues` are handed to a single repair agent that applies them to the documents itself; after a repair, only the axes that FAILED the previous round are re-dispatched — an axis that already passed is never re-reviewed, so the review-agent count shrinks from 3 toward 0 as fixes land. Aligns SKILL.md and `scripts/review-workflow.md` (the plan workflow now embeds the repair agent prompt and tracks a `passed` set per axis).
+- `uniterra-review`: the repro agent is merged into the review agent. The review agent now CONFIRMS each finding before reporting it — it writes a failing regression test in the repo's conventional test location (descriptive, invariant-based name, never a finding id) and reports ONLY confirmed findings, dropping unconfirmed ones. It also stops reporting low-value non-logic issues (stale documentation, stale comments, formatting/style nits) and focuses on the code logic itself; each reported finding carries the path of its confirming test. The workflow is now review → fix → re-review (no separate repro stage). Aligns SKILL.md, the review-agent prompt, the fix-agent prompt, and the workflow template; `references/repro-agent.md` is removed.
+
 ## [0.11.7] — 2026-08-21
 
 ### Fixed

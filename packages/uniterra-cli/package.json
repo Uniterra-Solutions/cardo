@@ -1,6 +1,6 @@
 {
   "name": "@uniterra-solutions/uniterra",
-  "version": "0.11.7",
+  "version": "0.11.8",
   "description": "Uniterra desktop app installer: one-command setup and update for the Uniterra desktop app (macOS and Windows).",
   "license": "MIT",
   "repository": {
