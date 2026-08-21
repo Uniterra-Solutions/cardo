@@ -268,6 +268,16 @@ function highestEffort(efforts: readonly string[]): string {
   return [...efforts].sort((a, b) => (EFFORT_RUNG[b] ?? -1) - (EFFORT_RUNG[a] ?? -1))[0] as string;
 }
 
+/**
+ * The default effort for a catalog row that does not declare one: `high` when
+ * the model offers it (the officially recommended default across DeepSeek and
+ * Anthropic — `max` is for measured wins, not a starting point), else the
+ * highest-ranked effort the model actually declares.
+ */
+function defaultEffortOf(efforts: readonly string[]): string {
+  return efforts.includes('high') ? 'high' : highestEffort(efforts);
+}
+
 /** Brand words that keep their own casing instead of first-letter capital. */
 const BRAND_SPELLING: Readonly<Record<string, string>> = {
   glm: 'GLM',
@@ -389,7 +399,9 @@ export class UniterraAdapter extends LlmAdapter {
               ...(configured.defaultReasoningEffort !== undefined &&
               configured.reasoningEfforts.includes(configured.defaultReasoningEffort)
                 ? { defaultEffort: ReasoningEffortId(configured.defaultReasoningEffort) }
-                : { defaultEffort: ReasoningEffortId(highestEffort(configured.reasoningEfforts)) }),
+                : {
+                    defaultEffort: ReasoningEffortId(defaultEffortOf(configured.reasoningEfforts)),
+                  }),
             },
           }
         : {}),

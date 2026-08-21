@@ -161,5 +161,11 @@ export function serializeRequest(options: GenerateOptions): ResponsesRequest {
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
     ...(options.maxTokens === undefined ? {} : { max_output_tokens: options.maxTokens }),
     ...(options.stop !== undefined && options.stop.length > 0 ? { stop: options.stop } : {}),
+    // Reasoning effort rides the Responses API's `reasoning.effort` object
+    // (OpenAI and DeepSeek both consume this shape); the adapter-owned effort
+    // id is passed through verbatim — no re-mapping here.
+    ...(options.reasoningEffort === undefined
+      ? {}
+      : { reasoning: { effort: options.reasoningEffort } }),
   };
 }

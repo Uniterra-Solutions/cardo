@@ -59,6 +59,7 @@
 
 - Run `pnpm run lint` and `pnpm run typecheck` before committing (build first — `tsc -b --noEmit` fails with TS6310 when referenced projects are stale)
 - Add tests for new behaviour
+- `uniterra-review` regression tests are permanent: the review agent (which confirms each finding by writing a failing test before reporting it) writes each failing test to the repo's conventional test location (the package's `test/` dir, picked up by its `test` script) with a descriptive, invariant-based name — never a finding id — matching the package's test framework and lint conventions; the fix agent turns them green but never deletes or renames them
 - After changing `packages/uniterra-systemprompt`, `packages/uniterra-skills`, or `packages/uniterra-updater` source, run `pnpm run build` — the desktop app resolves them via their `dist` exports
 - After changing `packages/uniterra-provider` source, run `pnpm run build` — the desktop's workspace built-in provisioning copies `packages/uniterra-provider/lib/` (the built bundle) into the profile; stale `lib/` means the profile ships an outdated plugin. `pnpm run build` there is `tsc -p tsconfig.json` + esbuild (host+client)
 - After changing `packages/uniterra-skills/src/skills/*`, run `pnpm run build` so `copy-skills.mjs` refreshes `dist/skills/` (stale entries are removed, so a deleted skill stops shipping)

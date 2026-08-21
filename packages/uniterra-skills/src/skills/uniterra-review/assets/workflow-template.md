@@ -1,18 +1,31 @@
 # Review Workflow Template
 
-One workflow: review → repro → fix. Submit with `args = { goal, context, task }`
-where `context = { requirements, design, acceptance }` (each may be empty). The
-three embedded prompts mirror `references/review-agent.md`, `references/repro-agent.md`,
-and `references/fix-agent.md`.
+One workflow: review (with in-agent reproduction) → fix. Submit it with the
+`workflow` tool as:
+`meta: { name: 'review', description: 'Adversarial review: confirm findings, then fix until clean' }`,
+`script: <the JS below>`, and `args = { goal, context, task }` where
+`context = { requirements, design, acceptance }` (each may be empty). The two
+embedded prompts mirror `references/review-agent.md` and `references/fix-agent.md`.
+
+The review agent and the old repro agent are merged into one: the review agent
+verifies every finding itself — it writes a failing test that reproduces each finding
+and reports ONLY the findings it confirmed. Unconfirmed findings are dropped, never
+reported. This is what "repro" used to do; it is now part of the review step.
+
+Note: `meta` is a separate required tool parameter, never part of the script. dsh
+accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
+with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
+with `META_INVALID`. `args` may carry an optional `maxRounds`.
 
 ```js
 const { goal, context, task } = args;
 
-const REVIEW_PROMPT = `You are an isolated adversarial code reviewer. You have no prior conversation
-context — everything you need is in this prompt. Your job is to try to BREAK the
-changes, not approve them. The goal, task, and context blocks are injected below.
+const REVIEW_PROMPT = `You are an isolated adversarial code reviewer who CONFIRMS every finding before
+reporting it. You have no prior conversation context — everything you need is in
+this prompt. Your job is to try to BREAK the changes, not approve them. The goal,
+task, and context blocks are injected below.
 
-Focus — check for ALL of these:
+Review focus — check for ALL of these:
 1. Unmet requirements — does the code fail to satisfy any requirement?
 2. Harmful design deviation — does the code deviate from the design in a harmful
    way? A deviation that is BETTER than the design is NOT a finding.
@@ -38,6 +51,35 @@ Security checklist:
 Read the repo first (AGENTS.md / CLAUDE.md + the source in scope) so findings
 reference real code. Inspect ONLY the review scope named in the task.
 
+Confirm EVERY finding before reporting it — only confirmed findings are reported:
+A finding is only worth reporting if you can PROVE it. For each candidate finding:
+1. Define the business logic under investigation as an invariant.
+2. Write a FAILING test (a fast-check property test, or a deterministic regression)
+   that captures the finding. The test is FORMAL source code that stays in the repo
+   as permanent regression coverage — follow the repo's test conventions exactly:
+   - Write it to the repo's conventional test location for the module under test
+     (the package's test/ directory, in the format the package's test script picks
+     up), using the repo's test framework (node:test + fast-check where AGENTS.md
+     prescribes it).
+   - Name it DESCRIPTIVELY after the invariant it pins (e.g.
+     <module>-<behaviour>.test.mjs), never after a finding id.
+   - Match the repo's existing conventions (imports, formatting, assertion style) so
+     the test passes lint/format like any other source.
+   - If a regression test for an invariant already exists (e.g. from an earlier
+     round), do not duplicate it — re-run it and confirm it still fails for the
+     finding's reason.
+3. Run the test and confirm it FAILS for the reason the finding describes (red).
+
+Report ONLY findings you confirmed with a failing test. DROP any finding you cannot
+confirm — an unconfirmed finding is NOT reported, and you must NOT write a test that
+fails for an unrelated reason just to "confirm" it.
+
+Do not report non-logic issues — focus on the code logic itself:
+- Do NOT report stale / outdated documentation or comments.
+- Do NOT report formatting, style, or naming nits.
+- Do NOT report cosmetic suggestions with no correctness impact.
+If the only issues you can find are this kind, return verdict "pass".
+
 Severity levels:
 - critical — wrong results, data loss/corruption, a security hole, or a core
   requirement entirely unmet. Blocks delivery.
@@ -45,48 +87,34 @@ Severity levels:
   criterion, or deviates from the design in a harmful way. Likely user-visible.
 - medium — fails on an edge/error path, missing or weak test coverage, or a clear
   maintainability debt. Concrete risk, no immediate breakage.
-- low — style/naming/readability, a harmless design deviation, non-blocking
-  suggestions. No correctness impact.
+- low — a confirmed but non-blocking finding with no correctness impact. Rare, since
+  style/naming/readability nits are not reported.
 
-Return a structured findings list. Every finding must reference a concrete
-location (inside the scope) and a concrete failure mode, and carry the id, level,
-and description. If the code is sound, return an empty findings list.`;
+Verdict — decide pass vs fail:
+- pass — the code is ready: no confirmed findings, or only confirmed low-severity
+  non-blocking ones. Passing is a deliberate judgment call: do NOT fail a review
+  over nitpicks — low findings alone never block.
+- fail — any confirmed finding at medium or above, or any confirmed finding (even
+  low) that must be addressed before the change is accepted.
 
-const REPRO_PROMPT = `You are an isolated subagent. You reproduce ONE review finding as a failing
-property-based test. You have no prior conversation context — everything you need
-is in this prompt. The goal and finding are injected below.
+Return a verdict ("pass" | "fail") and a structured findings list. Every finding
+must reference a concrete location (inside the scope) and a concrete failure mode,
+and carry the id, level, description, and verification_test (the path of the
+failing test that confirms it). If the code is sound, return verdict "pass" with an
+empty findings list.`;
 
-Method:
-1. Define the business logic under investigation as an invariant.
-2. Write a FAILING property test (fast-check, or a deterministic regression) that
-   captures the finding.
-3. Run the suite to confirm it FAILS for the reason the finding describes (red).
-
-Write the test to a location that won't collide with other repro agents (a
-distinct test file per finding, placed beside the module under test).
-
-Reproducible vs invalid:
-- verified — the test reproduces the finding (fails for the described reason).
-- invalid — you cannot reproduce it: the code is correct, the finding is wrong, or
-  the behaviour cannot be pinned by a test. Do NOT write a test that fails for an
-  unrelated reason just to "confirm" it.
-
-Do NOT edit source — only add the failing test.
-
-Return: id (unchanged), verdict ("verified" | "invalid"), level (unchanged),
-verification_test (the test file path — only when verified), and description.`;
-
-const FIX_PROMPT = `You are an isolated subagent. You repair ONLY the verified findings, each already
-pinned by a failing test. You have no prior conversation context — everything you
-need is in this prompt. The goal and verified findings are injected below.
+const FIX_PROMPT = `You are an isolated subagent. You repair ONLY the confirmed findings, each already
+pinned by a failing test written by the review agent. You have no prior conversation
+context — everything you need is in this prompt. The goal and confirmed findings are
+injected below.
 
 Method:
-1. Make the MINIMAL source change so each verified finding's failing test passes
+1. Make the MINIMAL source change so each confirmed finding's failing test passes
    (green).
 2. Run the test suite and lint; confirm the pinned tests pass and nothing else broke.
 
 Constraints:
-- Do NOT delete or weaken the repro tests.
+- Do NOT delete or weaken the failing regression tests.
 - Do NOT break already-implemented business logic — all other tests must stay green.
 - Do NOT refactor unrelated code or add abstractions / dependency injection unless
   a finding specifically demands it.
@@ -97,32 +125,22 @@ short summary.`;
 
 const REVIEW_SCHEMA = {
   type: 'object',
-  required: ['findings'],
+  required: ['verdict', 'findings'],
   properties: {
+    verdict: { type: 'string', enum: ['pass', 'fail'] },
     findings: {
       type: 'array',
       items: {
         type: 'object',
-        required: ['id', 'level', 'description'],
+        required: ['id', 'level', 'description', 'verification_test'],
         properties: {
           id: { type: 'string' },
           level: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
           description: { type: 'string' },
+          verification_test: { type: 'string' },
         },
       },
     },
-  },
-};
-
-const REPRO_SCHEMA = {
-  type: 'object',
-  required: ['id', 'verdict', 'level', 'description'],
-  properties: {
-    id: { type: 'string' },
-    verdict: { type: 'string', enum: ['verified', 'invalid'] },
-    level: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
-    verification_test: { type: 'string' },
-    description: { type: 'string' },
   },
 };
 
@@ -153,44 +171,27 @@ const maxRounds = args.maxRounds ?? 8;
 for (let round = 1; round <= maxRounds; round++) {
   phase('round-' + round);
 
-  // Stage 1 — review
+  // Stage 1 — review + in-agent reproduction (the review agent confirms each finding)
   const review = await agent(
     REVIEW_PROMPT + '\n\n## Goal\n' + goal + '\n\n## Task\n' + task + '\n\n' + contextBlock(),
     { label: 'review-' + round, schema: REVIEW_SCHEMA },
   );
   if (review === null) return { status: 'blocked', reason: 'review agent failed', round };
   const findings = review.findings;
-  if (findings.length === 0) return { status: 'done', rounds: round };
+  if (review.verdict === 'pass' || findings.length === 0)
+    return { status: 'done', rounds: round, verdict: review.verdict, findings };
 
-  // Stage 2 — repro (one agent per finding, parallel)
-  const repros = await parallel(
-    findings.map(
-      (f) => () =>
-        agent(
-          REPRO_PROMPT + '\n\n## Goal\n' + goal + '\n\n## Finding\n' + JSON.stringify(f, null, 2),
-          {
-            label: 'repro-' + round + '-' + f.id,
-            schema: REPRO_SCHEMA,
-          },
-        ),
-    ),
-  );
-  const verified = repros.filter((r) => r !== null && r.verdict === 'verified');
-  if (verified.length === 0) {
-    return { status: 'done', rounds: round, findings: findings.length, invalid: findings.length };
-  }
-
-  // Stage 3 — fix
+  // Stage 2 — fix the confirmed findings
   const fix = await agent(
     FIX_PROMPT +
       '\n\n## Goal\n' +
       goal +
-      '\n\n## Verified findings\n' +
-      JSON.stringify(verified, null, 2),
+      '\n\n## Confirmed findings\n' +
+      JSON.stringify(findings, null, 2),
     { label: 'fix-' + round, schema: FIX_SCHEMA },
   );
-  if (fix === null) return { status: 'blocked', reason: 'fix agent failed', round, verified };
-  if (fix.status === 'failed') return { status: 'failed', round, verified };
+  if (fix === null) return { status: 'blocked', reason: 'fix agent failed', round, findings };
+  if (fix.status === 'failed') return { status: 'failed', round, findings };
 }
 
 return { status: 'blocked', reason: 'max rounds reached', rounds: maxRounds };
@@ -199,8 +200,13 @@ return { status: 'blocked', reason: 'max rounds reached', rounds: maxRounds };
 ## Reading the result
 
 - `rounds` — number of rounds run.
-- `status: 'done'` — a review round returned no findings (or every finding was an invalid
-  false positive), so nothing is left to fix.
+- `verdict` — the last review round's verdict ("pass" | "fail").
+- `findings` — the last review round's findings. When `verdict` is "pass", these are
+  confirmed but non-blocking (low-severity) items the reviewer chose not to fix; when
+  "fail", the confirmed findings that went to fix.
+- `status: 'done'` — a review round returned `verdict: 'pass'` (no confirmed findings,
+  or only confirmed low-severity non-blocking ones — those findings are returned but
+  not fixed), so nothing is left to fix.
 - `status: 'blocked'` — the round cap was hit with findings still open; inspect the last
   round's work.
-- `status: 'failed'` — the fix agent could not repair a verified finding.
+- `status: 'failed'` — the fix agent could not repair a confirmed finding.

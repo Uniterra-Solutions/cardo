@@ -13,8 +13,9 @@ output. Batches run serially; agents WITHIN a batch run in parallel.
 
 ## Script
 
+Submit with the `workflow` tool as `meta: { name: 'implement', description: 'Implement overlapping tasks in serial batches' }`, `script: <the JS below>`, and `args = { goal, batches }`. The meta shape above is a separate tool parameter — do not put it in the script.
+
 ```js
-// meta: { name: 'implement', description: 'Implement overlapping tasks in serial batches' }
 const { goal, batches } = args;
 const results = [];
 for (let b = 0; b < batches.length; b++) {

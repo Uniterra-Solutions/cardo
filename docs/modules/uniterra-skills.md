@@ -2,7 +2,7 @@
 
 **Purpose:** Built-in skill registry — bundles the 10 company-standard skills and provisions them into the agent's skills directory at startup (idempotent, never clobbers user edits; retired skills are removed). In the dsh runtime the same skill tree ships via the rank-600 bundled provider (`DSH_BUNDLED_SKILL_DIR`).
 
-Source: `packages/uniterra-skills/src/index.ts`, `src/skills/*/SKILL.md`; build `scripts/copy-skills.mjs`; tests `test/provision.test.mts`.
+Source: `packages/uniterra-skills/src/index.ts`, `src/skills/*/SKILL.md`; build `scripts/copy-skills.mjs`; tests `test/provision.test.mts`, `test/workflow-templates.test.mts`.
 
 ## Public API
 
@@ -29,20 +29,48 @@ Provision order (`SKILL_NAMES`): `uniterra-pbt-debugging`, `uniterra-plan`, `uni
 
 `build` = `tsc -b` + `scripts/copy-skills.mjs`: mirrors `src/skills/*` → `dist/skills/`, deletes stale `dist/skills` entries (a deleted skill must not keep shipping), and throws if zero skills were copied (fail fast on a wrong path).
 
+## Workflow Templates & the dsh `workflow` Tool Contract
+
+The four pipeline skills (`uniterra-plan` / `uniterra-implement` / `uniterra-review` /
+`uniterra-simplify`) dispatch their agents through the dsh `workflow` tool. Every
+template embeds the script as a ` ```js ` code fence and MUST instruct the full
+submission contract, or a workflow taken straight from the template fails before the
+script runs:
+
+- **`meta` is a separate, REQUIRED tool parameter** (`meta: { name, description }`),
+  never part of the script body — dsh rejects a body opening with
+  `export const meta` (`SCRIPT_PARSE`). Only `name` / `description` / optional
+  `whenToUse` / `phases` (with only `title` / `detail` / `provider` / `model`) are
+  recognized; any other meta field fails the run with `META_INVALID`.
+- **`script`** is the plain-JS body only (no TypeScript), compiled as
+  `(async () => { <body> })()`, ending with `return <json-value>`.
+- **`args`** is free-form JSON exposed as the `args` global.
+- Hooks available in the script realm: `agent(prompt, opts)`, `parallel(thunks)`,
+  `pipeline(items, ...stages)`, `phase(title)`, `log(message)`, `args`. `agent()`
+  accepts only `label` / `phase` / `schema` / `provider` / `model` (anything else is
+  rejected loudly); `schema` must be object-rooted and use only
+  `type` / `properties` / `required` / `additionalProperties` / `items` / `enum` /
+  `const` / `oneOf`.
+
+`test/workflow-templates.test.mts` locks this: every embedded ` ```js ` fence parses
+under dsh's wrapper, no body opens with `export const meta`, every template instructs
+the `meta` parameter, and the single-script templates execute to a terminal JSON
+result under stubbed hooks. Keep templates inside this contract when editing them.
+
 ## Bundled Skills
 
-| Skill                                             | Trigger (LOAD when)                                                                 | Workflow                                                                                                                                                                                         |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [uniterra-plan](#uniterra-plan)                   | Plan a feature/task (prd/design/plan/規劃/計畫)                                     | Clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents (feasibility / over-engineering / verifiable acceptance)                       |
-| [uniterra-implement](#uniterra-implement)         | Execute an approved plan (execute_plan/執行計畫); implement a well-specified task   | Requirements + design → write ALL failing PBTs → decompose into a task list → batched/parallel workflow of subagents → full suite green                                                          |
-| [uniterra-simplify](#uniterra-simplify)           | Simplify code / cut over-engineering / run the simplify phase (with a review scope) | goal + context (requirements/design/acceptance) → review (over-engineering checklist — plan design is authoritative, safe/risky) → fix → re-review loop                                          |
-| [uniterra-review](#uniterra-review)               | Adversarial review / hunt for bugs / run the review phase (with a review scope)     | goal + context → review (correctness + security, critical/high/medium/low) → repro (pin findings as failing tests) → fix → re-review loop                                                        |
-| [uniterra-pbt-debugging](#uniterra-pbt-debugging) | Bug report / test failure / wrong behavior in business-logic code                   | Read logic → define invariants → failing PBT reproduction → fix → regression tests                                                                                                               |
-| uniterra-qa                                       | Verify an app against its PRD (qa/test/驗收/試用)                                   | UI: playwright DOM geometry → screenshot pixel analysis → external-tool UI operation (or playwright E2E); backend: clean-container install + smoke boot → API journeys → fix loop → qa-report.md |
-| project-documentation                             | Generate/update/rebuild project docs (寫文檔/更新文檔/重建文檔/項目文檔)            | SCAN → ANALYZE → GENERATE (12 files in dependency order) → VERIFY audit; existing docs → incremental git-diff update                                                                             |
-| create-skill                                      | Build a new agent skill from scratch                                                | DISCOVER → DESIGN → PLAN → BUILD → VALIDATE → DELIVER                                                                                                                                            |
-| manage-agents-md                                  | Create/audit agent spec files (AGENTS.md etc.)                                      | Scan 6 core areas → write → audit → drift check                                                                                                                                                  |
-| manage-git-repo                                   | Commit/version/release/PR workflows                                                 | Commit (dependency order) / Version Release (semver + changelog + `v` tag) / Branch + Batch Commit + PR / Stacked PR                                                                             |
+| Skill                                             | Trigger (LOAD when)                                                                 | Workflow                                                                                                                                                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [uniterra-plan](#uniterra-plan)                   | Plan a feature/task (prd/design/plan/規劃/計畫)                                     | Clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents → repair agent applies failing issues → re-review only the failed axes until all pass                                 |
+| [uniterra-implement](#uniterra-implement)         | Execute an approved plan (execute_plan/執行計畫); implement a well-specified task   | Requirements + design → write ALL failing PBTs → decompose into a task list → batched/parallel workflow of subagents → full suite green                                                                                                 |
+| [uniterra-simplify](#uniterra-simplify)           | Simplify code / cut over-engineering / run the simplify phase (with a review scope) | goal + context (requirements/design/acceptance) → review (over-engineering checklist — plan design is authoritative, safe/risky, pass/fail verdict) → fix → re-review loop until pass                                                   |
+| [uniterra-review](#uniterra-review)               | Adversarial review / hunt for bugs / run the review phase (with a review scope)     | goal + context → review (correctness + security, critical/high/medium/low, pass/fail verdict; each finding confirmed by a failing test — only confirmed findings reported, no stale-doc/comment nits) → fix → re-review loop until pass |
+| [uniterra-pbt-debugging](#uniterra-pbt-debugging) | Bug report / test failure / wrong behavior in business-logic code                   | Read logic → define invariants → failing PBT reproduction → fix → regression tests                                                                                                                                                      |
+| uniterra-qa                                       | Verify an app against its PRD (qa/test/驗收/試用)                                   | UI: playwright DOM geometry → screenshot pixel analysis → external-tool UI operation (or playwright E2E); backend: clean-container install + smoke boot → API journeys → fix loop → qa-report.md                                        |
+| project-documentation                             | Generate/update/rebuild project docs (寫文檔/更新文檔/重建文檔/項目文檔)            | SCAN → ANALYZE → GENERATE (12 files in dependency order) → VERIFY audit; existing docs → incremental git-diff update                                                                                                                    |
+| create-skill                                      | Build a new agent skill from scratch                                                | DISCOVER → DESIGN → PLAN → BUILD → VALIDATE → DELIVER                                                                                                                                                                                   |
+| manage-agents-md                                  | Create/audit agent spec files (AGENTS.md etc.)                                      | Scan 6 core areas → write → audit → drift check                                                                                                                                                                                         |
+| manage-git-repo                                   | Commit/version/release/PR workflows                                                 | Commit (dependency order) / Version Release (semver + changelog + `v` tag) / Branch + Batch Commit + PR / Stacked PR                                                                                                                    |
 
 ### uniterra-plan
 
@@ -50,7 +78,7 @@ The planning phase (Jovaltus methodology). Artifacts live under `<repo>/.plan/<Y
 
 1. **Clarify** — interactively complete the requirements list AND the architecture design with the user (`ask_user_question`).
 2. **Write the three docs yourself** (no authoring subagents) — `prd.md` (Functional Requirements list), `design.md` (architecture), `acceptance.md` (one acceptance criterion per requirement, each naming an objective verifiable piece of evidence).
-3. **Review workflow** (`scripts/review-workflow.md`) — three parallel review agents, each fed `prd_dir` / `design_dir` / `acceptance_dir`: requirement-list-review (technical feasibility + contradictions), design-review (over-engineering / minimal complexity / minimal invasiveness / necessary vs unnecessary libraries), acceptance-review (clarity + objective verifiable evidence). Re-run until all pass.
+3. **Review workflow** (`scripts/review-workflow.md`) — three parallel review agents, each fed `prd_dir` / `design_dir` / `acceptance_dir`: requirement-list-review (technical feasibility + contradictions), design-review (over-engineering / minimal complexity / minimal invasiveness / necessary vs unnecessary libraries), acceptance-review (clarity + objective verifiable evidence). The failing axes' issues go to a single repair agent that applies them to the docs itself; then only the axes that FAILED the previous round are re-reviewed — an axis that already passed is never re-dispatched, so the review-agent count shrinks from 3 toward 0. Re-run until all pass.
 
 ### uniterra-implement
 
@@ -62,11 +90,11 @@ PBT-first implementation against an explicit requirements list. The failing prop
 
 ### uniterra-simplify
 
-Behaviour-preserving simplification — usable standalone, no plan required. Assemble a goal + context (requirements / design / acceptance, from docs or written directly), then a `workflow` loops review → fix → re-review: the review agent finds simplification opportunities against the over-engineering checklist (`references/overengineering-checklist.md`), each rated `safe` (provably behaviour-preserving) or `risky`; the fix agent applies them, preserving behaviour exactly. The `design` context block is AUTHORITATIVE: neither agent ever proposes/applies a simplification that contradicts the plan's architecture or engineering needs (module boundaries, layers, interfaces, data shapes, testability, observability, security, error handling, performance) — design-mandated machinery (a layer, interface, config flag, guard, error path) is not over-engineering, and the checklist applies only where the design is silent. Cap at `maxRounds` (default 8).
+Behaviour-preserving simplification — usable standalone, no plan required. Assemble a goal + context (requirements / design / acceptance, from docs or written directly), then a `workflow` loops review → fix → re-review: the review agent returns a verdict (`pass` | `fail`) plus simplification opportunities against the over-engineering checklist (`references/overengineering-checklist.md`), each rated `safe` (provably behaviour-preserving) or `risky`; the fix agent applies them, preserving behaviour exactly. A `pass` verdict means the code is already simple enough — trivial/nitpick-level ideas are returned with the result but not applied, so the loop ends; `fail` sends the recommendations to the fix agent. The `design` context block is AUTHORITATIVE: neither agent ever proposes/applies a simplification that contradicts the plan's architecture or engineering needs (module boundaries, layers, interfaces, data shapes, testability, observability, security, error handling, performance) — design-mandated machinery (a layer, interface, config flag, guard, error path) is not over-engineering, and the checklist applies only where the design is silent. Cap at `maxRounds` (default 8).
 
 ### uniterra-review
 
-Adversarial review — usable standalone, no plan required. Assemble a goal + context (requirements / design / acceptance) + task, then a `workflow` loops review → repro → fix → re-review: the review agent grades findings critical / high / medium / low, covering correctness AND security (`references/security-checklist.md`); a repro agent pins each finding as a failing property test (un-reproducible findings are invalid and dropped); the fix agent repairs only the verified findings. Cap at `maxRounds` (default 8).
+Adversarial review — usable standalone, no plan required. Assemble a goal + context (requirements / design / acceptance) + task, then a `workflow` loops review → fix → re-review: a single review agent (review and repro merged) returns a verdict (`pass` | `fail`) plus findings graded critical / high / medium / low, covering correctness AND security (`references/security-checklist.md`), and CONFIRMS each finding before reporting it by writing a failing regression test in the repo's conventional test location with a descriptive invariant-based name (never a finding id) — only confirmed findings are reported and unconfirmed ones are dropped, and it never reports low-value non-logic issues (stale docs/comments, formatting/style nits), focusing on the code logic itself; the fix agent repairs only the confirmed findings. A `pass` verdict means the change is ready — only confirmed low-severity non-blocking findings remain, returned with the result but not fixed, so the loop ends; `fail` sends the confirmed findings to fix. Cap at `maxRounds` (default 8).
 
 ### uniterra-pbt-debugging
 

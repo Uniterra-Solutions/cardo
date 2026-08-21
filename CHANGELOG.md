@@ -5,6 +5,45 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.8] — 2026-08-21
+
+### Changed
+
+- `uniterra-plan`: the review workflow no longer stops at "apply the issues yourself and re-run all three". A failing axis's `issues` are handed to a single repair agent that applies them to the documents itself; after a repair, only the axes that FAILED the previous round are re-dispatched — an axis that already passed is never re-reviewed, so the review-agent count shrinks from 3 toward 0 as fixes land. Aligns SKILL.md and `scripts/review-workflow.md` (the plan workflow now embeds the repair agent prompt and tracks a `passed` set per axis).
+- `uniterra-review`: the repro agent is merged into the review agent. The review agent now CONFIRMS each finding before reporting it — it writes a failing regression test in the repo's conventional test location (descriptive, invariant-based name, never a finding id) and reports ONLY confirmed findings, dropping unconfirmed ones. It also stops reporting low-value non-logic issues (stale documentation, stale comments, formatting/style nits) and focuses on the code logic itself; each reported finding carries the path of its confirming test. The workflow is now review → fix → re-review (no separate repro stage). Aligns SKILL.md, the review-agent prompt, the fix-agent prompt, and the workflow template; `references/repro-agent.md` is removed.
+
+## [0.11.7] — 2026-08-21
+
+### Fixed
+
+- `uniterra-review` and `uniterra-simplify`: the review agents could never let a review through — the workflow loop kept forcing repro → fix rounds on any finding or recommendation, however minor, so a single low-severity nit or cosmetic suggestion blocked the pipeline. Each review agent now returns a verdict (`pass` | `fail`) alongside its findings / recommendations: `pass` means the code is ready — no findings, or only low-severity non-blocking ones — and ends the loop immediately, returning those items with the result instead of fixing them; `fail` means at least one finding (medium or above for `uniterra-review`) or recommendation with real simplification value (for `uniterra-simplify`) goes to repro / fix. Aligns SKILL.md, the review-agent prompts, and the workflow templates.
+
+### Added
+
+- Workflow-template contract tests now also lock the pass-verdict short-circuit: a review agent's `verdict: "pass"` ends the review / simplify workflow as `done` with the non-blocking items returned, and no repro / fix round runs (`packages/uniterra-skills/test/workflow-templates.test.mts`).
+
+## [0.11.6] — 2026-08-21
+
+### Fixed
+
+- Bundled pipeline skills (`uniterra-plan` / `uniterra-implement` / `uniterra-review` / `uniterra-simplify`): the workflow templates only instructed the `workflow` tool's `args` — the REQUIRED `meta` parameter (`name` + `description`) was never mentioned, so a workflow submitted straight from a template failed tool-call validation before the script ran, and `uniterra-implement`'s examples hinted at meta only in a `// meta:` comment inside the script (a step away from the `export const meta` body dsh rejects with `SCRIPT_PARSE`). Every template now spells out the full submission (`meta` + `script` + `args`) and warns that dsh rejects any meta field beyond name/description/whenToUse/phases (`META_INVALID`).
+
+### Added
+
+- Regression lane `packages/uniterra-skills/test/workflow-templates.test.mts` locking the templates to the dsh `workflow` tool contract: every embedded script parses under dsh's `(async () => { body })()` wrapper, no body opens with `export const meta`, every template instructs the `meta` parameter, and the single-script templates execute to a terminal JSON result under stubbed hooks. The contract is documented in `AGENTS.md`, `docs/conventions.md`, `docs/modules/uniterra-skills.md`, and `docs/workflows.md`.
+
+## [0.11.5] — 2026-08-21
+
+### Fixed
+
+- `uniterra-provider`: the harness-selected reasoning effort was dropped at serialization — the effort selector had no effect on the wire. Chat Completions now carries `reasoning_effort`, Responses carries `reasoning: { effort }`, both passed through verbatim.
+- `uniterra-provider`: a catalog row without an explicit `defaultReasoningEffort` defaulted to the highest declared rung (`max` when available), which over-thinks routine tasks. The default is now `high` when the model offers it (the officially recommended default across DeepSeek and Anthropic), with the settings-page dropdown mirroring the same preference.
+- `uniterra-systemprompt`: the app-wide working rules now frame thinking as a cost — reason only far enough to set direction, then verify conclusions against the real system (run code, read files, execute tests, query APIs) and correct them from the evidence; a conclusion the evidence contradicts is a dropped hypothesis, not a defended fact. Output rules are tightened to essentials only (outcome, evidence, next step), cutting filler and process recap.
+
+### Changed
+
+- `uniterra-review`: the repro stage no longer spawns one agent per finding in parallel — a single repro agent now pins ALL findings of a round and returns one result entry per finding (un-reproducible findings stay invalid and dropped). The repro tests are promoted to formal source code that stays in the repo as permanent regression coverage: each failing test goes to the repo's conventional test location (the package's `test/` dir, picked up by its `test` script) with a descriptive, invariant-based name — never a finding id — matching the package's test framework and lint conventions, so a verified finding keeps its regression test after the fix instead of a throwaway `f1-*` file. Existing regression tests for an invariant are re-run rather than duplicated. Aligns SKILL.md, the repro-agent prompt, and the workflow template.
+
 ## [0.11.3] — 2026-08-21
 
 ### Changed

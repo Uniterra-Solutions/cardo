@@ -229,6 +229,12 @@ async function* chatSse(payloads) {
   assert.equal(chat.tools[0].function.name, 'get_weather');
   assert.equal(chat.max_tokens, 2048);
   assert.equal(chat.temperature, 0.7);
+  // No reasoning effort requested → no reasoning_effort on the wire.
+  assert.equal('reasoning_effort' in chat, false);
+
+  // The harness's adapter-owned effort id rides the wire verbatim.
+  const chatEffort = plugin.serializeChatRequest({ ...base, reasoningEffort: 'max' });
+  assert.equal(chatEffort.reasoning_effort, 'max');
 
   // Responses: input items + tools at top level, no messages array.
   const responses = plugin.serializeResponsesRequest(base);
@@ -241,6 +247,12 @@ async function* chatSse(payloads) {
   assert.equal(responses.tools[0].name, 'get_weather');
   assert.equal(responses.max_output_tokens, 2048);
   assert.equal('messages' in responses, false);
+  // No reasoning effort requested → no reasoning object on the wire.
+  assert.equal('reasoning' in responses, false);
+
+  // Responses API carries effort inside `reasoning.effort`, verbatim.
+  const responsesEffort = plugin.serializeResponsesRequest({ ...base, reasoningEffort: 'high' });
+  assert.deepEqual(responsesEffort.reasoning, { effort: 'high' });
 
   // Tool-call turns serialize to function_call items in the Responses input.
   const toolTurn = plugin.serializeResponsesRequest({
@@ -577,6 +589,41 @@ async function* chatSse(payloads) {
   const chatResolved = await adapter.resolveModel('uniterra', 'chat-model');
   assert.equal(chatResolved.context.contextWindow, 128_000);
   assert.equal(chatResolved.reasoning.defaultEffort, 'high');
+  // Default effort prefers the officially recommended `high` rung over the
+  // highest declared rung (`max`) — matching DeepSeek/Anthropic guidance.
+  const maxEffort = new plugin.UniterraAdapter({
+    options: () => ({
+      baseURL: 'http://gw.local:3000/v1',
+      apiKeyRef: 'uniterra',
+      api: 'chat-completions',
+      models: [{ id: 'max-model', reasoningEfforts: ['low', 'high', 'max'] }],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'smoke-key',
+  });
+  const maxResolved = await maxEffort.resolveModel('uniterra', 'max-model');
+  assert.equal(maxResolved.reasoning.defaultEffort, 'high');
+  // An explicit catalog default still wins.
+  const pinned = new plugin.UniterraAdapter({
+    options: () => ({
+      baseURL: 'http://gw.local:3000/v1',
+      apiKeyRef: 'uniterra',
+      api: 'chat-completions',
+      models: [
+        { id: 'pinned-model', reasoningEfforts: ['low', 'high', 'max'], defaultReasoningEffort: 'max' },
+      ],
+      modelExcludePatterns: [],
+      defaultContextWindow: 128_000,
+      streamIdleTimeoutMs: 300_000,
+      retryPolicy: resolveRetryPolicy(undefined, 'smoke'),
+    }),
+    resolveApiKey: async () => 'smoke-key',
+  });
+  const pinnedResolved = await pinned.resolveModel('uniterra', 'pinned-model');
+  assert.equal(pinnedResolved.reasoning.defaultEffort, 'max');
   // The response-only model still resolves (wire protocol is not a capability
   // gate here — the adapter routes per request).
   const respResolved = await adapter.resolveModel('uniterra', 'resp-model');

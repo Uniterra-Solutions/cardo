@@ -41,6 +41,8 @@ export interface ChatRequest {
   temperature?: number;
   max_tokens?: number;
   stop?: string[];
+  /** Optional reasoning-effort id (OpenAI/DeepSeek-style `reasoning_effort`). */
+  reasoning_effort?: string;
   /** Optional structured-output constraint (OpenAI `response_format`). */
   response_format?: { type: 'json_object' | 'json_schema'; schema?: Record<string, unknown> };
 }
@@ -135,6 +137,8 @@ export interface ResponsesRequest {
   tools?: ResponsesTool[];
   temperature?: number;
   max_output_tokens?: number;
+  /** Optional reasoning-effort control (OpenAI/DeepSeek-style `reasoning.effort`). */
+  reasoning?: { effort: string };
   /** Optional structured-output constraint (OpenAI `text.format`). */
   text?: { format?: { type: 'json_object' | 'json_schema'; schema?: Record<string, unknown> } };
   store?: false;

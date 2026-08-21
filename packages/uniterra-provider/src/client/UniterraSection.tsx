@@ -163,8 +163,9 @@ function toDrafts(source: unknown): ModelDraft[] {
 }
 
 /**
- * The highest rung in a row's declared efforts — the dropdown's value when
- * no preset has been chosen yet.
+ * The default effort for a row with no preset chosen — mirrors the adapter's
+ * `defaultEffortOf`: prefer the officially recommended `high` rung when the
+ * model declares it, else the highest declared rung.
  */
 const EFFORT_RUNG: Readonly<Record<string, number>> = {
   max: 7,
@@ -179,6 +180,7 @@ const EFFORT_RUNG: Readonly<Record<string, number>> = {
 
 function highestOf(efforts: readonly unknown[]): string {
   const ids = efforts.filter((effort): effort is string => typeof effort === 'string');
+  if (ids.includes('high')) return 'high';
   return [...ids].sort((a, b) => (EFFORT_RUNG[b] ?? -1) - (EFFORT_RUNG[a] ?? -1))[0] ?? '';
 }
 
