@@ -43,7 +43,21 @@ Write them yourself in the main session (no authoring subagents):
   an objective, verifiable piece of evidence (a test, a command output, an observable
   behavior).
 
-### 3. Review the documents with the fixed workflow
+### 3. Confirm the plan broadly matches the user's needs
+
+Before the automated review, get a sanity check from the user so the plan actually
+fits their needs:
+
+- Read back the three documents with a short summary: what the plan builds, the key
+  requirements, and how each is verified.
+- Ask via `ask_user_question` (options + Other) whether the content is broadly correct
+  and matches what they want. Keep it to a single confirming question, e.g. "Does this
+  plan match your needs? / Are the requirements correct?"
+- If they raise issues or select "needs changes", apply the edits to
+  `prd.md` / `design.md` / `acceptance.md` yourself and show the result again. Only
+  proceed to the automated review once the user confirms the content is broadly correct.
+
+### 4. Review the documents with the fixed workflow
 
 - Run the fixed workflow in `scripts/review-workflow.md` with the `workflow` tool:
   `meta` + `script` (from that file) + `args = { prd_dir, design_dir, acceptance_dir }`
