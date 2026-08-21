@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] — 2026-08-21
+
+### Changed
+
+- `uniterra-review`: the repro stage no longer spawns one agent per finding in parallel — a single repro agent now pins ALL findings of a round and returns one result entry per finding (un-reproducible findings stay invalid and dropped). The repro tests are promoted to formal source code that stays in the repo as permanent regression coverage: each failing test goes to the repo's conventional test location (the package's `test/` dir, picked up by its `test` script) with a descriptive, invariant-based name — never a finding id — matching the package's test framework and lint conventions, so a verified finding keeps its regression test after the fix instead of a throwaway `f1-*` file. Existing regression tests for an invariant are re-run rather than duplicated. Aligns SKILL.md, the repro-agent prompt, and the workflow template.
+
 ## [0.11.3] — 2026-08-21
 
 ### Changed
