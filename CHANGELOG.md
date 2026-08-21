@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.10] — 2026-08-22
+
+### Changed
+
+- `uniterra-skills`: `create-skill` is no longer a bundled skill — removed from the bundled skill registry (the bundled count drops from 10 to 9) and its source is deleted, so fresh installs no longer provision it. Docs and spec (`AGENTS.md`) synced.
+- `uniterra-implement`: each dispatched subagent is now instructed to prioritize STRENGTHENING / completing the failing property tests written in the first step — extend the property, add the missing edge cases and invariant asserts — before making them green, rather than writing a brand-new property test from scratch for a requirement that already has an allocated failing test. Aligns SKILL.md and the shared fixed rules in `assets/workflow-script-example.md`.
+
 ## [0.11.9] — 2026-08-21
 
 ### Added
