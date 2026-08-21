@@ -22,7 +22,7 @@
  *     terminal `return` all match the engine contract.
  *  5. A review agent's `verdict: "pass"` ends the review / simplify workflow
  *     immediately as `done`: non-blocking findings / recommendations are
- *     returned with the result, and no repro / fix round runs.
+ *     returned with the result, and no fix round runs.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -215,7 +215,7 @@ test('single-script templates execute to a terminal JSON result with stubbed hoo
   }
 });
 
-test('review and simplify templates end on a pass verdict without repro/fix rounds', async () => {
+test('review and simplify templates end on a pass verdict without fix rounds', async () => {
   const root = builtinSkillsDir();
   const cases = [
     {
@@ -223,9 +223,16 @@ test('review and simplify templates end on a pass verdict without repro/fix roun
       args: { goal: 'g', context: { requirements: '', design: '', acceptance: '' }, task: 't' },
       reviewResponse: {
         verdict: 'pass',
-        findings: [{ id: 'f1', level: 'low', description: 'cosmetic nit' }],
+        findings: [
+          {
+            id: 'f1',
+            level: 'low',
+            description: 'confirmed non-blocking finding',
+            verification_test: 'test/example.test.mjs',
+          },
+        ],
       },
-      downstreamLabels: ['repro-', 'fix-'],
+      downstreamLabels: ['fix-'],
     },
     {
       file: 'uniterra-simplify/assets/workflow-template.md',
