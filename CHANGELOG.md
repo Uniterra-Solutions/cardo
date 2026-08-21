@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.7] — 2026-08-21
+
+### Fixed
+
+- `uniterra-review` and `uniterra-simplify`: the review agents could never let a review through — the workflow loop kept forcing repro → fix rounds on any finding or recommendation, however minor, so a single low-severity nit or cosmetic suggestion blocked the pipeline. Each review agent now returns a verdict (`pass` | `fail`) alongside its findings / recommendations: `pass` means the code is ready — no findings, or only low-severity non-blocking ones — and ends the loop immediately, returning those items with the result instead of fixing them; `fail` means at least one finding (medium or above for `uniterra-review`) or recommendation with real simplification value (for `uniterra-simplify`) goes to repro / fix. Aligns SKILL.md, the review-agent prompts, and the workflow templates.
+
+### Added
+
+- Workflow-template contract tests now also lock the pass-verdict short-circuit: a review agent's `verdict: "pass"` ends the review / simplify workflow as `done` with the non-blocking items returned, and no repro / fix round runs (`packages/uniterra-skills/test/workflow-templates.test.mts`).
+
 ## [0.11.6] — 2026-08-21
 
 ### Fixed
