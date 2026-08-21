@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.6] — 2026-08-21
+
+### Fixed
+
+- Bundled pipeline skills (`uniterra-plan` / `uniterra-implement` / `uniterra-review` / `uniterra-simplify`): the workflow templates only instructed the `workflow` tool's `args` — the REQUIRED `meta` parameter (`name` + `description`) was never mentioned, so a workflow submitted straight from a template failed tool-call validation before the script ran, and `uniterra-implement`'s examples hinted at meta only in a `// meta:` comment inside the script (a step away from the `export const meta` body dsh rejects with `SCRIPT_PARSE`). Every template now spells out the full submission (`meta` + `script` + `args`) and warns that dsh rejects any meta field beyond name/description/whenToUse/phases (`META_INVALID`).
+
+### Added
+
+- Regression lane `packages/uniterra-skills/test/workflow-templates.test.mts` locking the templates to the dsh `workflow` tool contract: every embedded script parses under dsh's `(async () => { body })()` wrapper, no body opens with `export const meta`, every template instructs the `meta` parameter, and the single-script templates execute to a terminal JSON result under stubbed hooks. The contract is documented in `AGENTS.md`, `docs/conventions.md`, `docs/modules/uniterra-skills.md`, and `docs/workflows.md`.
+
 ## [0.11.5] — 2026-08-21
 
 ### Fixed
