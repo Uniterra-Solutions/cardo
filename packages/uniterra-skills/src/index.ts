@@ -29,7 +29,6 @@ const SKILL_NAMES = [
   'manage-git-repo',
   'project-documentation',
   'uniterra-qa',
-  'create-skill',
 ] as const;
 
 export type BuiltinSkillName = (typeof SKILL_NAMES)[number];

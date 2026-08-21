@@ -2,7 +2,7 @@
   "name": "@uniterra-solutions/uniterra-skills",
   "version": "0.5.0",
   "private": true,
-  "description": "Uniterra built-in skill registry: bundles the company-standard skills (Jovaltus pipeline skills + Caelterra create-skill) and provisions them into the desktop app's agent skills directory.",
+  "description": "Uniterra built-in skill registry: bundles the company-standard skills (Jovaltus pipeline skills) and provisions them into the desktop app's agent skills directory.",
   "type": "module",
   "exports": {
     ".": {
