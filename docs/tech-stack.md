@@ -72,7 +72,8 @@ Provisioned into the user's dsh profile at startup — see [modules/vendor-plugi
 | Source                           | Plugins                                                                                                                                                                                                                 |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | npm (pinned exact)               | dshmarket 1.9.0, dsh-notifier 0.6.2, dsh-better-sidebar 0.12.2, dsh-file-upload 0.4.2, dsh-find-plugin 0.3.6, dsh-subagent-model-picker 0.1.1, dsh-tool-git 0.1.3, dsh-browser-playwright 0.1.1, dsh-computer-use 0.1.0 |
-| vendored (`vendor/dsh-plugins/`) | dsh-deep-whale (skin), dsh-shortcuts                                                                                                                                                                                    |
+| vendored (`vendor/dsh-plugins/`) | dsh-shortcuts                                                                                                                                                                                                           |
+| optional (`vendor/dsh-plugins/`) | dsh-deep-whale (skin, opt-in)                                                                                                                                                                                           |
 | workspace built-in               | @uniterra-solutions/uniterra-provider                                                                                                                                                                                   |
 
 ## External Services
@@ -101,5 +102,5 @@ Provisioned into the user's dsh profile at startup — see [modules/vendor-plugi
 
 ```bash
 grep -h '"@deepseek-ai/dsh"\|"electron"' packages/*/package.json    # pinned runtime versions
-grep -n 'BUILTIN_NPM_PLUGINS' packages/uniterra-desktop/src/builtin.ts # npm built-in list
+grep -n 'registerBuiltinPlugin({' packages/uniterra-desktop/src/builtin.ts   # the built-in registry
 ```

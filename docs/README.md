@@ -38,7 +38,7 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 - [modules/uniterra-updater.md](modules/uniterra-updater.md) — update-decision semantics, skip persistence
 - [modules/uniterra-skills.md](modules/uniterra-skills.md) — skill registry, provisioning, the 7 bundled skills
 - [modules/uniterra-systemprompt.md](modules/uniterra-systemprompt.md) — working-rule injection extension
-- [modules/vendor-plugins.md](modules/vendor-plugins.md) — npm/vendored/workspace built-ins, pin ledger, update policy
+- [modules/vendor-plugins.md](modules/vendor-plugins.md) — npm/vendored/optional/workspace built-ins, pin ledger, update policy
 
 Not present (do not apply): `api-reference.md` (no HTTP routes), `data-models.md` (no database — config schemas are documented in their module docs).
 

@@ -104,7 +104,7 @@ Other locked behaviors: empty tool output → `'(no output)'`; text-less turns s
 
 - Outbound (peers, all exact `@deepseek-ai/*@0.1.0-rc.6` + cordis 4.0.1): dsh-llm, dsh-credentials, dsh-settings, dsh-launch-environment, dsh-timeout, dsh-client-* (client half); schemastery, react.
 - Runtime deps: eventsource-parser, undici (inlined at build).
-- Inbound: `packages/uniterra-desktop` provisions it as `BUILTIN_WORKSPACE_PLUGINS`.
+- Inbound: `packages/uniterra-desktop` provisions it as a `kind: 'workspace'` built-in (`registerBuiltinPlugin`).
 
 ## Patterns & Gotchas
 
