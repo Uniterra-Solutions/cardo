@@ -66,9 +66,20 @@ Do not propose a simplification that contradicts the design context; a change th
 design mandates or that weakens a stated engineering need is not a simplification
 opportunity — omit it entirely.
 
+## Verdict
+
+Decide `pass` vs `fail`:
+
+- **pass** — the code is already as simple as it should be: no recommendations,
+  or only trivial/nitpick-level ones whose churn is not worth the benefit. Do NOT
+  fail a review over cosmetic nits.
+- **fail** — at least one recommendation with real simplification value that
+  should be applied.
+
 ## Output
 
-Return a structured recommendations list. Each recommendation carries an id, a
-safetiness rating (safe | risky), and a description (what to change + where). If
-the code is already as simple as it should be — or every apparent simplification
-would violate the design context — return an empty list.
+Return a verdict ("pass" | "fail") and a structured recommendations list. Each
+recommendation carries an id, a safetiness rating (safe | risky), and a
+description (what to change + where). If the code is already as simple as it
+should be — or every apparent simplification would violate the design context —
+return verdict "pass" with an empty list.

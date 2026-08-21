@@ -73,10 +73,18 @@ Do not propose a simplification that contradicts the design context; a change th
 design mandates or that weakens a stated engineering need is not a simplification
 opportunity — omit it entirely.
 
-Return a structured recommendations list. Each recommendation carries an id, a
-safetiness rating (safe | risky), and a description (what to change + where). If
-the code is already as simple as it should be — or every apparent simplification
-would violate the design context — return an empty list.`;
+Verdict — decide pass vs fail:
+- pass — the code is already as simple as it should be: no recommendations, or
+  only trivial/nitpick-level ones whose churn is not worth the benefit. Do NOT
+  fail a review over cosmetic nits.
+- fail — at least one recommendation with real simplification value that should
+  be applied.
+
+Return a verdict ("pass" | "fail") and a structured recommendations list. Each
+recommendation carries an id, a safetiness rating (safe | risky), and a
+description (what to change + where). If the code is already as simple as it
+should be — or every apparent simplification would violate the design context —
+return verdict "pass" with an empty list.`;
 
 const FIX_PROMPT = `You are an isolated subagent. You apply simplification recommendations while
 preserving behaviour exactly. You have no prior conversation context — everything
@@ -116,8 +124,9 @@ recommended shape), and a short summary.`;
 
 const REVIEW_SCHEMA = {
   type: 'object',
-  required: ['recommendations'],
+  required: ['verdict', 'recommendations'],
   properties: {
+    verdict: { type: 'string', enum: ['pass', 'fail'] },
     recommendations: {
       type: 'array',
       items: {
@@ -189,8 +198,14 @@ for (let round = 1; round <= maxRounds; round++) {
   if (review === null)
     return { status: 'blocked', reason: 'review agent failed', round, skipped: accumulatedSkipped };
   const recommendations = review.recommendations;
-  if (recommendations.length === 0)
-    return { status: 'done', rounds: round, skipped: accumulatedSkipped };
+  if (review.verdict === 'pass' || recommendations.length === 0)
+    return {
+      status: 'done',
+      rounds: round,
+      verdict: review.verdict,
+      recommendations,
+      skipped: accumulatedSkipped,
+    };
 
   // Stage 2 — fix
   const fix = await agent(
@@ -234,9 +249,14 @@ return {
 ## Reading the result
 
 - `rounds` — number of rounds run.
+- `verdict` — the last review round's verdict ("pass" | "fail").
+- `recommendations` — the last review round's recommendations. When `verdict` is
+  "pass", these are trivial/non-blocking ones the reviewer chose not to push (may
+  be empty); when "fail", the recommendations that went to fix.
 - `skipped` — the accumulated recommendations that were considered but not applied
   (id + reason + round), carried across rounds and never dropped.
-- `status: 'done'` — a review round returned no new recommendations (already
-  simple); any residual items are in `skipped`.
+- `status: 'done'` — a review round returned `verdict: 'pass'` (already simple;
+  any trivial non-blocking recommendations are returned but not applied); any
+  residual items are in `skipped`.
 - `status: 'blocked'` — the round cap was hit with recommendations still open.
 - `status: 'failed'` — the fix agent could not apply a recommendation.

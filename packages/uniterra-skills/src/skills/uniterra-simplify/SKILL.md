@@ -43,13 +43,19 @@ template) + `args = { goal, context }`. Two stages:
 
 1. **review agent** (`references/review-agent.md`) — finds simplification
    opportunities against the over-engineering checklist
-   (`references/overengineering-checklist.md`); returns recommendations, each rated
-   `safe` or `risky`.
+   (`references/overengineering-checklist.md`); returns a verdict (`pass` |
+   `fail`) plus recommendations, each rated `safe` or `risky`.
 2. **fix agent** (`references/fix-agent.md`) — applies the recommendations while
    preserving behaviour exactly.
 
-The workflow loops **review → fix → re-review** until a review round returns no
-recommendations, or the round cap (`maxRounds`, default 8) is hit.
+The workflow loops **review → fix → re-review** until a review round returns
+`verdict: 'pass'` (no recommendations, or only trivial non-blocking ones), or the
+round cap (`maxRounds`, default 8) is hit.
+
+A `pass` verdict means the code is already simple enough — the reviewer judged
+any remaining ideas trivial, so they are returned with the result but NOT
+applied. `fail` means at least one recommendation has real value and goes to the
+fix agent.
 
 Recommendations a fix round cannot apply (the `skipped` list) are carried into the
 next review round and **accumulate** — the reviewer always sees the full skip

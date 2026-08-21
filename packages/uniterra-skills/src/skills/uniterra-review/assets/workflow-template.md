@@ -55,9 +55,17 @@ Severity levels:
 - low — style/naming/readability, a harmless design deviation, non-blocking
   suggestions. No correctness impact.
 
-Return a structured findings list. Every finding must reference a concrete
-location (inside the scope) and a concrete failure mode, and carry the id, level,
-and description. If the code is sound, return an empty findings list.`;
+Verdict — decide pass vs fail:
+- pass — the code is ready: no findings, or only low-severity non-blocking
+  suggestions. Passing is a deliberate judgment call: do NOT fail a review over
+  nitpicks — low findings alone never block.
+- fail — any finding at medium or above, or any finding (even low) that must be
+  addressed before the change is accepted.
+
+Return a verdict ("pass" | "fail") and a structured findings list. Every finding
+must reference a concrete location (inside the scope) and a concrete failure
+mode, and carry the id, level, and description. If the code is sound, return
+verdict "pass" with an empty findings list.`;
 
 const REPRO_PROMPT = `You are an isolated subagent. You reproduce ALL review findings as failing
 property-based tests. You have no prior conversation context — everything you need
@@ -116,8 +124,9 @@ short summary.`;
 
 const REVIEW_SCHEMA = {
   type: 'object',
-  required: ['findings'],
+  required: ['verdict', 'findings'],
   properties: {
+    verdict: { type: 'string', enum: ['pass', 'fail'] },
     findings: {
       type: 'array',
       items: {
@@ -188,7 +197,8 @@ for (let round = 1; round <= maxRounds; round++) {
   );
   if (review === null) return { status: 'blocked', reason: 'review agent failed', round };
   const findings = review.findings;
-  if (findings.length === 0) return { status: 'done', rounds: round };
+  if (review.verdict === 'pass' || findings.length === 0)
+    return { status: 'done', rounds: round, verdict: review.verdict, findings };
 
   // Stage 2 — repro (one agent for all findings)
   const repro = await agent(
@@ -222,8 +232,14 @@ return { status: 'blocked', reason: 'max rounds reached', rounds: maxRounds };
 ## Reading the result
 
 - `rounds` — number of rounds run.
-- `status: 'done'` — a review round returned no findings (or every finding was an invalid
-  false positive), so nothing is left to fix.
+- `verdict` — the last review round's verdict ("pass" | "fail").
+- `findings` — the last review round's findings. When `verdict` is "pass", these
+  are non-blocking (low-severity) items the reviewer chose not to fix; when
+  "fail", the findings that went to repro.
+- `status: 'done'` — a review round returned `verdict: 'pass'` (no findings, or
+  only low-severity non-blocking ones — those findings are returned but not
+  fixed), or every finding was an invalid false positive, so nothing is left to
+  fix.
 - `status: 'blocked'` — the round cap was hit with findings still open; inspect the last
   round's work.
 - `status: 'failed'` — the fix agent could not repair a verified finding.

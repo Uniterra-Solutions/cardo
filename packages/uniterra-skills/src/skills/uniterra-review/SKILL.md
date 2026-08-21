@@ -41,7 +41,8 @@ template) + `args = { goal, context, task }`. One workflow, three stages:
 
 1. **review agent** (`references/review-agent.md`) — comprehensive adversarial
    review covering correctness AND security (`references/security-checklist.md`);
-   returns findings graded critical / high / medium / low.
+   returns a verdict (`pass` | `fail`) plus findings graded critical / high /
+   medium / low.
 2. **repro agent** (`references/repro-agent.md`) — one agent for all findings;
    pins each as a failing property test written as formal regression tests
    following the repo's conventions; un-reproducible findings are INVALID and
@@ -50,8 +51,14 @@ template) + `args = { goal, context, task }`. One workflow, three stages:
    under constraints (no weakened tests, no broken business logic).
 
 The workflow loops **review → repro → fix → re-review** until a review round
-returns no findings (or every finding is an invalid false positive), or the round
-cap (`maxRounds`, default 8) is hit.
+returns `verdict: 'pass'` (no findings, or only low-severity non-blocking ones),
+every finding is an invalid false positive, or the round cap (`maxRounds`,
+default 8) is hit.
+
+A `pass` verdict means the change is ready — the reviewer judged every finding
+non-blocking, so they are returned with the result but NOT repro'd or fixed.
+`fail` means at least one finding must be addressed: it goes to repro → fix, and
+the loop re-reviews until it passes.
 
 ## Severity levels
 

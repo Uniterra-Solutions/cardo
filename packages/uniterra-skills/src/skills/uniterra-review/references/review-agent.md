@@ -43,8 +43,19 @@ reference real code. Inspect ONLY the review scope named in the task.
 - **low** — style/naming/readability, a harmless design deviation, non-blocking
   suggestions. No correctness impact.
 
+## Verdict
+
+Decide `pass` vs `fail`:
+
+- **pass** — the code is ready: no findings, or only low-severity non-blocking
+  suggestions. Passing is a deliberate judgment call: do NOT fail a review over
+  nitpicks — low findings alone never block.
+- **fail** — any finding at **medium** or above, or any finding (even low) that
+  must be addressed before the change is accepted.
+
 ## Output
 
-Return a structured findings list. Every finding must reference a concrete
-location (inside the scope) and a concrete failure mode, and carry the id, level,
-and description. If the code is sound, return an empty findings list.
+Return a verdict ("pass" | "fail") and a structured findings list. Every finding
+must reference a concrete location (inside the scope) and a concrete failure
+mode, and carry the id, level, and description. If the code is sound, return
+verdict "pass" with an empty findings list.
