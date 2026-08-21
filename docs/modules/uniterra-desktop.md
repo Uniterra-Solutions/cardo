@@ -2,18 +2,15 @@
 
 **Purpose:** Electron shell over the bundled DeepSeek Harness (dsh) CLI — supervises the dsh web server child and hosts its Web UI in a BrowserWindow. Uniterra IS the dsh desktop surface: it runs the bundled dsh against the user's normal dsh configuration; no app-owned home, no seeding, no profile scaffolding.
 
-Source: `packages/uniterra-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.ts`, `profile.ts`); packaging `electron-builder.yml`; tests `test/*.mjs`.
+Source: `packages/uniterra-desktop/src/` (`main.ts`, `dsh-process.ts`, `builtin.ts`); packaging `electron-builder.yml`; tests `test/*.mjs`.
 
 ## Files
-
-<<<<<<< HEAD
 
 | File                                | Responsibility                                                                                                                                                                                   |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/main.ts`                       | Electron main entry: single-instance lock, dev test-home mirror, built-in provisioning, dsh child supervision + crash restart, BrowserWindow, startup update check, startup-failure log + dialog |
 | `src/dsh-process.ts`                | dsh runtime supervision: spawn bundled CLI, await readiness URL, own shutdown                                                                                                                    |
-| `src/builtin.ts`                    | Declarative `registerBuiltinPlugin()` registry: npm `dsh plugin add`, vendored/workspace copy, kind-aware staleness + retired heal, bundle rows                                                  |
-| `src/profile.ts`                    | LEGACY manifest constants — not imported by `main.ts`/`builtin.ts`; consumed only by `test/profile.test.mjs`. Constants disagree with the live `builtin.ts` lists (see Gotchas). Do not extend.  |
+| `src/builtin.ts`                    | Declarative `registerBuiltinPlugin()` registry: npm `dsh plugin add`, vendored/workspace copy, kind-aware staleness + retired heal, bundle rows, optional-plugin toggle (`reconcileOptionalPlugins`) |
 | `scripts/electron-before-build.cjs` | electron-builder `beforeBuild` hook: returns `false` so node_modules are never reinstalled (the extracted source tree already has them)                                                          |
 
 ## Public API
@@ -69,10 +66,10 @@ Boot failure surfacing: any `boot()` rejection (initial boot or crash-restart) i
 - `ELECTRON_RUN_AS_NODE=1` on both the dsh child spawn and `dsh plugin add` — the Electron binary runs as plain Node. `NO_COLOR=1` keeps stdout parse-friendly.
 - Readiness regex requires a non-digit terminator (`(?=[^0-9])`) so a chunk boundary inside the port digits never yields a truncated URL — regression-locked in `builtin-pbt.test.mjs`.
 - `ensureBuiltinPlugins` returns early when the profile dir doesn't exist — it enriches an existing profile, never scaffolds one.
-- Vendored plugins are copied, not `dsh plugin add`-ed (peers only exist in the dsh source workspace); workspace built-ins ship pre-built with no pnpm install — a missing `packages/uniterra-provider/lib/` breaks boot (0.6.1 regression).
-- Staleness is kind-aware in `copyBuiltinsStale()`: content identity against the pinned source for vendored copies, installed-vs-source `package.json` version for workspace copies — never bundle-list; a fixed distribution can ship under the same package name.
-- `profile.ts` is legacy: `PROFILE_PLUGINS` lists 6 specs while `builtin.ts`'s live set is 9 npm + 2 vendored (+ 1 workspace); `profileManifest()` still has the scoped-name split bug `p.split('@')[0]` that `builtinPackageName` fixes. Do not use as a source of truth.
-- `scripts/prepare-runtime.mjs` is orphaned (the 0.5.0 `vendor/dsh-runtime` model); its plugin list is inconsistent with `builtin.ts`. `vendor/dsh-runtime/` itself is a legacy snapshot not on the current boot path.
+- Vendored plugins are copied, not `dsh plugin add`-ed (peers only exist in the dsh source workspace); workspace built-ins ship pre-built with no pnpm install — a missing `packages/uniterra-provider/lib/` breaks boot (0.6.1 regression). Optional plugins (the Deep Whale skin) follow the same copy path but only when the profile's `.uniterra.json` toggle enables them — `reconcileOptionalPlugins` enforces the toggle before the provisioning gate (fresh installs never get the skin; existing row-bearing profiles migrate to enabled and are preserved; disabling removes the row and the copy; an illegible toggle file is never destructive and never overwritten).
+- Staleness is kind-aware in `copyBuiltinsStale()`: content identity against the pinned source for vendored copies, installed-vs-source `package.json` version for workspace copies — never bundle-list; a fixed distribution can ship under the same package name. Optional entries are exempt — their freshness is owned by `reconcileOptionalPlugins`, so a disabled optional (no copy at all) never forces a re-provision on every boot.
+- `profile.ts` was removed: it was legacy (its `PROFILE_PLUGINS` list and `profileManifest()` disagreed with `builtin.ts`'s live registry and were never imported at runtime); its test file went with it.
+- `scripts/prepare-runtime.mjs` was removed: orphaned since the 0.5.0 `vendor/dsh-runtime` model (no script, CI step, or boot path references it; the output dir no longer exists).
 - No code signing: macOS sets `hardenedRuntime: false` + `identity: null` (no quarantine needed); Windows sets `signAndEditExecutable: false` — Uniterra ships unsigned, and skipping the sign step also stops electron-builder from downloading/extracting its `winCodeSign` tool, whose 7z archive contains macOS symlinks that 7-Zip cannot create on Windows without Developer Mode / administrator privileges (electron-builder#8149).
 - On Windows the CLI probe and Update Now spawn npm shims (`uniterra` / `npx` as `.cmd`) with `shell: process.platform === 'win32'` — execFile cannot launch `.cmd` shims directly (`spawn ENOENT`); cmd.exe resolves them via PATHEXT (args are fixed, no quoting risk).
 

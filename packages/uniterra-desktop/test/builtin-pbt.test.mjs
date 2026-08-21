@@ -3,8 +3,9 @@
  *
  * Business invariants locked here:
  *  - REGISTRY: the single registerBuiltinPlugin registry is the source of
- *    truth — one representative entry per kind (npm / vendor / workspace)
- *    flows into expectedBuiltinBundles, and retired names never do.
+ *    truth — one representative entry per kind (npm / vendor / workspace /
+ *    optional) flows into the expected bundles, and retired names never do.
+ *    Optional entries never do either.
  *  - EXTRACT: every built-in npm spec `<name>@<version>` contributes its
  *    package NAME to the expected bundles — including scoped names
  *    (`@scope/name@1.0.0` → `@scope/name`).
@@ -12,8 +13,13 @@
  *    expected bundle (extras and order never matter); malformed manifests
  *    are "not provisioned", never an exception.
  *  - STALE: the unified copyBuiltinsStale detects drift by content identity
- *    for BOTH vendored and workspace built-ins.
+ *    for BOTH vendored and workspace built-ins, and never for optional ones
+ *    (reconcileOptionalPlugins owns their freshness).
  *  - RETIRED: removeRetiredBuiltins heals exactly the retired names.
+ *  - OPTIONAL: the `.uniterra.json` toggle is authoritative — enabled means
+ *    row + fresh copy ensured, disabled means row + copy removed; a missing
+ *    file migrates from the bundle rows (existing installs preserved), and
+ *    an illegible file is never destructive and never overwritten.
  *  - READY: awaitReadiness resolves with the first `http://127.0.0.1:<port>`
  *    seen, across arbitrary chunk boundaries, and rejects when the stream
  *    never carries one.
@@ -27,6 +33,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import {
+  OPTIONAL_PLUGINS_FILE,
   builtinPackageName,
   builtinPlugins,
   copyBuiltins,
@@ -34,6 +41,7 @@ import {
   expectedBuiltinBundles,
   hasAllBuiltins,
   npmBuiltinSpecs,
+  reconcileOptionalPlugins,
   removeRetiredBuiltins,
   retiredBuiltinNames,
 } from '../dist/builtin.js';
@@ -42,6 +50,7 @@ import { awaitReadiness } from '../dist/dsh-process.js';
 const NPM_SPECS = npmBuiltinSpecs();
 const VENDOR = copyBuiltins('vendor');
 const WORKSPACE = copyBuiltins('workspace');
+const OPTIONAL = copyBuiltins('optional');
 const RETIRED = retiredBuiltinNames();
 
 // ---------------------------------------------------------------------------
@@ -51,10 +60,7 @@ const RETIRED = retiredBuiltinNames();
 test('REGISTRY: one representative entry per kind flows into the expected bundles', () => {
   const expected = expectedBuiltinBundles();
   // Official dsh bundles always lead.
-  assert.deepEqual(expected.slice(0, 2), [
-    '@deepseek-ai/dsh-base',
-    '@deepseek-ai/dsh-web-app',
-  ]);
+  assert.deepEqual(expected.slice(0, 2), ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']);
   // npm kind.
   assert.ok(NPM_SPECS.length >= 9, 'the full npm built-in set is registered');
   for (const spec of NPM_SPECS) {
@@ -64,7 +70,7 @@ test('REGISTRY: one representative entry per kind flows into the expected bundle
     );
   }
   // vendor kind.
-  assert.ok(VENDOR.length >= 2, 'both vendored built-ins are registered');
+  assert.ok(VENDOR.length >= 1, 'the vendored built-in is registered');
   for (const { dir, package: pkg } of VENDOR) {
     assert.ok(expected.includes(pkg), `vendor ${dir} contributes ${pkg}`);
   }
@@ -72,6 +78,11 @@ test('REGISTRY: one representative entry per kind flows into the expected bundle
   assert.ok(WORKSPACE.length >= 1, 'the workspace built-in is registered');
   for (const { dir, package: pkg } of WORKSPACE) {
     assert.ok(expected.includes(pkg), `workspace ${dir} contributes ${pkg}`);
+  }
+  // optional kind — registered, but NEVER an expected bundle.
+  assert.ok(OPTIONAL.length >= 1, 'the optional built-in stays registered');
+  for (const { dir, package: pkg } of OPTIONAL) {
+    assert.ok(!expected.includes(pkg), `optional ${dir} does not contribute ${pkg}`);
   }
 });
 
@@ -253,7 +264,7 @@ function isSelfContainedPatch(patchText) {
 }
 
 test('VENDOR: every vendored built-in contributes its Loader row via a self-contained insert patch', async () => {
-  assert.ok(VENDOR.length >= 2, 'both vendored built-ins remain shipped');
+  assert.ok(VENDOR.length >= 1, 'the vendored built-in remains shipped');
   for (const { dir } of VENDOR) {
     const text = await readFile(join(vendorPluginsRoot, dir, 'cordis.patch.yml'), 'utf8');
     assert.ok(
@@ -268,19 +279,6 @@ test('VENDOR regression: retired built-ins must be gone from the vendored regist
   for (const name of RETIRED) {
     assert.ok(!vendorPackages.includes(name), `retired ${name} must not ship as vendored`);
   }
-});
-
-test('VENDOR regression: the skin ships the standalone dsh-deep-whale distribution, not the retired builtin-row one', () => {
-  const skin = VENDOR.find((entry) => entry.dir === 'dsh-deep-whale');
-  assert.equal(skin?.package, '@dsh-external/dsh-client-ui-skin-maid-atelier');
-  assert.ok(
-    !VENDOR.some((entry) => entry.dir === 'deep-whale-day-night-theme'),
-    'the retired deep-whale-day-night-theme source must be gone',
-  );
-  assert.ok(
-    expectedBuiltinBundles().includes('@dsh-external/dsh-client-ui-skin-maid-atelier'),
-    'the skin package name stays an expected bundle',
-  );
 });
 
 // ---------------------------------------------------------------------------
@@ -362,6 +360,227 @@ test('STALE: a missing or illegible installed copy is stale (forces re-provision
     await mkdir(skin, { recursive: true });
     await writeFile(join(skin, 'package.json'), 'not json at all');
     assert.equal(copyBuiltinsStale(profile, vendor, source), true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('STALE: optional entries never force a stale verdict (reconcile owns them)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'uniterra-stale-'));
+  try {
+    const vendor = join(dir, 'vendor');
+    const source = join(dir, 'source');
+    const profile = join(dir, 'profiles', 'web');
+    await mkdir(profile, { recursive: true });
+    await writeProfileManifest(dir, []);
+    for (const entry of copyEntries()) {
+      const root = entry.root === 'vendor' ? vendor : source;
+      await writeCopySource(root, entry.dir, '1.0.0');
+      await writeInstalledCopy(profile, entry.package, '1.0.0');
+    }
+    // Every mandatory copy matches; the optional skin has NO copy at all.
+    // A disabled optional must not make the profile look stale — that would
+    // force a re-provision on every boot.
+    assert.equal(copyBuiltinsStale(profile, vendor, source), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// OPTIONAL — the .uniterra.json toggle is authoritative; a missing file
+//            migrates from bundle rows (existing installs preserved); an
+//            illegible file is never destructive and never overwritten
+// ---------------------------------------------------------------------------
+
+const SKIN_PKG = '@dsh-external/dsh-client-ui-skin-maid-atelier';
+
+test('OPTIONAL regression: the skin ships the standalone dsh-deep-whale distribution, not the retired builtin-row one', () => {
+  const skin = OPTIONAL.find((entry) => entry.dir === 'dsh-deep-whale');
+  assert.equal(skin?.package, SKIN_PKG);
+  assert.ok(
+    !VENDOR.some((entry) => entry.dir === 'deep-whale-day-night-theme'),
+    'the retired deep-whale-day-night-theme source must be gone',
+  );
+  assert.ok(
+    !expectedBuiltinBundles().includes(SKIN_PKG),
+    'the skin is never an expected bundle (default absent)',
+  );
+});
+
+/** Build a profile fixture with a skin source in `vendor/` and the given
+ * toggle file, bundle rows, and installed copy version. */
+async function optionalFixture({ stateFile, bundles, installedVersion }) {
+  const dir = await mkdtemp(join(tmpdir(), 'uniterra-optional-'));
+  const vendor = join(dir, 'vendor');
+  const profile = join(dir, 'profiles', 'web');
+  const skinSource = join(vendor, 'dsh-deep-whale');
+  await mkdir(skinSource, { recursive: true });
+  await writeFile(
+    join(skinSource, 'package.json'),
+    `${JSON.stringify({ name: SKIN_PKG, version: '1.0.0' })}\n`,
+  );
+  await mkdir(profile, { recursive: true });
+  await writeFile(
+    join(profile, 'package.json'),
+    `${JSON.stringify({ dsh: { profile: { bundles } } })}\n`,
+  );
+  if (stateFile !== undefined) {
+    await writeFile(join(profile, OPTIONAL_PLUGINS_FILE), stateFile);
+  }
+  if (installedVersion !== undefined) {
+    const dest = join(profile, 'node_modules', ...SKIN_PKG.split('/'));
+    await mkdir(dest, { recursive: true });
+    await writeFile(
+      join(dest, 'package.json'),
+      `${JSON.stringify({ name: SKIN_PKG, version: installedVersion })}\n`,
+    );
+  }
+  return { dir, profile, vendor };
+}
+
+async function readManifest(profile) {
+  return JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
+}
+
+async function readStateFile(profile) {
+  return JSON.parse(await readFile(join(profile, OPTIONAL_PLUGINS_FILE), 'utf8'));
+}
+
+async function skinInstalled(profile) {
+  return existsSync(join(profile, 'node_modules', ...SKIN_PKG.split('/')));
+}
+
+test('OPTIONAL DEFAULT-ABSENT: a fresh profile stays skin-free and is persisted as disabled', async () => {
+  const { dir, profile } = await optionalFixture({
+    bundles: ['@deepseek-ai/dsh-base'],
+    stateFile: undefined,
+  });
+  try {
+    const changed = reconcileOptionalPlugins(profile, join(dir, 'vendor'));
+    assert.equal(changed, true, 'the missing toggle file is persisted');
+    const manifest = await readManifest(profile);
+    assert.ok(!manifest.dsh.profile.bundles.includes(SKIN_PKG), 'no skin row added');
+    assert.equal(await skinInstalled(profile), false, 'no skin copy installed');
+    assert.deepEqual((await readStateFile(profile)).optionalPlugins, {}, 'persisted as disabled');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('OPTIONAL MIGRATION: an existing row-bearing profile is preserved and persisted as enabled', async () => {
+  const { dir, profile } = await optionalFixture({
+    bundles: ['@deepseek-ai/dsh-base', SKIN_PKG],
+    stateFile: undefined,
+    installedVersion: '1.0.0',
+  });
+  try {
+    const changed = reconcileOptionalPlugins(profile, join(dir, 'vendor'));
+    assert.equal(changed, true, 'the missing toggle file is persisted');
+    const manifest = await readManifest(profile);
+    assert.ok(manifest.dsh.profile.bundles.includes(SKIN_PKG), 'the existing row is kept');
+    assert.equal(await skinInstalled(profile), true, 'the installed copy is kept');
+    assert.equal(
+      (await readStateFile(profile)).optionalPlugins[SKIN_PKG],
+      true,
+      'persisted as enabled',
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('OPTIONAL ENABLED: the toggle installs the row and a fresh copy', async () => {
+  const stateFile = `${JSON.stringify({ version: 1, optionalPlugins: { [SKIN_PKG]: true } })}\n`;
+  const { dir, profile } = await optionalFixture({
+    bundles: ['@deepseek-ai/dsh-base'],
+    stateFile,
+  });
+  try {
+    const changed = reconcileOptionalPlugins(profile, join(dir, 'vendor'));
+    assert.equal(changed, true, 'the row and copy were installed');
+    const manifest = await readManifest(profile);
+    assert.ok(manifest.dsh.profile.bundles.includes(SKIN_PKG), 'row appended');
+    const installed = JSON.parse(
+      await readFile(join(profile, 'node_modules', ...SKIN_PKG.split('/'), 'package.json'), 'utf8'),
+    );
+    assert.equal(installed.version, '1.0.0', 'fresh copy installed');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('OPTIONAL ENABLED: a stale enabled copy is healed to the source version', async () => {
+  const stateFile = `${JSON.stringify({ version: 1, optionalPlugins: { [SKIN_PKG]: true } })}\n`;
+  const { dir, profile } = await optionalFixture({
+    bundles: ['@deepseek-ai/dsh-base', SKIN_PKG],
+    stateFile,
+    installedVersion: '0.9.0',
+  });
+  try {
+    const changed = reconcileOptionalPlugins(profile, join(dir, 'vendor'));
+    assert.equal(changed, true, 'the stale copy was replaced');
+    const installed = JSON.parse(
+      await readFile(join(profile, 'node_modules', ...SKIN_PKG.split('/'), 'package.json'), 'utf8'),
+    );
+    assert.equal(installed.version, '1.0.0', 'copy healed to the source version');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('OPTIONAL DISABLED: the toggle removes the row and the copy, idempotently', async () => {
+  const stateFile = `${JSON.stringify({ version: 1, optionalPlugins: {} })}\n`;
+  const { dir, profile } = await optionalFixture({
+    bundles: ['@deepseek-ai/dsh-base', SKIN_PKG],
+    stateFile,
+    installedVersion: '1.0.0',
+  });
+  try {
+    const changed = reconcileOptionalPlugins(profile, join(dir, 'vendor'));
+    assert.equal(changed, true, 'the disabled skin was removed');
+    const manifest = await readManifest(profile);
+    assert.ok(!manifest.dsh.profile.bundles.includes(SKIN_PKG), 'row removed');
+    assert.equal(await skinInstalled(profile), false, 'copy removed');
+    assert.equal(
+      reconcileOptionalPlugins(profile, join(dir, 'vendor')),
+      false,
+      'second pass is a no-op',
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('OPTIONAL: an illegible toggle file is never destructive and never overwritten', async () => {
+  const { dir, profile } = await optionalFixture({
+    bundles: ['@deepseek-ai/dsh-base', SKIN_PKG],
+    stateFile: 'not json at all {{{',
+    installedVersion: '1.0.0',
+  });
+  try {
+    const changed = reconcileOptionalPlugins(profile, join(dir, 'vendor'));
+    assert.equal(changed, false, 'nothing is changed for an illegible file');
+    const manifest = await readManifest(profile);
+    assert.ok(manifest.dsh.profile.bundles.includes(SKIN_PKG), 'row preserved');
+    assert.equal(await skinInstalled(profile), true, 'copy preserved');
+    assert.equal(
+      await readFile(join(profile, OPTIONAL_PLUGINS_FILE), 'utf8'),
+      'not json at all {{{',
+      'file untouched',
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('OPTIONAL: an illegible manifest never throws — the profile is left alone', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'uniterra-optional-'));
+  try {
+    const profile = join(dir, 'profiles', 'web');
+    await mkdir(profile, { recursive: true });
+    await writeFile(join(profile, 'package.json'), 'not json at all {{{');
+    assert.equal(reconcileOptionalPlugins(profile, join(dir, 'vendor')), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

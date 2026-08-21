@@ -4,10 +4,11 @@
  * home, packaged → ~/.dsh's `web` profile).
  *
  * A built-in is declared ONCE, through {@link registerBuiltinPlugin}, under one
- * of the three existing mechanisms — npm, vendored, or workspace — or flagged
- * retired. Every consumer (expected bundles, the provisioning loops, stale
- * detection, and the retirement heal) derives from that single registry, so
- * adding a built-in never means wiring a second code path.
+ * of the four mechanisms — npm, vendored, workspace, or optional (shipped but
+ * not forced; see reconcileOptionalPlugins) — or flagged retired. Every
+ * consumer (expected bundles, the provisioning loops, stale detection, and the
+ * retirement heal) derives from that single registry, so adding a built-in
+ * never means wiring a second code path.
  *
  * Idempotent: a profile that already carries every built-in is left alone, so
  * user-installed extras and edits are never touched.
@@ -23,13 +24,15 @@ export interface NpmBuiltin {
   readonly spec: string;
 }
 
-/** One copy-based built-in: vendored (third-party, under `vendor/dsh-plugins`)
- * or in-house workspace (`packages/*`, this repo's own). Copied into the
- * profile's node_modules under its package name (not pnpm-installed) because
- * some declare peers that only exist in the dsh source workspace and pnpm
- * would fail fetching them. The package name can differ from the repo dir. */
+/** One copy-based built-in: vendored (third-party, under `vendor/dsh-plugins`),
+ * in-house workspace (`packages/*`, this repo's own), or optional (a vendored
+ * plugin shipped but NOT forced — installed only when the profile's
+ * `.uniterra.json` toggle enables it). Copied into the profile's node_modules
+ * under its package name (not pnpm-installed) because some declare peers that
+ * only exist in the dsh source workspace and pnpm would fail fetching them.
+ * The package name can differ from the repo dir. */
 export interface CopyBuiltin {
-  readonly kind: 'vendor' | 'workspace';
+  readonly kind: 'vendor' | 'workspace' | 'optional';
   readonly dir: string;
   readonly package: string;
 }
@@ -86,8 +89,13 @@ registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-computer-use@0.1.0' });
 // augmented a base row only shipped by `dsh-client-ui-theme-plugins` (absent
 // on the pinned rc.6 family), so its patch silently no-oped and the skin
 // never loaded. See `vendor/dsh-plugins/VENDOR.md`.
+//
+// The skin is OPTIONAL: a cosmetic theme (CC BY-NC-SA 4.0, non-commercial),
+// installed for a user only when their profile's `.uniterra.json` toggle
+// enables it — never forced on fresh installs, never removed from existing
+// ones (see reconcileOptionalPlugins).
 registerBuiltinPlugin({
-  kind: 'vendor',
+  kind: 'optional',
   dir: 'dsh-deep-whale',
   package: '@dsh-external/dsh-client-ui-skin-maid-atelier',
 });
@@ -180,7 +188,7 @@ export function npmBuiltinSpecs(): readonly string[] {
 }
 
 /** The copy-based built-ins of one kind, in declaration order. */
-export function copyBuiltins(kind: 'vendor' | 'workspace'): readonly CopyBuiltin[] {
+export function copyBuiltins(kind: CopyBuiltin['kind']): readonly CopyBuiltin[] {
   return activeBuiltins().filter((entry): entry is CopyBuiltin => entry.kind === kind);
 }
 
@@ -215,38 +223,40 @@ export function hasAllBuiltins(profileDirPath: string): boolean {
   }
 }
 
+/** Whether the installed copy under `dest` matches the source package dir.
+ * Content identity is the `package.json` `version` field — a fixed
+ * distribution can ship under the SAME package name, so a bundle list can
+ * never tell staleness. A missing or illegible copy on either side is stale. */
+function copyEntryStale(sourceDir: string, destDir: string): boolean {
+  try {
+    const sourceVersion = (readJson(path.join(sourceDir, 'package.json')) as { version?: string })
+      .version;
+    const installedVersion = (readJson(path.join(destDir, 'package.json')) as { version?: string })
+      .version;
+    return sourceVersion !== installedVersion;
+  } catch {
+    return true;
+  }
+}
+
 /** Whether any copy-based built-in's installed copy in the profile has drifted
- * from the current source. The bundle list alone cannot tell — a plugin can
- * ship a fixed distribution under the SAME package name (the skin swap), so a
- * stale node_modules copy must be detected by content identity (package.json
- * `version`). A missing or illegible installed copy is stale. Kind-aware:
- * vendored sources resolve under `vendorRoot`, workspace sources under
- * `sourceRoot`. Returns false only when every installed copy matches. */
+ * from the current source. Optional entries are EXEMPT: their freshness is
+ * owned by reconcileOptionalPlugins (a disabled optional has no copy at all,
+ * and must not force a re-provision on every boot). Returns false only when
+ * every checked installed copy matches. */
 export function copyBuiltinsStale(
   profileDirPath: string,
   vendorRoot: string,
   sourceRoot: string,
 ): boolean {
   for (const entry of activeBuiltins()) {
-    if (entry.kind === 'npm') {
+    if (entry.kind === 'npm' || entry.kind === 'optional') {
       continue;
     }
     const root = entry.kind === 'vendor' ? vendorRoot : sourceRoot;
-    const sourcePkg = path.join(root, entry.dir, 'package.json');
-    const installedPkg = path.join(
-      profileDirPath,
-      'node_modules',
-      ...entry.package.split('/'),
-      'package.json',
-    );
-    try {
-      const sourceVersion = (readJson(sourcePkg) as { version?: string }).version;
-      const installedVersion = (readJson(installedPkg) as { version?: string }).version;
-      if (sourceVersion !== installedVersion) {
-        return true;
-      }
-    } catch {
-      return true; // cannot read either copy → assume stale, re-provision
+    const dest = path.join(profileDirPath, 'node_modules', ...entry.package.split('/'));
+    if (copyEntryStale(path.join(root, entry.dir), dest)) {
+      return true;
     }
   }
   return false;
@@ -310,6 +320,154 @@ export function removeRetiredBuiltins(profileDirPath: string): boolean {
   return changed;
 }
 
+// ---------------------------------------------------------------------------
+// Optional plugins — shipped but not forced. The per-profile `.uniterra.json`
+// toggle file is the source of truth; a missing file migrates from bundle
+// rows (existing installs are preserved, never deleted).
+// ---------------------------------------------------------------------------
+
+/** The per-profile optional-plugin toggle file the desktop reads at boot. */
+export const OPTIONAL_PLUGINS_FILE = '.uniterra.json';
+
+/** Parsed state of the toggle file. `legible` is false when the file exists
+ * but cannot be parsed — migration semantics apply and the file is never
+ * overwritten (least destructive). */
+interface OptionalPluginState {
+  /** Package names explicitly enabled (`optionalPlugins.<name> === true`). */
+  readonly enabled: ReadonlySet<string>;
+  readonly filePresent: boolean;
+  readonly legible: boolean;
+}
+
+function readOptionalState(profileDirPath: string): OptionalPluginState {
+  const statePath = path.join(profileDirPath, OPTIONAL_PLUGINS_FILE);
+  if (!existsSync(statePath)) {
+    return { enabled: new Set(), filePresent: false, legible: true };
+  }
+  try {
+    const parsed: unknown = readJson(statePath);
+    const optionalPlugins =
+      parsed !== null && typeof parsed === 'object'
+        ? (parsed as { optionalPlugins?: unknown }).optionalPlugins
+        : undefined;
+    const enabled = new Set<string>();
+    if (optionalPlugins !== null && typeof optionalPlugins === 'object') {
+      for (const [name, value] of Object.entries(optionalPlugins as Record<string, unknown>)) {
+        if (value === true) {
+          enabled.add(name);
+        }
+      }
+    }
+    return { enabled, filePresent: true, legible: true };
+  } catch {
+    return { enabled: new Set(), filePresent: true, legible: false };
+  }
+}
+
+function writeOptionalState(profileDirPath: string, enabled: ReadonlySet<string>): void {
+  const optionalPlugins: Record<string, boolean> = {};
+  for (const name of Array.from(enabled)) {
+    optionalPlugins[name] = true;
+  }
+  writeFileSync(
+    path.join(profileDirPath, OPTIONAL_PLUGINS_FILE),
+    `${JSON.stringify({ version: 1, optionalPlugins }, null, 2)}\n`,
+    'utf8',
+  );
+}
+
+/** Copy one plugin package dir into the profile's node_modules under its
+ * package name, replacing whatever is there (a previous copy, or a pnpm
+ * link left by `dsh plugin add`). */
+function copyPluginDir(profileDirPath: string, pkgName: string, sourceDir: string): void {
+  const dest = path.join(profileDirPath, 'node_modules', ...pkgName.split('/'));
+  rmSync(dest, { recursive: true, force: true });
+  mkdirSync(path.dirname(dest), { recursive: true });
+  cpSync(sourceDir, dest, { recursive: true });
+}
+
+/**
+ * Reconcile the optional plugins against the profile's `.uniterra.json`
+ * toggle. Runs BEFORE the provisioning gate so an already-full profile still
+ * gets its optional state enforced (same pattern as removeRetiredBuiltins).
+ *
+ * - Legible toggle file: authoritative. Enabled ⇒ bundle row + fresh copy
+ *   ensured (copy, not pnpm link — survives app moves); disabled ⇒ row and
+ *   installed copy removed, idempotently.
+ * - Missing toggle file: migrate from the bundle rows — an existing row is
+ *   kept and persisted as enabled, an absent one stays absent. The file is
+ *   written either way so the state becomes explicit.
+ * - Illegible toggle file: derived from the rows like a missing file, but
+ *   never persisted and never destructive — the user's file is left alone.
+ *
+ * @returns true when the profile (manifest, node_modules, or toggle file)
+ *   was changed.
+ */
+export function reconcileOptionalPlugins(profileDirPath: string, vendorRoot: string): boolean {
+  const optional = copyBuiltins('optional');
+  if (optional.length === 0) {
+    return false;
+  }
+  const state = readOptionalState(profileDirPath);
+  const manifestPath = path.join(profileDirPath, 'package.json');
+  let manifest: { dsh?: { profile?: { bundles?: string[] } } };
+  try {
+    manifest = readJson(manifestPath) as { dsh?: { profile?: { bundles?: string[] } } };
+  } catch {
+    return false; // no legible manifest — nothing to reconcile
+  }
+  const bundles = manifest.dsh?.profile?.bundles ?? [];
+  const bundleSet = new Set(bundles);
+
+  // The effective enabled set: the legible file wins; a missing or illegible
+  // file migrates from the bundle rows (presence decides).
+  const fileIsAuthoritative = state.filePresent && state.legible;
+  const enabled = new Set<string>();
+  for (const entry of optional) {
+    if (fileIsAuthoritative ? state.enabled.has(entry.package) : bundleSet.has(entry.package)) {
+      enabled.add(entry.package);
+    }
+  }
+
+  let changed = false;
+  const nextBundles = [...bundles];
+  for (const entry of optional) {
+    const pkg = entry.package;
+    const dest = path.join(profileDirPath, 'node_modules', ...pkg.split('/'));
+    if (enabled.has(pkg)) {
+      if (!bundleSet.has(pkg)) {
+        nextBundles.push(pkg);
+        changed = true;
+      }
+      if (copyEntryStale(path.join(vendorRoot, entry.dir), dest)) {
+        copyPluginDir(profileDirPath, pkg, path.join(vendorRoot, entry.dir));
+        changed = true;
+      }
+    } else {
+      const rowIndex = nextBundles.indexOf(pkg);
+      if (rowIndex !== -1) {
+        nextBundles.splice(rowIndex, 1);
+        changed = true;
+      }
+      if (existsSync(dest)) {
+        rmSync(dest, { recursive: true, force: true });
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    manifest.dsh ??= {};
+    manifest.dsh.profile ??= {};
+    manifest.dsh.profile.bundles = nextBundles;
+    writeJson(manifestPath, manifest);
+  }
+  if (!state.filePresent) {
+    writeOptionalState(profileDirPath, enabled);
+  }
+  return changed || !state.filePresent;
+}
+
 /**
  * Ensure the built-in plugins are installed into `dshHome`'s profile.
  *
@@ -336,6 +494,9 @@ export function ensureBuiltinPlugins(
   // Heal retired built-ins first: an already-full profile early-returns
   // below, so this is the only pass that can remove them.
   removeRetiredBuiltins(dir);
+  // Enforce the optional-plugin toggle next, for the same reason — a full
+  // profile must still honour `.uniterra.json` (install / remove / migrate).
+  reconcileOptionalPlugins(dir, vendorRoot);
   if (hasAllBuiltins(dir) && !copyBuiltinsStale(dir, vendorRoot, sourceRoot)) {
     return;
   }
@@ -353,7 +514,8 @@ export function ensureBuiltinPlugins(
 
   // Copy-based built-ins (vendor + workspace): copy under their package name
   // and append the bundle rows to the profile manifest (dsh plugin add can't
-  // be used — these packages declare peers that are not on npm).
+  // be used — these packages declare peers that are not on npm). Optional
+  // entries are NOT copied here — reconcileOptionalPlugins owns them.
   const manifestPath = path.join(dir, 'package.json');
   const manifest = readJson(manifestPath) as {
     name?: string;
@@ -378,10 +540,7 @@ export function ensureBuiltinPlugins(
     cpSync(sourceDir, dest, { recursive: true });
   };
 
-  for (const entry of activeBuiltins()) {
-    if (entry.kind === 'npm') {
-      continue;
-    }
+  for (const entry of [...copyBuiltins('vendor'), ...copyBuiltins('workspace')]) {
     const root = entry.kind === 'vendor' ? vendorRoot : sourceRoot;
     copyBuiltin(path.join(root, entry.dir), entry.package);
   }
