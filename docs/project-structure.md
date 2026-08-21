@@ -30,18 +30,18 @@ Directory map for the uniterra monorepo. Locate code by task, not by grepping.
 
 ## Built-in Skills (`packages/uniterra-skills/src/skills/`)
 
-| Skill dir                | Purpose                                                                                                                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `uniterra-plan`          | Planning phase: clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents                            |
-| `uniterra-implement`     | PBT-first execution: write ALL failing PBTs → decompose into a task list → batched / full-parallel workflow of subagents                                     |
-| `uniterra-simplify`      | Behaviour-preserving simplification: goal + context → review (over-engineering checklist — plan design is authoritative) → fix → re-review loop              |
-| `uniterra-review`        | Adversarial review: goal + context → review (correctness + security) → repro (pin findings as failing tests) → fix → re-review loop                          |
-| `uniterra-pbt-debugging` | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests                                              |
-| `project-documentation`  | Generate/maintain the structured `docs/` tree                                                                                                                |
-| `uniterra-qa`            | PRD-driven acceptance testing: UI apps = playwright geometry + pixel checks then UI operation; backend = clean-container install + smoke boot + API journeys |
-| `create-skill`           | Scaffold a new agent skill                                                                                                                                   |
-| `manage-agents-md`       | Create/audit agent spec files (AGENTS.md etc.)                                                                                                               |
-| `manage-git-repo`        | Commit, version, release, PR workflows                                                                                                                       |
+| Skill dir                | Purpose                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uniterra-plan`          | Planning phase: clarify requirements + design interactively → write prd.md / design.md / acceptance.md → 3 parallel review agents                             |
+| `uniterra-implement`     | PBT-first execution: write ALL failing PBTs → decompose into a task list → batched / full-parallel workflow of subagents                                      |
+| `uniterra-simplify`      | Behaviour-preserving simplification: goal + context → review (over-engineering checklist — plan design is authoritative) → fix → re-review loop               |
+| `uniterra-review`        | Adversarial review: goal + context → review (correctness + security) → repro (one agent pins all findings as failing regression tests) → fix → re-review loop |
+| `uniterra-pbt-debugging` | Invariant-first debugging: pin business logic as properties, reproduce the bug, fix, lock with regression tests                                               |
+| `project-documentation`  | Generate/maintain the structured `docs/` tree                                                                                                                 |
+| `uniterra-qa`            | PRD-driven acceptance testing: UI apps = playwright geometry + pixel checks then UI operation; backend = clean-container install + smoke boot + API journeys  |
+| `create-skill`           | Scaffold a new agent skill                                                                                                                                    |
+| `manage-agents-md`       | Create/audit agent spec files (AGENTS.md etc.)                                                                                                                |
+| `manage-git-repo`        | Commit, version, release, PR workflows                                                                                                                        |
 
 ## Vendored Plugins (`vendor/dsh-plugins/`)
 

@@ -7,7 +7,7 @@ Task recipes. Each links to the module/skill that owns the details.
 1. Load the `uniterra-plan` skill; clarify the requirements list AND architecture design interactively; write `prd.md` / `design.md` / `acceptance.md` under `<repo>/.plan/<YYYYMMDD>/<name>/`.
 2. Run the plan's review workflow — three parallel review agents (feasibility, over-engineering, verifiable acceptance) — until all pass.
 3. Load `uniterra-implement`: write ALL failing property tests (red phase), decompose into a task list, run the batched / full-parallel `workflow` script; confirm the full suite is green.
-4. Run `uniterra-review` (adversarial: correctness + security, findings pinned as failing tests before fixing) and/or `uniterra-simplify` (over-engineering checklist, behaviour-preserving; the plan's design is an authoritative constraint) — each loops until its review passes.
+4. Run `uniterra-review` (adversarial: correctness + security, findings pinned as failing regression tests written per repo conventions before fixing) and/or `uniterra-simplify` (over-engineering checklist, behaviour-preserving; the plan's design is an authoritative constraint) — each loops until its review passes.
    Details: [modules/uniterra-skills.md](modules/uniterra-skills.md#uniterra-plan).
 
 ## Debug a Bug (PBT-first)
