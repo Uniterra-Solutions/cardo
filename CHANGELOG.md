@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.9] — 2026-08-21
+
+### Added
+
+- `uniterra-plan`: the plan is now confirmed with the user before the automated three-agent review — the workflow reads back `prd.md` / `design.md` / `acceptance.md` with a short summary and asks via `ask_user_question` whether the content is broadly correct and matches the user's needs, applies their edits, and re-shows them until they confirm, then proceeds to review.
+
+### Changed
+
+- `uniterra-desktop`: the Deep Whale skin (`dsh-deep-whale`) is no longer forced on every profile. A new `optional` registry kind and `reconcileOptionalPlugins()` enforce the per-profile `.uniterra.json` toggle at boot: fresh installs never install or activate the skin (optional entries are excluded from the expected bundles and from stale detection, so a disabled skin can't force a re-provision on every boot); existing row-bearing profiles migrate with the skin preserved and persisted as enabled (nothing is deleted); enabled ⇒ bundle row + fresh copy ensured (self-healing to the shipped source), disabled ⇒ row and copy removed idempotently; an illegible toggle file is never destructive and never overwritten. Also removes the legacy `src/profile.ts` (+ its test) and the orphaned `scripts/prepare-runtime.mjs`.
+
 ## [0.11.8] — 2026-08-21
 
 ### Changed
