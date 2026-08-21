@@ -25,6 +25,11 @@ clarification; make a reasonable, documented decision where the task is ambiguou
 - Work at the repo root (your cwd). Leave all changes UNCOMMITTED — a later review reads the diff.
 - Touch only `constraints.owned_files`; never modify `constraints.forbidden_files` or any file
   outside your task's scope — parallel agents may be working at the same time.
+- Your requirement's failing property tests are already written (see `requirements[].test`).
+  FIRST prioritize STRENGTHENING / completing those existing failing test cases — extend the
+  property, add the missing edge cases and invariant asserts — then make them GREEN. Never
+  start by writing a brand-new property test from scratch for a requirement that already has
+  an allocated failing test.
 - Follow the project's conventions (AGENTS.md / CLAUDE.md): run lint / typecheck / build, add
   tests for new behaviour, and make your requirements' failing property tests GREEN.
 - Verify external APIs before using them; never write from memory.
