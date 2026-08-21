@@ -52,18 +52,29 @@ Return a structured findings list. Every finding must reference a concrete
 location (inside the scope) and a concrete failure mode, and carry the id, level,
 and description. If the code is sound, return an empty findings list.`;
 
-const REPRO_PROMPT = `You are an isolated subagent. You reproduce ONE review finding as a failing
-property-based test. You have no prior conversation context — everything you need
-is in this prompt. The goal and finding are injected below.
+const REPRO_PROMPT = `You are an isolated subagent. You reproduce ALL review findings as failing
+property-based tests. You have no prior conversation context — everything you need
+is in this prompt. The goal and findings are injected below.
 
 Method:
-1. Define the business logic under investigation as an invariant.
+1. For EACH finding, define the business logic under investigation as an invariant.
 2. Write a FAILING property test (fast-check, or a deterministic regression) that
    captures the finding.
 3. Run the suite to confirm it FAILS for the reason the finding describes (red).
 
-Write the test to a location that won't collide with other repro agents (a
-distinct test file per finding, placed beside the module under test).
+The tests are FORMAL source code that stay in the repo as permanent regression
+coverage — follow the repo's test conventions exactly:
+- Write each test to the repo's conventional test location for the module under
+  test (e.g. the package's test/ directory, in the format the package's test
+  script picks up), using the repo's test framework (node:test + fast-check
+  where AGENTS.md prescribes it).
+- Name each test file and test case DESCRIPTIVELY after the invariant it pins
+  (e.g. <module>-<behaviour>.test.mjs), never after a finding id.
+- Match the repo's existing conventions (imports, formatting, assertion style)
+  so the tests pass lint/format like any other source.
+- If a regression test for an invariant already exists (e.g. from an earlier
+  round), do not duplicate it — re-run it and confirm it still fails for the
+  finding's reason.
 
 Reproducible vs invalid:
 - verified — the test reproduces the finding (fails for the described reason).
@@ -71,10 +82,11 @@ Reproducible vs invalid:
   the behaviour cannot be pinned by a test. Do NOT write a test that fails for an
   unrelated reason just to "confirm" it.
 
-Do NOT edit source — only add the failing test.
+Do NOT edit source — only add the failing tests.
 
-Return: id (unchanged), verdict ("verified" | "invalid"), level (unchanged),
-verification_test (the test file path — only when verified), and description.`;
+Return: results — one entry per finding: id (unchanged), verdict ("verified" | "invalid"),
+level (unchanged), verification_test (the test file path — only when verified), and
+description.`;
 
 const FIX_PROMPT = `You are an isolated subagent. You repair ONLY the verified findings, each already
 pinned by a failing test. You have no prior conversation context — everything you
@@ -116,13 +128,22 @@ const REVIEW_SCHEMA = {
 
 const REPRO_SCHEMA = {
   type: 'object',
-  required: ['id', 'verdict', 'level', 'description'],
+  required: ['results'],
   properties: {
-    id: { type: 'string' },
-    verdict: { type: 'string', enum: ['verified', 'invalid'] },
-    level: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
-    verification_test: { type: 'string' },
-    description: { type: 'string' },
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'verdict', 'level', 'description'],
+        properties: {
+          id: { type: 'string' },
+          verdict: { type: 'string', enum: ['verified', 'invalid'] },
+          level: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
+          verification_test: { type: 'string' },
+          description: { type: 'string' },
+        },
+      },
+    },
   },
 };
 
@@ -162,20 +183,15 @@ for (let round = 1; round <= maxRounds; round++) {
   const findings = review.findings;
   if (findings.length === 0) return { status: 'done', rounds: round };
 
-  // Stage 2 — repro (one agent per finding, parallel)
-  const repros = await parallel(
-    findings.map(
-      (f) => () =>
-        agent(
-          REPRO_PROMPT + '\n\n## Goal\n' + goal + '\n\n## Finding\n' + JSON.stringify(f, null, 2),
-          {
-            label: 'repro-' + round + '-' + f.id,
-            schema: REPRO_SCHEMA,
-          },
-        ),
-    ),
+  // Stage 2 — repro (one agent for all findings)
+  const repro = await agent(
+    REPRO_PROMPT + '\n\n## Goal\n' + goal + '\n\n## Findings\n' + JSON.stringify(findings, null, 2),
+    { label: 'repro-' + round, schema: REPRO_SCHEMA },
   );
-  const verified = repros.filter((r) => r !== null && r.verdict === 'verified');
+  if (repro === null) {
+    return { status: 'blocked', reason: 'repro agent failed', round, findings };
+  }
+  const verified = (repro.results ?? []).filter((r) => r !== null && r.verdict === 'verified');
   if (verified.length === 0) {
     return { status: 'done', rounds: round, findings: findings.length, invalid: findings.length };
   }

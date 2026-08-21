@@ -5,8 +5,8 @@ description: >
   there is a review scope — no plan required. Assemble the goal + context
   (requirements, design, acceptance — from docs or your own input for simple
   tasks), then run a review workflow: a review agent grades findings by
-  severity (critical / high / medium / low), a repro agent pins each as a
-  failing property test (invalid findings dropped), and a fix agent repairs
+  severity (critical / high / medium / low), a repro agent pins the findings as
+  failing property tests (invalid findings dropped), and a fix agent repairs
   only the verified findings. LOAD when:
   - User asks to review changes, hunt for bugs, or run the review phase
     (review / 審查 / code review)
@@ -42,9 +42,10 @@ workflow, three stages:
 1. **review agent** (`references/review-agent.md`) — comprehensive adversarial
    review covering correctness AND security (`references/security-checklist.md`);
    returns findings graded critical / high / medium / low.
-2. **repro agent** (`references/repro-agent.md`) — one per finding, parallel;
-   pins each as a failing property test; un-reproducible findings are INVALID
-   and dropped.
+2. **repro agent** (`references/repro-agent.md`) — one agent for all findings;
+   pins each as a failing property test written as formal regression tests
+   following the repo's conventions; un-reproducible findings are INVALID and
+   dropped.
 3. **fix agent** (`references/fix-agent.md`) — repairs only the verified findings
    under constraints (no weakened tests, no broken business logic).
 
