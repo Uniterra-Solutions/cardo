@@ -36,7 +36,7 @@ Quick links: [Setup](setup.md) · [Architecture](architecture.md) · [Tech Stack
 - [modules/uniterra-provider.md](modules/uniterra-provider.md) — dual-protocol adapter, config, wire invariants, settings page
 - [modules/uniterra-cli.md](modules/uniterra-cli.md) — `uniterra setup` / `uniterra update`, install flow, release
 - [modules/uniterra-updater.md](modules/uniterra-updater.md) — update-decision semantics, skip persistence
-- [modules/uniterra-skills.md](modules/uniterra-skills.md) — skill registry, provisioning, the 7 bundled skills
+- [modules/uniterra-skills.md](modules/uniterra-skills.md) — skill registry, provisioning, the 9 bundled skills
 - [modules/uniterra-systemprompt.md](modules/uniterra-systemprompt.md) — working-rule injection extension
 - [modules/vendor-plugins.md](modules/vendor-plugins.md) — npm/vendored/optional/workspace built-ins, pin ledger, update policy
 

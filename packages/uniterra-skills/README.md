@@ -9,10 +9,9 @@ like any user skill.
 
 Vendored from the Hermes plugins — re-sync by copying the directories:
 
-| Skill                                                                                     | Origin                                         |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `agentic-debugging`, `manage-agents-md`, `manage-git-repo`, `project-documentation`, `qa` | `jovaltus/src/jovaltus/skills/`                |
-| `create-skill`                                                                            | `caelterra/src/caelterra/skills/create-skill/` |
+| Skill                                                                                     | Origin                          |
+| ----------------------------------------------------------------------------------------- | ------------------------------- |
+| `agentic-debugging`, `manage-agents-md`, `manage-git-repo`, `project-documentation`, `qa` | `jovaltus/src/jovaltus/skills/` |
 
 `scripts/copy-skills.mjs` copies `src/skills/*` → `dist/skills/` during the
 build; consumers must load this package from its built `dist` output.

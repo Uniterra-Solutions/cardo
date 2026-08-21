@@ -20,7 +20,7 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Add a Bundled Skill
 
-1. Create `packages/uniterra-skills/src/skills/<name>/SKILL.md` (use the `create-skill` skill).
+1. Create `packages/uniterra-skills/src/skills/<name>/SKILL.md` (model it on an existing bundled skill's `SKILL.md` — same frontmatter `name:` + `description:` structure).
 2. Add the name to `SKILL_NAMES` in `packages/uniterra-skills/src/index.ts`.
 3. `pnpm run build` (copy-skills refreshes `dist/skills/`).
 4. Extend `packages/uniterra-skills/test/provision.test.mts`.
