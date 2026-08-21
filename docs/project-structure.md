@@ -25,7 +25,7 @@ Directory map for the uniterra monorepo. Locate code by task, not by grepping.
 | `packages/uniterra-provider`     | In-house dual-protocol LLM provider plugin (chat completions + Responses API)  | `src/index.ts`, `src/adapter.ts`, `src/serialize-*.ts`, `src/translate-*.ts`, `src/client/*` |
 | `packages/uniterra-cli`          | Public npm installer (`uniterra` bin): `setup` / `update` — macOS + Windows    | `src/cli.ts`, `src/install-logic.ts`                                                         |
 | `packages/uniterra-updater`      | Pure update-check decision logic (no Electron imports)                         | `src/index.ts`, `src/decision.ts`                                                            |
-| `packages/uniterra-skills`       | Built-in skill registry (10 company skills) + provisioning                     | `src/index.ts`, `src/skills/*/SKILL.md`, `scripts/copy-skills.mjs`                           |
+| `packages/uniterra-skills`       | Built-in skill registry (9 company skills) + provisioning                      | `src/index.ts`, `src/skills/*/SKILL.md`, `scripts/copy-skills.mjs`                           |
 | `packages/uniterra-systemprompt` | pi-agent extension appending app-wide working rules to every turn              | `src/index.ts`                                                                               |
 
 ## Built-in Skills (`packages/uniterra-skills/src/skills/`)
