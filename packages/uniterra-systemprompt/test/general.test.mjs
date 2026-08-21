@@ -33,6 +33,21 @@ test('appends the working rules to the base system prompt', () => {
   assert.ok(systemPrompt.includes("Reply in the user's language by default"));
 });
 
+test('thinking is framed as a cost with an infer-verify-correct loop', () => {
+  const { systemPrompt } = run('base');
+  assert.ok(systemPrompt.includes('Thinking has a cost'));
+  assert.ok(systemPrompt.includes('infer-verify-correct loop'));
+  assert.ok(systemPrompt.includes('reason to a conclusion or hypothesis'));
+  assert.ok(systemPrompt.includes('correct the conclusion from what the evidence shows'));
+});
+
+test('output stays concise: essentials only, no filler', () => {
+  const { systemPrompt } = run('base');
+  assert.ok(systemPrompt.includes('Keep replies concise'));
+  assert.ok(systemPrompt.includes('outcome, evidence, next step'));
+  assert.ok(systemPrompt.includes('No filler'));
+});
+
 test('does not accumulate duplicate rules across turns', () => {
   const handler = loadHandler();
   const base = 'base prompt';
