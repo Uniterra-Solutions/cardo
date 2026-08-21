@@ -89,6 +89,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Deep Whale skin (`dsh-deep-whale`) is now an optional plugin** instead of a forced built-in: fresh installations no longer install or activate it. The desktop reads the profile's `.uniterra.json` toggle (`{"version": 1, "optionalPlugins": {"@dsh-external/dsh-client-ui-skin-maid-atelier": true}}`) at every boot and provisions the skin only when enabled — disabling removes the bundle row and the installed copy. Profiles that already carry the skin (no toggle file yet) migrate automatically: the row is preserved and persisted as enabled, nothing is deleted. An illegible toggle file is never destructive and never overwritten. The registry's new `optional` kind (`reconcileOptionalPlugins()` in `packages/uniterra-desktop/src/builtin.ts`) owns the whole lifecycle; `copyBuiltinsStale()` now ignores optional entries so a disabled skin never forces a re-provision on boot. Enabled optionals still self-heal to the shipped source version.
+
+### Removed
+
+- `packages/uniterra-desktop/src/profile.ts` and its test (`profile.test.mjs`): legacy profile-bootstrap constants that contradicted the live `builtin.ts` registry and were never imported at runtime.
+- `packages/uniterra-desktop/scripts/prepare-runtime.mjs`: orphaned since the 0.5.0 `vendor/dsh-runtime` model — no script, CI step, or boot path referenced it, and the output directory no longer exists.
+
 - **Project renamed from Cardo to Uniterra.** The repository, npm packages (`@uniterra-solutions/cardo` → `@uniterra-solutions/uniterra`), CLI command (`cardo` → `uniterra`), desktop app identity (`Uniterra`, `com.uniterra.uniterra`), provider route (`llm-cardo` → `llm-uniterra`), bundled skills (`cardo-*` → `uniterra-*`), and environment variables (`CARDO_*` → `UNITERRA_*`) all use the new name. The old `@uniterra-solutions/cardo` package remains on npm at v0.8.3 for existing installs; earlier entries in this changelog keep the old names as historical record.
 
 ### Fixed
