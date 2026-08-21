@@ -2,7 +2,7 @@
 
 **Purpose:** Built-in skill registry — bundles the 10 company-standard skills and provisions them into the agent's skills directory at startup (idempotent, never clobbers user edits; retired skills are removed). In the dsh runtime the same skill tree ships via the rank-600 bundled provider (`DSH_BUNDLED_SKILL_DIR`).
 
-Source: `packages/uniterra-skills/src/index.ts`, `src/skills/*/SKILL.md`; build `scripts/copy-skills.mjs`; tests `test/provision.test.mts`.
+Source: `packages/uniterra-skills/src/index.ts`, `src/skills/*/SKILL.md`; build `scripts/copy-skills.mjs`; tests `test/provision.test.mts`, `test/workflow-templates.test.mts`.
 
 ## Public API
 
@@ -28,6 +28,34 @@ Provision order (`SKILL_NAMES`): `uniterra-pbt-debugging`, `uniterra-plan`, `uni
 ## Build / Packaging
 
 `build` = `tsc -b` + `scripts/copy-skills.mjs`: mirrors `src/skills/*` → `dist/skills/`, deletes stale `dist/skills` entries (a deleted skill must not keep shipping), and throws if zero skills were copied (fail fast on a wrong path).
+
+## Workflow Templates & the dsh `workflow` Tool Contract
+
+The four pipeline skills (`uniterra-plan` / `uniterra-implement` / `uniterra-review` /
+`uniterra-simplify`) dispatch their agents through the dsh `workflow` tool. Every
+template embeds the script as a ` ```js ` code fence and MUST instruct the full
+submission contract, or a workflow taken straight from the template fails before the
+script runs:
+
+- **`meta` is a separate, REQUIRED tool parameter** (`meta: { name, description }`),
+  never part of the script body — dsh rejects a body opening with
+  `export const meta` (`SCRIPT_PARSE`). Only `name` / `description` / optional
+  `whenToUse` / `phases` (with only `title` / `detail` / `provider` / `model`) are
+  recognized; any other meta field fails the run with `META_INVALID`.
+- **`script`** is the plain-JS body only (no TypeScript), compiled as
+  `(async () => { <body> })()`, ending with `return <json-value>`.
+- **`args`** is free-form JSON exposed as the `args` global.
+- Hooks available in the script realm: `agent(prompt, opts)`, `parallel(thunks)`,
+  `pipeline(items, ...stages)`, `phase(title)`, `log(message)`, `args`. `agent()`
+  accepts only `label` / `phase` / `schema` / `provider` / `model` (anything else is
+  rejected loudly); `schema` must be object-rooted and use only
+  `type` / `properties` / `required` / `additionalProperties` / `items` / `enum` /
+  `const` / `oneOf`.
+
+`test/workflow-templates.test.mts` locks this: every embedded ` ```js ` fence parses
+under dsh's wrapper, no body opens with `export const meta`, every template instructs
+the `meta` parameter, and the single-script templates execute to a terminal JSON
+result under stubbed hooks. Keep templates inside this contract when editing them.
 
 ## Bundled Skills
 

@@ -5,8 +5,8 @@ Task recipes. Each links to the module/skill that owns the details.
 ## Develop a Feature (company standard)
 
 1. Load the `uniterra-plan` skill; clarify the requirements list AND architecture design interactively; write `prd.md` / `design.md` / `acceptance.md` under `<repo>/.plan/<YYYYMMDD>/<name>/`.
-2. Run the plan's review workflow — three parallel review agents (feasibility, over-engineering, verifiable acceptance) — until all pass.
-3. Load `uniterra-implement`: write ALL failing property tests (red phase), decompose into a task list, run the batched / full-parallel `workflow` script; confirm the full suite is green.
+2. Run the plan's review workflow — three parallel review agents (feasibility, over-engineering, verifiable acceptance) — until all pass. Each workflow runs through the dsh `workflow` tool: submit `meta` + `script` (from the template) + `args` per the template's instructions.
+3. Load `uniterra-implement`: write ALL failing property tests (red phase), decompose into a task list, run the batched / full-parallel `workflow` script (again `meta` + `script` + `args` per the template); confirm the full suite is green.
 4. Run `uniterra-review` (adversarial: correctness + security, findings pinned as failing regression tests written per repo conventions before fixing) and/or `uniterra-simplify` (over-engineering checklist, behaviour-preserving; the plan's design is an authoritative constraint) — each loops until its review passes.
    Details: [modules/uniterra-skills.md](modules/uniterra-skills.md#uniterra-plan).
 
@@ -51,7 +51,7 @@ Task recipes. Each links to the module/skill that owns the details.
 
 ## Release a Version
 
-1. Bump `packages/uniterra-cli/package.json` + `packages/uniterra-desktop/package.json` versions (+ `CHANGELOG.md` entry), commit, push.
+1. Bump the version declarations — root `package.json`, `packages/uniterra-cli/package.json`, `packages/uniterra-desktop/package.json`, and the version table in `docs/tech-stack.md` — plus a `CHANGELOG.md` entry; commit, push.
 2. Push tag `v<version>` — `release.yml` gates the publish on the full matrix (CI lint/typecheck/tests + clean-container installer replay + windows-latest install verification, all via `needs`); on success it publishes the CLI via npm trusted publishing, builds the workspace on Linux, and creates the GitHub Release carrying the `uniterra-src-<tag>.tar.gz` source asset (built tree + `.uniterra-prebuilt` marker).
 3. Version mismatch between tag and `packages/uniterra-cli/package.json` fails the release.
    Details: [modules/uniterra-cli.md](modules/uniterra-cli.md), [modules/uniterra-updater.md](modules/uniterra-updater.md).
