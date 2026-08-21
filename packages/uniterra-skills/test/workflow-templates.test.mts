@@ -20,6 +20,9 @@
  *     execute to a terminal JSON result under stubbed hooks, proving the hook
  *     names, the `agent()` options (label/schema), the schema shapes, and the
  *     terminal `return` all match the engine contract.
+ *  5. A review agent's `verdict: "pass"` ends the review / simplify workflow
+ *     immediately as `done`: non-blocking findings / recommendations are
+ *     returned with the result, and no repro / fix round runs.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -45,7 +48,11 @@ const META_STATEMENT = /^\s*export\s+const\s+meta\b/;
 const RUNNABLE_TEMPLATES: ReadonlyArray<{ file: string; args: unknown }> = [
   {
     file: 'uniterra-review/assets/workflow-template.md',
-    args: { goal: 'test goal', context: { requirements: '', design: '', acceptance: '' }, task: 'test task' },
+    args: {
+      goal: 'test goal',
+      context: { requirements: '', design: '', acceptance: '' },
+      task: 'test task',
+    },
   },
   {
     file: 'uniterra-simplify/assets/workflow-template.md',
@@ -112,7 +119,7 @@ function fillSchema(schema: unknown): unknown {
   }
 }
 
-test('every workflow template script parses under dsh\'s wrapper and instructs the meta parameter', () => {
+test("every workflow template script parses under dsh's wrapper and instructs the meta parameter", () => {
   const root = builtinSkillsDir();
   const files = WORKFLOW_SKILLS.flatMap((skill) => collectMarkdownFiles(path.join(root, skill)));
   const embedding = files.filter((file) => jsFences(readFileSync(file, 'utf8')).length > 0);
@@ -161,7 +168,11 @@ test('single-script templates execute to a terminal JSON result with stubbed hoo
       thunks: ReadonlyArray<() => Promise<unknown>>,
     ): Promise<Array<unknown | null>> =>
       Promise.all(
-        thunks.map((thunk) => Promise.resolve().then(thunk).catch(() => null)),
+        thunks.map((thunk) =>
+          Promise.resolve()
+            .then(thunk)
+            .catch(() => null),
+        ),
       ),
     pipeline: async (
       items: unknown[],
@@ -193,10 +204,108 @@ test('single-script templates execute to a terminal JSON result with stubbed hoo
       filename: file,
     });
     const result: unknown = await script.runInContext(context);
-    assert.ok(result !== null && typeof result === 'object', `${file}: script must return a JSON object`);
+    assert.ok(
+      result !== null && typeof result === 'object',
+      `${file}: script must return a JSON object`,
+    );
     assert.doesNotThrow(
       () => JSON.stringify(result),
       `${file}: script result must be JSON-serializable`,
     );
+  }
+});
+
+test('review and simplify templates end on a pass verdict without repro/fix rounds', async () => {
+  const root = builtinSkillsDir();
+  const cases = [
+    {
+      file: 'uniterra-review/assets/workflow-template.md',
+      args: { goal: 'g', context: { requirements: '', design: '', acceptance: '' }, task: 't' },
+      reviewResponse: {
+        verdict: 'pass',
+        findings: [{ id: 'f1', level: 'low', description: 'cosmetic nit' }],
+      },
+      downstreamLabels: ['repro-', 'fix-'],
+    },
+    {
+      file: 'uniterra-simplify/assets/workflow-template.md',
+      args: { goal: 'g', context: { requirements: '', design: '', acceptance: '' } },
+      reviewResponse: {
+        verdict: 'pass',
+        recommendations: [{ id: 'r1', safetiness: 'safe', description: 'cosmetic nit' }],
+      },
+      downstreamLabels: ['fix-'],
+    },
+  ];
+
+  for (const c of cases) {
+    const called: string[] = [];
+    const hooks: Record<string, unknown> = {
+      agent: async (
+        prompt: string,
+        opts?: { label?: string; schema?: unknown },
+      ): Promise<unknown> => {
+        assert.equal(typeof prompt, 'string');
+        assert.ok(prompt.length > 0, 'agent() requires a non-empty prompt');
+        called.push(opts?.label ?? '');
+        if ((opts?.label ?? '').startsWith('review-')) return c.reviewResponse;
+        return opts?.schema === undefined ? '' : fillSchema(opts.schema);
+      },
+      parallel: async (
+        thunks: ReadonlyArray<() => Promise<unknown>>,
+      ): Promise<Array<unknown | null>> =>
+        Promise.all(
+          thunks.map((thunk) =>
+            Promise.resolve()
+              .then(thunk)
+              .catch(() => null),
+          ),
+        ),
+      pipeline: async (
+        items: unknown[],
+        ...stages: Array<(value: unknown, item: unknown, index: number) => unknown>
+      ): Promise<Array<unknown | null>> =>
+        Promise.all(
+          items.map(async (item, index) => {
+            let value: unknown = item;
+            try {
+              for (const stage of stages) value = await stage(value, item, index);
+              return value;
+            } catch {
+              return null;
+            }
+          }),
+        ),
+      phase: (_title: string): void => undefined,
+      log: (_message: string): void => undefined,
+    };
+
+    const absolute = path.join(root, c.file);
+    const body = jsFences(readFileSync(absolute, 'utf8'))[0]!;
+    const context: Record<string, unknown> = { ...hooks, args: c.args };
+    vm.createContext(context);
+    const script = new vm.Script(DSH_WRAPPER_PREFIX + body + DSH_WRAPPER_SUFFIX, {
+      filename: c.file,
+    });
+    const result = (await script.runInContext(context)) as {
+      status?: string;
+      verdict?: string;
+      findings?: Array<{ id: string }>;
+      recommendations?: Array<{ id: string }>;
+    };
+    assert.equal(result.status, 'done', `${c.file}: a pass verdict must end the workflow as done`);
+    assert.equal(result.verdict, 'pass', `${c.file}: the result must carry the pass verdict`);
+    const carried = result.findings ?? result.recommendations;
+    assert.equal(
+      carried?.length,
+      1,
+      `${c.file}: non-blocking items must be returned with the result, not dropped`,
+    );
+    for (const label of c.downstreamLabels) {
+      assert.ok(
+        !called.some((call) => call.startsWith(label)),
+        `${c.file}: no ${label} round may run after a pass verdict (agent calls: ${called.join(', ')})`,
+      );
+    }
   }
 });
