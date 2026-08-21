@@ -13,8 +13,9 @@ another's output. This is the default when the design cleanly separates modules.
 
 ## Script
 
+Submit with the `workflow` tool as `meta: { name: 'implement', description: 'Implement independent tasks in parallel' }`, `script: <the JS below>`, and `args = { goal, tasks }` (the flat task list). The meta shape above is a separate tool parameter — do not put it in the script.
+
 ```js
-// meta: { name: 'implement', description: 'Implement independent tasks in parallel' }
 const { goal, tasks } = args;
 const results = await parallel(
   tasks.map((t) => () => agent(renderTask(goal, t), { label: t.id, schema: RETURN_SCHEMA })),

@@ -38,7 +38,8 @@ over-engineering — never propose removing them.
 
 ## 2. Run the simplify workflow
 
-Use `assets/workflow-template.md` with `args = { goal, context }`. Two stages:
+Use `assets/workflow-template.md` with the `workflow` tool: `meta` + `script` (from the
+template) + `args = { goal, context }`. Two stages:
 
 1. **review agent** (`references/review-agent.md`) — finds simplification
    opportunities against the over-engineering checklist

@@ -1,9 +1,16 @@
 # Review Workflow Template
 
-One workflow: review → repro → fix. Submit with `args = { goal, context, task }`
-where `context = { requirements, design, acceptance }` (each may be empty). The
+One workflow: review → repro → fix. Submit it with the `workflow` tool as:
+`meta: { name: 'review', description: 'Adversarial review: review → repro → fix until clean' }`,
+`script: <the JS below>`, and `args = { goal, context, task }` where
+`context = { requirements, design, acceptance }` (each may be empty). The
 three embedded prompts mirror `references/review-agent.md`, `references/repro-agent.md`,
 and `references/fix-agent.md`.
+
+Note: `meta` is a separate required tool parameter, never part of the script. dsh
+accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
+with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
+with `META_INVALID`. `args` may carry an optional `maxRounds`.
 
 ```js
 const { goal, context, task } = args;

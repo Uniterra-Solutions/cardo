@@ -45,9 +45,9 @@ Write them yourself in the main session (no authoring subagents):
 
 ### 3. Review the documents with the fixed workflow
 
-- Run the fixed workflow in `scripts/review-workflow.md` with
-  `args = { prd_dir, design_dir, acceptance_dir }` (in practice all three are the
-  run directory).
+- Run the fixed workflow in `scripts/review-workflow.md` with the `workflow` tool:
+  `meta` + `script` (from that file) + `args = { prd_dir, design_dir, acceptance_dir }`
+  (in practice all three are the run directory).
 - It dispatches three parallel review agents, each fed all three dirs:
   - **requirement-list-review** (`prompts/requirement-list-review.md`) — technical
     feasibility + contradictions between requirements.

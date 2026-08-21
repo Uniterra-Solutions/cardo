@@ -1,11 +1,18 @@
 # Simplify Workflow Template
 
-One workflow: review → fix. Submit with `args = { goal, context }` where
+One workflow: review → fix. Submit it with the `workflow` tool as:
+`meta: { name: 'simplify', description: 'Behaviour-preserving simplification: review → fix until simple' }`,
+`script: <the JS below>`, and `args = { goal, context }` where
 `context = { requirements, design, acceptance }` (each may be empty). The two
 embedded prompts mirror `references/review-agent.md` and `references/fix-agent.md`.
 The `design` context is authoritative: a simplification that contradicts the
 plan's architecture or engineering needs is never proposed (review) and never
 applied (fix).
+
+Note: `meta` is a separate required tool parameter, never part of the script. dsh
+accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
+with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
+with `META_INVALID`. `args` may carry an optional `maxRounds`.
 
 ```js
 const { goal, context } = args;

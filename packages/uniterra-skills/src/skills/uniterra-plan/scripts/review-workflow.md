@@ -5,9 +5,14 @@ three parallel agents. Only the three directory paths vary; the prompts are fixe
 (mirrors of `prompts/requirement-list-review.md`, `prompts/design-review.md`, and
 `prompts/acceptance-review.md`).
 
-Submit it with the `workflow` tool using `meta: { name: 'plan-review', description:
-'Review plan documents with three parallel agents' }` and
-`args: { prd_dir, design_dir, acceptance_dir }`.
+Submit it with the `workflow` tool as:
+`meta: { name: 'plan-review', description: 'Review plan documents with three parallel agents' }`,
+`script: <the JS below>`, and `args: { prd_dir, design_dir, acceptance_dir }`.
+
+Note: `meta` is a separate required tool parameter, never part of the script. dsh
+accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
+with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
+with `META_INVALID`.
 
 ```js
 const { prd_dir, design_dir, acceptance_dir } = args;

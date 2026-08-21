@@ -36,8 +36,8 @@ contract on that axis".
 
 ## 2. Run the review workflow
 
-Use `assets/workflow-template.md` with `args = { goal, context, task }`. One
-workflow, three stages:
+Use `assets/workflow-template.md` with the `workflow` tool: `meta` + `script` (from the
+template) + `args = { goal, context, task }`. One workflow, three stages:
 
 1. **review agent** (`references/review-agent.md`) — comprehensive adversarial
    review covering correctness AND security (`references/security-checklist.md`);

@@ -1,7 +1,17 @@
 # Workflow Script — shared building blocks
 
 Every script is a plain JavaScript body (no `export const meta` statement — meta rides the
-`meta` request field). `args` is the task list from `assets/task-list-example.md`.
+separate `meta` tool parameter). `args` is the task list from `assets/task-list-example.md`.
+
+Submit the assembled script with the `workflow` tool as:
+`meta: { name: 'implement', description: '<one line>' }`,
+`script: <the assembled JS>`, and `args` = the task list (`{ goal, tasks }` for the
+parallel shape, `{ goal, batches }` for the batched shape).
+
+Note: `meta` is a separate required tool parameter, never part of the script. dsh
+accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
+with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
+with `META_INVALID`.
 
 ## Fixed rules (identical in every prompt)
 
@@ -75,7 +85,6 @@ function renderTask(goal, task) {
 ## Minimal complete example (one batch)
 
 ```js
-// meta: { name: 'implement', description: 'Implement the plan agents' }
 const { goal, tasks } = args;
 
 const results = await parallel(
