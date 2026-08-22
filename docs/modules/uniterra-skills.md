@@ -42,6 +42,10 @@ script runs:
   `export const meta` (`SCRIPT_PARSE`). Only `name` / `description` / optional
   `whenToUse` / `phases` (with only `title` / `detail` / `provider` / `model`) are
   recognized; any other meta field fails the run with `META_INVALID`.
+- **Make ONE `workflow` call** — `meta`, `script`, and `args` are three properties of ONE
+  `arguments` object. Never split them across parallel `workflow` calls (each partial call
+  fails `missing required property "meta"` / `"script"`) and never wrap them under a field
+  named `arguments` (fails `"arguments" must be an object`).
 - **`script`** is the plain-JS body only (no TypeScript), compiled as
   `(async () => { <body> })()`, ending with `return <json-value>`.
 - **`args`** is free-form JSON exposed as the `args` global.
@@ -51,6 +55,15 @@ script runs:
   rejected loudly); `schema` must be object-rooted and use only
   `type` / `properties` / `required` / `additionalProperties` / `items` / `enum` /
   `const` / `oneOf`.
+- **Subagent reports to the workflow are JSON** — every `agent(...)` call passes a
+  `schema`, and its return is the validated JSON object. Only the subagent **input
+  prompt** is text/markdown; never convert the schema-validated return to markdown.
+
+Fixed templates (plan / review / simplify / implement) embed the script as a ` ```js `
+fence that the agent copies verbatim, filling only `meta` + `args`; `uniterra-implement`
+consolidates both orchestration shapes (parallel and batched) into a single fixed script
+that branches on `args.tasks` (flat, full parallel) vs `args.batches` (array of task
+arrays, serial across batches).
 
 `test/workflow-templates.test.mts` locks this: every embedded ` ```js ` fence parses
 under dsh's wrapper, no body opens with `export const meta`, every template instructs
@@ -86,7 +99,7 @@ PBT-first implementation against an explicit requirements list. The failing prop
 
 1. **Requirements + design** — read the plan's `prd.md` + `design.md`, or build them interactively (`ask_user_question`) when no design exists; clarify any ambiguous requirement.
 2. **Write ALL failing property tests** in the main session (the red suite), then decompose requirements + design into a **task list** (`assets/task-list-example.md`): one entry per task with its requirements (each pointing at the covering test), context files, conventions, and owned / forbidden file sets.
-3. **Workflow** (`assets/workflow-script-example.md`) — full parallel when tasks are independent, batched (parallel within a batch, serial across batches) when they overlap; each subagent gets a self-contained JSON (goal + context + task + constraints) and returns `{changed_files, satisfied_requirements, deviations}` via schema. Each subagent works against the failing tests written in step 2 and **prioritizes STRENGTHENING / completing those test cases** (extend the property, add the missing edge cases and invariant asserts) rather than writing a fresh property test from scratch each time. After the workflow the full suite must be green before review.
+3. **Workflow** (`assets/workflow-template.md`) — one fixed script (copy verbatim) handles both shapes: set `args.tasks` (flat) for full parallel when tasks are independent, or `args.batches` (array of task arrays, serial across batches) when they overlap. Each task carries a pre-rendered markdown `prompt` (goal + context + requirements + conventions + constraints) and returns `{changed_files, satisfied_requirements, deviations}` via schema. Each subagent works against the failing tests written in step 2 and **prioritizes STRENGTHENING / completing those test cases** (extend the property, add the missing edge cases and invariant asserts) rather than writing a fresh property test from scratch each time. After the workflow the full suite must be green before review.
 
 ### uniterra-simplify
 
