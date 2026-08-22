@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.11] — 2026-08-22
+
+### Changed
+
+- The four pipeline workflow skills (`uniterra-plan` / `uniterra-implement` / `uniterra-review` / `uniterra-simplify`) instructed the `workflow` tool with `meta`, `script`, and `args` as three comma-separated sibling items. The agent model read that as three separate tool calls and split them into parallel invokes, each of which failed with `missing required property "meta"/"script"` or `"arguments" must be an object`. The templates now present a single-call `arguments` object and explicitly forbid splitting across parallel calls or wrapping the three in an `arguments` field.
+- `uniterra-implement`: the task list is flattened — each task now carries a pre-rendered markdown `prompt` (goal/context/requirements/conventions/constraints) instead of a deeply nested JSON object, since the deep nesting is what corrupted the tool-call arguments. Subagent reports to the workflow remain JSON via the `schema` option on each `agent()` call.
+
 ## [0.11.10] — 2026-08-22
 
 ### Changed
