@@ -39,17 +39,21 @@ tests that encode the business logic as invariants — never write implementatio
    implementation: subagents strengthen and complete them (never rewrite them from
    scratch) and turn them green.
 2. Decompose requirements + design into a **task list** (`assets/task-list-example.md`):
-   one entry per task, carrying its requirements (with the test that covers each),
-   context files, conventions, and constraints (owned / forbidden files).
+   one entry per task, with its `prompt` already rendered to markdown (goal, context
+   files, requirements with their test, conventions, constraints). Keeping `args` flat
+   (a markdown string per task) avoids the deep-nested-JSON tool-call corruption.
 3. Choose the workflow shape by task overlap and write the script
-   (`assets/workflow-script-example.md` for the shared render function + return contract):
+   (`assets/workflow-script-example.md` for the fixed rules + return contract):
    - Independent tasks → **full parallel** (`references/parallel-workflow.md`).
    - Overlapping tasks → **batched** (`references/batched-workflow.md`).
 
 ### 3. Run the workflow script
 
-- Run it with the `workflow` tool; each subagent makes its requirements' failing tests
-  green and returns a structured report (changed files, satisfied requirements, deviations).
+- Run it with the `workflow` tool as **ONE call** whose `arguments` is a single object with
+  `meta` + `script` + `args` together (never split across parallel calls, never wrapped in
+  a field named `arguments`); each subagent reads its `task.prompt` and makes its
+  requirements' failing tests green, returning a JSON report (changed files, satisfied
+  requirements, deviations) via `schema`.
 - **Strengthen, don't rewrite.** Each subagent works against the failing tests written in
   step 2 (its requirement's allocated test). It FIRST prioritizes strengthening / completing
   those failing test cases — extend the property, add the missing edge cases and invariant
@@ -68,7 +72,7 @@ tests that encode the business logic as invariants — never write implementatio
 
 ## Files
 
-- `assets/task-list-example.md` — the per-task JSON contract + example.
-- `assets/workflow-script-example.md` — shared render function, fixed rules, return schema.
+- `assets/task-list-example.md` — the per-task contract (pre-rendered markdown `prompt`) + example.
+- `assets/workflow-script-example.md` — the ONE-call submission format, fixed rules, return schema.
 - `references/parallel-workflow.md` — scenario: independent tasks → full parallel.
 - `references/batched-workflow.md` — scenario: overlapping tasks → batched.

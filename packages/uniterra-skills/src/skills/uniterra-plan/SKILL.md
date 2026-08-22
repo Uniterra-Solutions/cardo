@@ -59,9 +59,12 @@ fits their needs:
 
 ### 4. Review the documents with the fixed workflow
 
-- Run the fixed workflow in `scripts/review-workflow.md` with the `workflow` tool:
-  `meta` + `script` (from that file) + `args = { prd_dir, design_dir, acceptance_dir }`
-  (in practice all three are the run directory).
+- Run the fixed workflow in `scripts/review-workflow.md` with the `workflow` tool as **ONE
+  call** whose `arguments` is a single object with `meta` + `script` + `args` together
+  (never split across parallel calls, never wrapped in a field named `arguments`).
+  `args = { prd_dir, design_dir, acceptance_dir }` (in practice all three are the run
+  directory). The review and repair subagents report to the workflow as JSON (validated by
+  the `schema` each `agent(...)` call passes); only their input prompts are text.
 - It dispatches three parallel review agents, each fed all three dirs:
   - **requirement-list-review** (`prompts/requirement-list-review.md`) — technical
     feasibility + contradictions between requirements.

@@ -38,8 +38,9 @@ over-engineering — never propose removing them.
 
 ## 2. Run the simplify workflow
 
-Use `assets/workflow-template.md` with the `workflow` tool: `meta` + `script` (from the
-template) + `args = { goal, context }`. Two stages:
+Use `assets/workflow-template.md` with the `workflow` tool as **ONE call** whose `arguments`
+is a single object with `meta` + `script` + `args` together (never split across parallel
+calls, never wrapped in a field named `arguments`). `args = { goal, context }`. Two stages:
 
 1. **review agent** (`references/review-agent.md`) — finds simplification
    opportunities against the over-engineering checklist
@@ -56,6 +57,9 @@ A `pass` verdict means the code is already simple enough — the reviewer judged
 any remaining ideas trivial, so they are returned with the result but NOT
 applied. `fail` means at least one recommendation has real value and goes to the
 fix agent.
+
+The subagent **reports to the workflow as JSON** (validated by the `schema` each
+`agent(...)` call passes); only the subagent **input prompts** are text.
 
 Recommendations a fix round cannot apply (the `skipped` list) are carried into the
 next review round and **accumulate** — the reviewer always sees the full skip

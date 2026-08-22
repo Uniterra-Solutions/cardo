@@ -1,6 +1,12 @@
 # Task List — per-task contract for the workflow script
 
-The workflow script receives the task list through `args`. Shape:
+The workflow script receives the task list through `args`. **Each task carries a
+pre-rendered markdown `prompt`** — a single flat string the subagent reads verbatim,
+already built at decomposition time from the task's goal/context/requirements/
+conventions/constraints. This keeps `args` flat, so the orchestrator never has to
+serialize a deep nested JSON (which is what corrupts the tool call).
+
+## Shape
 
 ```json
 {
@@ -9,38 +15,60 @@ The workflow script receives the task list through `args`. Shape:
     {
       "id": "T1",
       "name": "…",
-      "requirements": [
-        { "id": "REQ-1", "text": "…", "test": "packages/x/test/a.test.ts → 'should …'" }
-      ],
-      "conventions": ["module-specific convention or command"],
-      "context": {
-        "files": [
-          { "path": "packages/x/src/a.ts", "description": "…", "read": "function foo / §3.2" }
-        ]
-      },
-      "constraints": {
-        "owned_files": ["packages/x/src/a.ts"],
-        "forbidden_files": ["packages/x/src/b.ts"]
-      }
+      "prompt": "# Task: …\n\n… (rendered markdown, see below) …"
     }
   ]
 }
 ```
 
+- For the **batched** shape use `"batches": [ [ { id, name, prompt } ], … ]` (an array
+  of task arrays) instead of `"tasks"`.
+- `goal` is hoisted to the top level as a heading-only anchor; the real content lives in
+  each `prompt`. If `goal` is not needed inside the prompts, it may be omitted.
+
 ## Field notes
 
-- `goal` — hoisted to the top level because every subagent sees the same feature goal;
-  the render function copies it into every prompt.
-- `tasks[].id` — stable identifier, used as the agent `label` for observability.
-- `tasks[].requirements[].test` — the executable acceptance: which failing test encodes
-  this requirement. Point at the test file + case name, not prose.
-- `tasks[].conventions` — task-specific, written at decomposition time from `AGENTS.md`
-  and the modules this task touches (module-local test commands, naming, invariants).
-- `tasks[].context.files[].read` — prefer a symbol / heading (function name, §section);
-  line numbers drift, use them only as a secondary hint.
-- `tasks[].constraints.owned_files` / `forbidden_files` — the exact file sets. Parallel
-  agents may be working at the same time; overlapping `owned_files` between same-batch
-  tasks is a decomposition bug.
+- `id` — stable identifier, used as the agent `label` for observability.
+- `name` — one-line task name.
+- `prompt` — the **entire subagent instruction block as one markdown string**. It must
+  include, at minimum, the sections rendered below (goal, requirements with their
+  `test`, conventions, context files, constraints). The script appends the shared
+  `FIXED_RULES` (see `assets/workflow-script-example.md`) after it at run time.
+- **Do not** put `goal` / `context` / `requirements` / `conventions` / `constraints` as
+  separate nested fields in `args` — they are flattened into `prompt`. Keeping them as a
+  nested object is what forces a deep JSON and corrupts the call.
+
+## Rendering the `prompt`
+
+At decomposition time, render each task into markdown, e.g.:
+
+```markdown
+# Task: <name>
+
+## Goal
+
+<goal>
+
+## Context
+
+- <path> — <description> (read: <symbol / §section>)
+- …
+
+## Requirements
+
+- <REQ-id>: <text> — [test: <package/x/test.ts → 'case'>]
+- …
+
+## Conventions
+
+- <module-local test command or convention>
+- …
+
+## Constraints
+
+- owned_files: <path>, <path>
+- forbidden_files: <path>, <path>
+```
 
 ## Example
 
@@ -51,65 +79,12 @@ The workflow script receives the task list through `args`. Shape:
     {
       "id": "auth-issue",
       "name": "Token issuance endpoint",
-      "requirements": [
-        {
-          "id": "REQ-1",
-          "text": "POST /auth/token returns an access and a refresh token",
-          "test": "packages/auth/test/issue.test.ts → 'returns both tokens'"
-        },
-        {
-          "id": "REQ-2",
-          "text": "Access token expires after 15 minutes",
-          "test": "packages/auth/test/issue.test.ts → 'access token TTL is 15m'"
-        }
-      ],
-      "conventions": [
-        "run: pnpm --filter @cardo/auth test",
-        "token claims live in TokenPayload (packages/auth/src/token.ts)"
-      ],
-      "context": {
-        "files": [
-          {
-            "path": "packages/auth/src/issue.ts",
-            "description": "empty module to implement",
-            "read": "(new file)"
-          },
-          {
-            "path": "packages/auth/src/token.ts",
-            "description": "TokenPayload type + sign/verify helpers",
-            "read": "function signToken"
-          }
-        ]
-      },
-      "constraints": {
-        "owned_files": ["packages/auth/src/issue.ts"],
-        "forbidden_files": ["packages/auth/src/refresh.ts"]
-      }
+      "prompt": "# Task: Token issuance endpoint\n\n## Goal\nAdd user authentication with refresh-token rotation\n\n## Context\n- packages/auth/src/issue.ts — empty module to implement (read: (new file))\n- packages/auth/src/token.ts — TokenPayload type + sign/verify helpers (read: function signToken)\n\n## Requirements\n- REQ-1: POST /auth/token returns an access and a refresh token — [test: packages/auth/test/issue.test.ts → 'returns both tokens']\n- REQ-2: Access token expires after 15 minutes — [test: packages/auth/test/issue.test.ts → 'access token TTL is 15m']\n\n## Conventions\n- run: pnpm --filter @cardo/auth test\n- token claims live in TokenPayload (packages/auth/src/token.ts)\n\n## Constraints\n- owned_files: packages/auth/src/issue.ts\n- forbidden_files: packages/auth/src/refresh.ts"
     },
     {
       "id": "auth-refresh",
       "name": "Refresh-token rotation",
-      "requirements": [
-        {
-          "id": "REQ-3",
-          "text": "A refresh token can be rotated exactly once",
-          "test": "packages/auth/test/refresh.test.ts → 'rotates once then rejects'"
-        }
-      ],
-      "conventions": ["run: pnpm --filter @cardo/auth test"],
-      "context": {
-        "files": [
-          {
-            "path": "packages/auth/src/refresh.ts",
-            "description": "empty module to implement",
-            "read": "(new file)"
-          }
-        ]
-      },
-      "constraints": {
-        "owned_files": ["packages/auth/src/refresh.ts"],
-        "forbidden_files": ["packages/auth/src/issue.ts"]
-      }
+      "prompt": "# Task: Refresh-token rotation\n\n## Goal\nAdd user authentication with refresh-token rotation\n\n## Context\n- packages/auth/src/refresh.ts — empty module to implement (read: (new file))\n\n## Requirements\n- REQ-3: A refresh token can be rotated exactly once — [test: packages/auth/test/refresh.test.ts → 'rotates once then rejects']\n\n## Conventions\n- run: pnpm --filter @cardo/auth test\n\n## Constraints\n- owned_files: packages/auth/src/refresh.ts\n- forbidden_files: packages/auth/src/issue.ts"
     }
   ]
 }

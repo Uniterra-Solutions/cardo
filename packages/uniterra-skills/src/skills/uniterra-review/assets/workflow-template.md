@@ -1,21 +1,35 @@
 # Review Workflow Template
 
-One workflow: review (with in-agent reproduction) → fix. Submit it with the
-`workflow` tool as:
-`meta: { name: 'review', description: 'Adversarial review: confirm findings, then fix until clean' }`,
-`script: <the JS below>`, and `args = { goal, context, task }` where
-`context = { requirements, design, acceptance }` (each may be empty). The two
-embedded prompts mirror `references/review-agent.md` and `references/fix-agent.md`.
+One workflow: review (with in-agent reproduction) → fix. Make **ONE** `workflow` tool call —
+`meta`, `script`, and `args` are three properties of ONE arguments object, never three
+separate calls, and never wrapped under a field named `arguments`:
+
+```json
+{
+  "meta": {
+    "name": "review",
+    "description": "Adversarial review: confirm findings, then fix until clean"
+  },
+  "script": "<the JS below>",
+  "args": {
+    "goal": "...",
+    "context": { "requirements": "...", "design": "...", "acceptance": "..." },
+    "task": "..."
+  }
+}
+```
+
+`meta` + `script` are required; `args` is optional. Splitting `meta`/`script`/`args` across
+parallel calls fails with `missing required property "meta"` / `"script"`; wrapping them in
+`arguments` fails with `"arguments" must be an object`. `meta` must contain only `name`,
+`description` (plus optional `whenToUse`/`phases`). `args` may carry an optional `maxRounds`.
+
+The two embedded prompts mirror `references/review-agent.md` and `references/fix-agent.md`.
 
 The review agent and the old repro agent are merged into one: the review agent
 verifies every finding itself — it writes a failing test that reproduces each finding
 and reports ONLY the findings it confirmed. Unconfirmed findings are dropped, never
 reported. This is what "repro" used to do; it is now part of the review step.
-
-Note: `meta` is a separate required tool parameter, never part of the script. dsh
-accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
-with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
-with `META_INVALID`. `args` may carry an optional `maxRounds`.
 
 ```js
 const { goal, context, task } = args;
@@ -153,6 +167,9 @@ const FIX_SCHEMA = {
     summary: { type: 'string' },
   },
 };
+
+// The subagent reports to the workflow as JSON: each agent() call passes a schema and
+// returns the validated JSON object. Only the subagent's input prompt is text.
 
 function contextBlock() {
   return [

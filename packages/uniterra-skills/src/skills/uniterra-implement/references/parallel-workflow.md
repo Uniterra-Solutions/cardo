@@ -10,15 +10,36 @@ another's output. This is the default when the design cleanly separates modules.
    batched scenario instead.
 3. Each task's `forbidden_files` = every OTHER task's `owned_files` (the partition must be
    complete so parallel agents never collide).
+4. Render each task into a markdown `prompt` (see `assets/task-list-example.md`), so
+   `args` stays flat.
+
+## Submitting the workflow (ONE call)
+
+Make **ONE** `workflow` tool call. `meta`, `script`, and `args` are three properties of ONE
+arguments object — never three separate calls, and never wrapped under a field named
+`arguments`:
+
+```json
+{
+  "meta": { "name": "implement", "description": "Implement independent tasks in parallel" },
+  "script": "<the JS below>",
+  "args": { "goal": "...", "tasks": [{ "id": "T1", "name": "...", "prompt": "...markdown..." }] }
+}
+```
+
+`meta` + `script` are required; `args` is optional. Splitting `meta`/`script`/`args` across
+parallel calls fails with `missing required property "meta"` / `"script"`; wrapping them in
+`arguments` fails with `"arguments" must be an object`. `meta` must contain only `name`,
+`description` (plus optional `whenToUse`/`phases`).
 
 ## Script
 
-Submit with the `workflow` tool as `meta: { name: 'implement', description: 'Implement independent tasks in parallel' }`, `script: <the JS below>`, and `args = { goal, tasks }` (the flat task list). The meta shape above is a separate tool parameter — do not put it in the script.
-
 ```js
-const { goal, tasks } = args;
+const { tasks } = args;
 const results = await parallel(
-  tasks.map((t) => () => agent(renderTask(goal, t), { label: t.id, schema: RETURN_SCHEMA })),
+  tasks.map(
+    (t) => () => agent(t.prompt + '\n\n' + FIXED_RULES, { label: t.id, schema: RETURN_SCHEMA }),
+  ),
 );
 if (results.some((r) => r === null)) return { status: 'failed' };
 return { status: 'done', agents: results.length };
@@ -30,3 +51,4 @@ return { status: 'done', agents: results.length };
   failed run; do not silently continue.
 - Same-batch `owned_files` overlap is a decomposition bug — re-check the file sets before
   dispatching.
+- The subagent **returns JSON** (via `schema`); only its **input prompt** is markdown.

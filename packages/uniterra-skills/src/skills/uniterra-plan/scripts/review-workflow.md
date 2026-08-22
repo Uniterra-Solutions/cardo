@@ -8,14 +8,25 @@ round shrinks from 3 toward 0. Only the three directory paths vary; the prompts 
 fixed (mirrors of `prompts/requirement-list-review.md`, `prompts/design-review.md`,
 and `prompts/acceptance-review.md`).
 
-Submit it with the `workflow` tool as:
-`meta: { name: 'plan-review', description: 'Review plan documents, repair issues, and re-review only the failed axes until all pass' }`,
-`script: <the JS below>`, and `args: { prd_dir, design_dir, acceptance_dir }`.
+Make **ONE** `workflow` tool call — `meta`, `script`, and `args` are three properties of ONE
+arguments object, never three separate calls, and never wrapped under a field named
+`arguments`:
 
-Note: `meta` is a separate required tool parameter, never part of the script. dsh
-accepts ONLY `name` and `description` here (plus optional `whenToUse` and `phases`
-with only `title`/`detail`/`provider`/`model`) — any other meta field fails the run
-with `META_INVALID`. `args` may carry an optional `maxRounds`.
+```json
+{
+  "meta": {
+    "name": "plan-review",
+    "description": "Review plan documents, repair issues, and re-review only the failed axes until all pass"
+  },
+  "script": "<the JS below>",
+  "args": { "prd_dir": "...", "design_dir": "...", "acceptance_dir": "..." }
+}
+```
+
+`meta` + `script` are required; `args` is optional. Splitting `meta`/`script`/`args` across
+parallel calls fails with `missing required property "meta"` / `"script"`; wrapping them in
+`arguments` fails with `"arguments" must be an object`. `meta` must contain only `name`,
+`description` (plus optional `whenToUse`/`phases`). `args` may carry an optional `maxRounds`.
 
 ```js
 const { prd_dir, design_dir, acceptance_dir } = args;
@@ -122,6 +133,9 @@ const REPAIR_SCHEMA = {
     summary: { type: 'string' },
   },
 };
+
+// The subagent reports to the workflow as JSON: each agent() call passes a schema and
+// returns the validated JSON object. Only the subagent's input prompt is text.
 
 function inputs() {
   return [

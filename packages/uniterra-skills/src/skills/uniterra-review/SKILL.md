@@ -38,8 +38,10 @@ contract on that axis".
 
 ## 2. Run the review workflow
 
-Use `assets/workflow-template.md` with the `workflow` tool: `meta` + `script` (from the
-template) + `args = { goal, context, task }`. One workflow, two stages:
+Use `assets/workflow-template.md` with the `workflow` tool as **ONE call** whose `arguments`
+is a single object with `meta` + `script` + `args` together (never split across parallel
+calls, never wrapped in a field named `arguments`). `args = { goal, context, task }`. One
+workflow, two stages:
 
 1. **review agent** (`references/review-agent.md`) — comprehensive adversarial
    review covering correctness AND security (`references/security-checklist.md`).
@@ -62,6 +64,9 @@ A `pass` verdict means the change is ready — the reviewer judged every confirm
 finding non-blocking, so they are returned with the result but NOT fixed. `fail`
 means at least one confirmed finding must be addressed: it goes to fix, and the
 loop re-reviews until it passes.
+
+The subagent **reports to the workflow as JSON** (validated by the `schema` each
+`agent(...)` call passes); only the subagent **input prompts** are text.
 
 ## Severity levels
 
