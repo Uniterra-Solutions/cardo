@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.12] — 2026-08-22
+
+### Changed
+
+- `uniterra-implement`: consolidated the orchestration into a **single fixed workflow script** (`assets/workflow-template.md`, copied verbatim), matching the structure that already makes `uniterra-plan` / `uniterra-review` / `uniterra-simplify` reliable. The script branches on `args.tasks` (flat, full parallel) vs `args.batches` (array of task arrays, serial batches) — both shapes, one script; the agent only fills `meta` + `args`. `references/parallel-workflow.md` and `references/batched-workflow.md` are now decision guides only; `assets/workflow-script-example.md` is removed (its shared blocks are inlined).
+- The four pipeline workflow skills now instruct the dsh `workflow` tool as **ONE call** — `meta` + `script` + `args` as three properties of one `arguments` object, never split across parallel calls (each partial call fails `missing required property "meta"/"script"`) and never wrapped under an `arguments` field (fails `"arguments" must be an object`). Subagent reports to the workflow are JSON via the `schema` option on each `agent()` call; only the subagent input prompt is text. Docs (`docs/modules/uniterra-skills.md`, `docs/conventions.md`, `docs/workflows.md`) synced.
+
 ## [0.11.11] — 2026-08-22
 
 ### Changed
