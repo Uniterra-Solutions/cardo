@@ -123,7 +123,22 @@ test("every workflow template script parses under dsh's wrapper and instructs th
   const root = builtinSkillsDir();
   const files = WORKFLOW_SKILLS.flatMap((skill) => collectMarkdownFiles(path.join(root, skill)));
   const embedding = files.filter((file) => jsFences(readFileSync(file, 'utf8')).length > 0);
-  assert.ok(embedding.length >= 6, `found the workflow template files (got ${embedding.length})`);
+  // The four pipeline skills each ship exactly one file whose full ```js fence comes
+  // from the fixed template (implement consolidates its parallel + batched shapes into a
+  // single script). Assert all four are present.
+  const expected = [
+    'uniterra-plan/scripts/review-workflow.md',
+    'uniterra-implement/assets/workflow-template.md',
+    'uniterra-review/assets/workflow-template.md',
+    'uniterra-simplify/assets/workflow-template.md',
+  ];
+  const relativePaths = embedding.map((f) => path.relative(root, f));
+  for (const e of expected) {
+    assert.ok(
+      relativePaths.includes(e),
+      `expected workflow template file missing: ${e} (found: ${relativePaths.sort().join(', ')})`,
+    );
+  }
 
   for (const file of embedding) {
     const content = readFileSync(file, 'utf8');
