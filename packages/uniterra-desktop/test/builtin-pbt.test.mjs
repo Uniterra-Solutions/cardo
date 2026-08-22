@@ -79,6 +79,21 @@ test('REGISTRY: one representative entry per kind flows into the expected bundle
   for (const { dir, package: pkg } of WORKSPACE) {
     assert.ok(expected.includes(pkg), `workspace ${dir} contributes ${pkg}`);
   }
+  // The settings-UI extension ships as a workspace built-in (issue #2).
+  assert.ok(
+    WORKSPACE.some(({ package: pkg }) => pkg === '@uniterra-solutions/uniterra-settings-ui'),
+    'the settings UI extension is registered as a workspace built-in',
+  );
+  assert.ok(
+    expected.includes('@uniterra-solutions/uniterra-settings-ui'),
+    'the settings UI extension is an expected bundle',
+  );
+  // dsh-memory ships as an npm built-in, pinned exact (issue #5).
+  assert.ok(
+    NPM_SPECS.includes('@meomeo-dev/dsh-memory@0.5.6'),
+    'dsh-memory is registered at the pinned exact version',
+  );
+  assert.ok(expected.includes('@meomeo-dev/dsh-memory'), 'dsh-memory contributes its package name');
   // optional kind — registered, but NEVER an expected bundle.
   assert.ok(OPTIONAL.length >= 1, 'the optional built-in stays registered');
   for (const { dir, package: pkg } of OPTIONAL) {
@@ -121,6 +136,7 @@ const npmSpecArb = fc.oneof(
   fc.constant('dsh-notifier@0.6.2'),
   fc.constant('dsh-better-sidebar@0.12.2'),
   fc.constant('@dsh-external/dsh-client-ui-skin-maid-atelier@1.0.0'),
+  fc.constant('@meomeo-dev/dsh-memory@0.5.6'),
   fc.constant('dsh-shortcuts@1.1.0'),
 );
 
@@ -165,7 +181,9 @@ const bundleWordArb = fc.constantFrom(
   'dsh-subagent-model-picker',
   '@dsh-external/dsh-client-ui-skin-maid-atelier',
   'dsh-shortcuts',
+  '@meomeo-dev/dsh-memory',
   '@uniterra-solutions/uniterra-provider',
+  '@uniterra-solutions/uniterra-settings-ui',
   // Retired built-ins linger in profiles provisioned by older uniterra builds;
   // they must count as harmless extras for the SET verdict.
   ...RETIRED,

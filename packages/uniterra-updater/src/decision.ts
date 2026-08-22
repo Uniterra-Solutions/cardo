@@ -137,14 +137,19 @@ export interface UpdateInvocation {
  * published updater, so a stale global `uniterra` CLI (one that predates the
  * one-command full update and would only refresh the CLI, leaving the app
  * closed) can never be the binary that runs. `UNITERRA_UPDATE_COMMAND`
- * overrides the command for tests/dev (the args stay `['update']`).
+ * overrides the command for tests/dev (the args stay `['update']` unless the
+ * overlay flow requests `--no-open`, so the updater does not relaunch the app
+ * itself and the in-app overlay owns the restart).
  */
-export function updateInvocation(commandOverride: string | undefined): UpdateInvocation {
-  const override = commandOverride?.trim();
-  if (override !== undefined && override.length > 0) {
-    return { command: override, args: ['update'] };
+export function updateInvocation(
+  commandOverride: string | undefined,
+  options?: { noOpen?: boolean },
+): UpdateInvocation {
+  const args = options?.noOpen ? ['update', '--no-open'] : ['update'];
+  if (commandOverride !== undefined && commandOverride.trim().length > 0) {
+    return { command: commandOverride, args };
   }
-  return { command: 'npx', args: ['--yes', '@uniterra-solutions/uniterra@latest', 'update'] };
+  return { command: 'npx', args: ['--yes', '@uniterra-solutions/uniterra@latest', ...args] };
 }
 
 /**
@@ -203,4 +208,119 @@ function newestOf(a: string | undefined, b: string | undefined): string | undefi
     return a;
   }
   return compareSemver(a, b) >= 0 ? a : b;
+}
+
+// ---------------------------------------------------------------------------
+// Update-overlay surface (issue #15): child-updater stdout parsing and the
+// overlay state machine. Pure (no Electron, no fs) so the overlay flow is
+// unit-testable without spawning the updater.
+// ---------------------------------------------------------------------------
+
+/** One event the update overlay can react to. */
+export type OverlayEvent =
+  | { readonly kind: 'init'; readonly version: string }
+  | { readonly kind: 'status'; readonly label: string; readonly version?: string }
+  | { readonly kind: 'done'; readonly version?: string }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ignore' };
+
+/** The overlay's phase model: init → running → success | failure (terminal). */
+export interface OverlayState {
+  readonly phase: 'init' | 'running' | 'success' | 'failure';
+  readonly message: string;
+  readonly version?: string;
+}
+
+/** The overlay starts in the init phase with the do-not-close hint. */
+export const initialOverlayState: OverlayState = {
+  phase: 'init',
+  message: 'Initializing update... Do not close the application.',
+};
+
+/**
+ * Classify one child-updater stdout line into an overlay event. TOTAL: any
+ * non-blank line classifies as status/done/error — the overlay can never
+ * freeze on a line it has not seen — and blank lines are ignored.
+ */
+export function parseUpdateProgress(line: string): OverlayEvent {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) {
+    return { kind: 'ignore' };
+  }
+  if (trimmed.startsWith('Installed')) {
+    return doneEvent(trimmed);
+  }
+  if (/npm ERR!|Failed to update/.test(trimmed)) {
+    return { kind: 'error', message: trimmed };
+  }
+  return statusEvent(trimmed);
+}
+
+/**
+ * Overlay state machine: init{version} enters running (the only transition
+ * out of init); status/done/error only apply once running; done{version} →
+ * success, error{message} → failure. Success and failure are absorbing — a
+ * terminal result is rendered exactly once.
+ */
+export function overlayReducer(state: OverlayState, event: OverlayEvent): OverlayState {
+  if (state.phase === 'success' || state.phase === 'failure') {
+    return state;
+  }
+  switch (event.kind) {
+    case 'init':
+      return {
+        phase: 'running',
+        version: event.version,
+        message: `Updating to ${event.version}...`,
+      };
+    case 'status': {
+      if (state.phase !== 'running') {
+        return state;
+      }
+      return { ...state, message: event.label };
+    }
+    case 'done': {
+      if (state.phase !== 'running') {
+        return state;
+      }
+      return {
+        phase: 'success',
+        version: event.version,
+        message: `Update to ${event.version ?? 'the latest version'} completed. Restarting Uniterra...`,
+      };
+    }
+    case 'error': {
+      if (state.phase !== 'running') {
+        return state;
+      }
+      return {
+        phase: 'failure',
+        version: state.version,
+        message: `Update failed: ${event.message}. Retry the update or open the releases page.`,
+      };
+    }
+    case 'ignore':
+      return state;
+  }
+}
+
+/** The first `vX.Y.Z` token in a line, if any (the CLI prints target versions). */
+function extractVersion(line: string): string | undefined {
+  return /(v\d+\.\d+\.\d+)/.exec(line)?.[1];
+}
+
+function statusEvent(line: string): OverlayEvent {
+  const version = extractVersion(line);
+  if (version !== undefined) {
+    return { kind: 'status', label: line, version };
+  }
+  return { kind: 'status', label: line };
+}
+
+function doneEvent(line: string): OverlayEvent {
+  const version = extractVersion(line);
+  if (version !== undefined) {
+    return { kind: 'done', version };
+  }
+  return { kind: 'done' };
 }

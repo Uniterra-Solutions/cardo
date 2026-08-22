@@ -82,6 +82,9 @@ registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-subagent-model-picker@0.1.1' });
 registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-tool-git@0.1.3' });
 registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-browser-playwright@0.1.1' });
 registerBuiltinPlugin({ kind: 'npm', spec: 'dsh-computer-use@0.1.0' });
+// Working memory for the agent loop, namespace `memory` (see the settings-ui
+// extension's curated owner map — plugin id dsh-memory ≠ settings ns memory).
+registerBuiltinPlugin({ kind: 'npm', spec: '@meomeo-dev/dsh-memory@0.5.6' });
 
 // The skin is the `dsh-deep-whale` standalone distribution (`maid-atelier`
 // package) — self-inserting, host is a no-op, art embedded. The earlier
@@ -109,6 +112,15 @@ registerBuiltinPlugin({
   kind: 'workspace',
   dir: 'packages/uniterra-provider',
   package: '@uniterra-solutions/uniterra-provider',
+});
+
+// Universal settings UI (issue #2): a workspace built-in like the provider,
+// shipping lib/ + cordis.patch.yml for the profile's node_modules. The generic
+// settings page + widget registry live here.
+registerBuiltinPlugin({
+  kind: 'workspace',
+  dir: 'packages/uniterra-settings-ui',
+  package: '@uniterra-solutions/uniterra-settings-ui',
 });
 
 registerBuiltinPlugin({

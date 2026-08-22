@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `uniterra-provider` / `uniterra-settings-ui` (issue #2): the bespoke 1000-line settings section is retired — Uniterra settings now render through a new generic settings page built on the dsh-settings seam. The generic renderer drives a schemastery-derived field tree (typed inputs, variant selects, map editors, nested objects), plus per-namespace widget overrides and namespace-level virtual widgets; the provider registers two of them: the model-catalog editor (endpoint interrogation, models.dev context/output-token params panel, K/M-suffixed capacity entry, per-model protocol and reasoning-effort preset) and a write-only API-key credential field persisted via the credentials seam, never the settings file.
+- `uniterra-desktop` (issue #5): `@meomeo-dev/dsh-memory@0.5.6` — the agent-loop working-memory plugin — ships as the 10th built-in npm plugin; its provider is configured via `/lmemory config set provider uniterra`.
+- `uniterra-desktop` (issue #15): the update flow now runs behind an in-app progress overlay (check → download → rebuild → relaunch); window close/quit is blocked while an update is in flight, and the success state reports the installed version and restarts the app.
+
 ## [0.11.9] — 2026-08-21
 
 ### Added

@@ -14,18 +14,22 @@
  *   4. Crash-restart the runtime with a bounded backoff.
  */
 
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startDsh, stopDsh, type DshRuntimeHandle } from './dsh-process.js';
 import { ensureBuiltinPlugins } from './builtin.js';
 import {
+  initialOverlayState,
   resolveUniterraUpdateStatus,
   resolveUpdateAction,
   shouldPromptForUpdate,
   updateInvocation,
+  type OverlayState,
 } from '@uniterra-solutions/uniterra-updater';
+import { startOverlayUpdate } from './update-overlay.js';
+import { UPDATE_OVERLAY_HTML, UPDATE_OVERLAY_PRELOAD } from './update-overlay-ui.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -140,6 +144,12 @@ function copyTree(src: string, dst: string, skipDirs: ReadonlySet<string>): void
 let mainWindow: BrowserWindow | null = null;
 let runtime: DshRuntimeHandle | null = null;
 let restarts = 0;
+// The in-app update overlay (issue #15, macOS): the window itself, the
+// current overlay phase (drives the close/quit guard), and the target version
+// for retries. updateOverlayState is null when no update flow is running.
+let updateOverlayWindow: BrowserWindow | null = null;
+let updateOverlayState: OverlayState | null = null;
+let updateTargetVersion: string | undefined;
 
 // ── update check ──────────────────────────────────────────────────────────
 
@@ -283,13 +293,30 @@ async function runUniterraStartupUpdateCheck(): Promise<void> {
     type: 'info',
     title: 'Uniterra',
     message: `Uniterra ${result.latestVersion} is available.`,
-    detail: `You have ${result.currentVersion}. Update Now closes Uniterra and runs 'uniterra update', which updates the CLI, rebuilds + reinstalls the app from the latest source, and restarts the app when done — it may take a few minutes.`,
+    detail:
+      process.platform === 'darwin'
+        ? `You have ${result.currentVersion}. Update Now runs 'uniterra update' in the background with a progress overlay and restarts Uniterra when done — it may take a few minutes. Do not close the application during the update.`
+        : `You have ${result.currentVersion}. Update Now closes Uniterra and runs 'uniterra update', which updates the CLI, rebuilds + reinstalls the app from the latest source, and restarts the app when done — it may take a few minutes.`,
     buttons: ['Update Now', 'Later', 'Skip This Version'],
     defaultId: 0,
     cancelId: 1,
   });
   const action = resolveUpdateAction(result, response);
   if (action.action === 'quit-and-update') {
+    // resolveUpdateAction only returns 'quit-and-update' for an available
+    // update, so result.status is narrowed to 'update-available' here and
+    // latestVersion is guaranteed present.
+    if (process.platform === 'darwin') {
+      // FR-15.1–15.6 (macOS): keep the app alive and run the updater as a
+      // CHILD PROCESS (`uniterra update --no-open`), streaming its output
+      // into the in-app overlay; the app relaunches itself on success. The
+      // macOS bundle can be replaced in place (POSIX unlink of a running
+      // bundle); Windows keeps the quit-first detached flow below because
+      // %LOCALAPPDATA% is the directory the running app executes from and
+      // cannot be replaced in place (FR-15.4).
+      runOverlayUpdate(result.latestVersion);
+      return;
+    }
     // `uniterra update` is the single full-update command (CLI refresh + app
     // rebuild + relaunch). It is spawned detached BEFORE quitting so it
     // survives the app shutdown, and it relaunches the app when done —
@@ -313,6 +340,114 @@ async function runUniterraStartupUpdateCheck(): Promise<void> {
     app.quit();
   } else if (action.action === 'skip-version') {
     writeSkippedVersion(action.skippedVersion);
+  }
+}
+
+// ── in-app update overlay (issue #15, macOS) ─────────────────────────────
+
+/** Whether an update is running — window closes and app quits are blocked
+ * until it finishes (the close does nothing during the run, FR-15.6). */
+function updateInProgress(): boolean {
+  return (
+    updateOverlayState !== null &&
+    (updateOverlayState.phase === 'init' || updateOverlayState.phase === 'running')
+  );
+}
+
+/** Block window close while the update runs — closing mid-copy could kill a
+ * running install; the close is ignored until the update finishes. */
+function guardUpdateClose(event: Electron.Event): void {
+  if (updateInProgress()) {
+    event.preventDefault();
+  }
+}
+
+/** Electron requires a file path for webPreferences.preload, so the embedded
+ * preload source is written to userData (always overwritten; static content). */
+function writeUpdateOverlayPreload(): string {
+  const dir = app.getPath('userData');
+  mkdirSync(dir, { recursive: true });
+  const preloadPath = path.join(dir, 'update-overlay-preload.cjs');
+  writeFileSync(preloadPath, UPDATE_OVERLAY_PRELOAD);
+  return preloadPath;
+}
+
+/** The dedicated overlay window: a small modal over the main window showing a
+ * spinner + stage label during the run, the success copy on completion, and
+ * retry / open-releases / dismiss buttons on failure. */
+function createUpdateOverlayWindow(): BrowserWindow {
+  const parent = mainWindow !== null && !mainWindow.isDestroyed() ? mainWindow : undefined;
+  const win = new BrowserWindow({
+    width: 440,
+    height: 300,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: 'Updating Uniterra',
+    show: false,
+    ...(parent === undefined ? {} : { parent, modal: true }),
+    webPreferences: {
+      preload: writeUpdateOverlayPreload(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  updateOverlayWindow = win;
+  win.on('close', guardUpdateClose);
+  win.once('ready-to-show', () => {
+    win.show();
+  });
+  win.on('closed', () => {
+    if (updateOverlayWindow === win) {
+      updateOverlayWindow = null;
+    }
+  });
+  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(UPDATE_OVERLAY_HTML)}`);
+  return win;
+}
+
+/** FR-15.1–15.6 (macOS): start (or retry) the overlay update flow for the
+ * given target version. The child is only spawned once the overlay page has
+ * loaded so no state push is lost; a retry reuses the loaded window and the
+ * updater reinstalls from scratch. */
+function runOverlayUpdate(version: string): void {
+  updateTargetVersion = version;
+  updateOverlayState = initialOverlayState;
+  const window =
+    updateOverlayWindow !== null && !updateOverlayWindow.isDestroyed()
+      ? updateOverlayWindow
+      : createUpdateOverlayWindow();
+  const start = (): void => {
+    if (window.isDestroyed()) {
+      return;
+    }
+    startOverlayUpdate({
+      invocation: updateInvocation(process.env.UNITERRA_UPDATE_COMMAND, { noOpen: true }),
+      version,
+      callbacks: {
+        onState: (state) => {
+          updateOverlayState = state;
+          if (!window.isDestroyed()) {
+            window.webContents.send('update:status', state);
+          }
+        },
+        onSuccess: () => {
+          // FR-15.5: relaunch immediately — no await between relaunch and
+          // quit. The before-quit handler still stops dsh before app.exit(0);
+          // if a stale instance still holds the single-instance lock, its
+          // second-instance handler restores focus to the fresh instance.
+          app.relaunch();
+          app.quit();
+        },
+      },
+    });
+  };
+  if (window.webContents.isLoading()) {
+    window.webContents.once('did-finish-load', start);
+  } else {
+    start();
   }
 }
 
@@ -345,6 +480,9 @@ function createWindow(url: string): BrowserWindow {
     },
   });
   void win.loadURL(url);
+  // Closing the main window mid-update would quit the app and kill the
+  // running install — the close is ignored while the update runs (FR-15.6).
+  win.on('close', guardUpdateClose);
   win.on('closed', () => {
     mainWindow = null;
   });
@@ -466,6 +604,10 @@ if (!gotLock) {
   });
 
   app.on('before-quit', (event) => {
+    if (updateInProgress()) {
+      event.preventDefault();
+      return;
+    }
     if (runtime !== null) {
       event.preventDefault();
       const handle = runtime;
@@ -480,5 +622,20 @@ if (!gotLock) {
     if (mainWindow === null && runtime !== null) {
       mainWindow = createWindow(runtime.url);
     }
+  });
+
+  // In-app overlay actions (issue #15): the overlay window's buttons.
+  ipcMain.on('update:retry', () => {
+    if (updateTargetVersion !== undefined && updateOverlayState?.phase === 'failure') {
+      runOverlayUpdate(updateTargetVersion);
+    }
+  });
+  ipcMain.on('update:dismiss', () => {
+    if (updateOverlayWindow !== null && !updateOverlayWindow.isDestroyed()) {
+      updateOverlayWindow.close();
+    }
+  });
+  ipcMain.on('update:open-releases', () => {
+    void shell.openExternal(envOrDefault('UNITERRA_UPDATE_RELEASES_PAGE', DEFAULT_RELEASES_PAGE));
   });
 }

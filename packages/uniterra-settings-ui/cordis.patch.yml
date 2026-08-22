@@ -1,0 +1,7 @@
+# @uniterra-solutions/uniterra-settings-ui bundle patch
+# 在 profile 组合中插入插件行：注册 settings.section「Extensions / Integrations」页面，
+# 并经自有 RPC channel（/settings-ui）桥接 host 的 ctx.settings（describe/update/
+# replace/mutate + document 能力）—— 不依赖 connection.api.settings 的暴露白名单。
+- insert:
+    - id: settings-ui
+      name: '@uniterra-solutions/uniterra-settings-ui'

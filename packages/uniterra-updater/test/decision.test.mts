@@ -169,7 +169,7 @@ test('updateInvocation: default runs the latest updater via npx; override keeps 
       if (override !== undefined && trimmed.length > 0) {
         assert.deepEqual(
           invocation,
-          { command: trimmed, args: ['update'] },
+          { command: override, args: ['update'] },
           'an explicit override replaces only the command',
         );
       } else {

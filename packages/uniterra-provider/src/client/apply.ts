@@ -1,23 +1,28 @@
 /**
- * Browser half apply: register the Uniterra copy dictionary and, once the
- * `settings.section` declaration is on the ledger, one settings page of our
- * own. Zero dsh modifications — the section slot is `kind: 'list'`, built for
- * feature-owned pages ("adding a setting never means editing the shell").
+ * Browser half apply (issue #2, FR-2.5): register the Uniterra copy dictionary and the
+ * settings widgets for the llm-uniterra namespace — the model catalog (with endpoint
+ * interrogation and the models.dev params panel) and the write-only API-key secret
+ * field. The bespoke settings.section is retired: the generic settings page
+ * (settings-ui) renders the namespace schema, with these widgets overriding the
+ * model catalog and supplying the credentials-backed key (PRD FR-2.4/2.5). Widgets
+ * register through the settingsUiWidgets service when settings-ui is present; the
+ * provider never depends on it — the sub-fiber (ctx.inject) waits for the service,
+ * it is not in the module inject list, so the provider applies regardless.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
 // Type-only: pulls the ctx.locale Context merge into this program.
 import type {} from '@deepseek-ai/dsh-client-locale/client';
-// Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client';
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client';
-import { UniterraSection } from './UniterraSection.tsx';
+import type { SettingsWidgetRegistry } from '@uniterra-solutions/uniterra-settings-ui';
+import { createApiKeyWidget } from './widgets/api-key.tsx';
+import { createModelCatalogWidget } from './widgets/model-catalog.tsx';
 import type { UniterraKey } from './locale.ts';
 import { en, zh } from './locale.ts';
 import type { ModelsDevParamsRequest, ModelsDevParamsResponse } from './params-types.ts';
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** The Uniterra settings section copy. */
+    /** The Uniterra settings copy. */
     'settings.uniterra': UniterraKey;
   }
 }
@@ -25,14 +30,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Copy namespace owned by this plugin. */
 const NS = 'settings.uniterra';
 
+/** Settings namespace the provider registers (see host index.ts). */
+const SETTINGS_NS = 'llm-uniterra';
+
 /**
- * Section styles. The browser bundle is one JS file (ClientModuleRegistry
- * serves no plugin CSS), so the section injects its rules as a fiber-scoped
- * `<style>` element. Every color rides the shell's `--dsw-alias-*` design
- * tokens, which `ui-theme` redefines under `body[data-ds-dark-theme]` — one
- * set of rules renders correctly in both light and dark themes. The recipes
- * mirror `ui-settings-models` (`.input`, `.primaryButton`,
- * `.secondaryButton`).
+ * Widget styles. The browser bundle is one JS file (ClientModuleRegistry serves no
+ * plugin CSS), so the widgets inject their rules as a fiber-scoped <style> element.
+ * Every color rides the shell's `--dsw-alias-*` design tokens, which `ui-theme`
+ * redefines under `body[data-ds-dark-theme]` — one set of rules renders correctly
+ * in both light and dark themes. The recipes mirror `ui-settings-models` (.input,
+ * .primaryButton, .secondaryButton).
  */
 const SECTION_CSS = `
 .uniterra-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
@@ -172,11 +179,11 @@ const SECTION_CSS = `
 .uniterra-params-unmatched { color: var(--dsw-alias-label-dimmed); font-size: 12px; padding: 4px 0; }
 `;
 
-/** Required services (cordis fiber inject): the section slot, copy, and the wire face. */
-export const inject = ['slots', 'locale', 'connection'];
+/** Required services (cordis fiber inject): copy + the connection wire face. */
+export const inject = ['locale', 'connection'];
 
 /**
- * Register the Uniterra settings section.
+ * Register the Uniterra settings widgets.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -191,19 +198,19 @@ export function apply(ctx: ClientContext): void {
       return () => {
         element.remove();
       };
-    }, 'llm-uniterra: section styles');
+    }, 'llm-uniterra: widget styles');
   }
 
-  // The connection service's shape differs between the host and browser
-  // type faces (HostConnectionHandle vs ConnectionHandle). This file compiles
-  // under both (tsconfig.json includes src/client), and at runtime it only
-  // ever sees the browser face — so the double assertion is the honest bridge.
+  // The connection service's shape differs between the host and browser type faces
+  // (HostConnectionHandle vs ConnectionHandle). This file compiles under both
+  // (tsconfig.json includes src/client), and at runtime it only ever sees the
+  // browser face — so the double assertion is the honest bridge.
   const connection = ctx.get('connection') as unknown as ConnectionHandle;
-  const t = ctx.locale.bind(NS) as (key: UniterraKey) => string;
+  const t = ctx.locale.bind(NS) as (key: UniterraKey, params?: Record<string, unknown>) => string;
 
-  // One plain callback over the plugin's host RPC channel: the browser names
-  // the gateway model ids (and the proxy draft) and the host downloads
-  // https://models.dev/api.json — no cross-origin fetch in the browser.
+  // One plain callback over the plugin's host RPC channel: the browser names the
+  // gateway model ids and the host downloads https://models.dev/api.json — no
+  // cross-origin fetch in the browser.
   const fetchModelParams = (
     request: ModelsDevParamsRequest,
   ): Promise<
@@ -213,16 +220,21 @@ export function apply(ctx: ClientContext): void {
       { ok: true; value: ModelsDevParamsResponse } | { ok: false; error: { message: string } }
     >;
 
-  ctx.slots.inject('settings.section', () =>
-    ctx.slots.register(
-      {
-        name: 'settings.section',
-        id: 'uniterra',
-        order: 15,
-        label: () => t('nav'),
-        inject: () => ({ api: connection.api, t, fetchModelParams }),
-      },
-      UniterraSection,
-    ),
-  );
+  // Register the widgets once the settings-ui extension is present. A sub-fiber
+  // (ctx.inject), deliberately NOT part of the module inject list: without
+  // settings-ui the provider still applies — this fiber simply never fires.
+  ctx.inject(['settingsUiWidgets'], (cctx) => {
+    const registry = cctx.get('settingsUiWidgets') as SettingsWidgetRegistry;
+    const wire = cctx.get('connection') as unknown as ConnectionHandle;
+    registry.register(
+      SETTINGS_NS,
+      'models',
+      createModelCatalogWidget({ t, api: wire.api, fetchModelParams }),
+    );
+    registry.register(
+      SETTINGS_NS,
+      'apiKey',
+      createApiKeyWidget({ t, credentials: wire.api.credentials }),
+    );
+  });
 }
