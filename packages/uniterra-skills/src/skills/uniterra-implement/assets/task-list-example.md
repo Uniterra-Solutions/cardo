@@ -33,7 +33,7 @@ serialize a deep nested JSON (which is what corrupts the tool call).
 - `prompt` — the **entire subagent instruction block as one markdown string**. It must
   include, at minimum, the sections rendered below (goal, requirements with their
   `test`, conventions, context files, constraints). The script appends the shared
-  `FIXED_RULES` (see `assets/workflow-script-example.md`) after it at run time.
+  `FIXED_RULES` (see `assets/workflow-template.md`) after it at run time.
 - **Do not** put `goal` / `context` / `requirements` / `conventions` / `constraints` as
   separate nested fields in `args` — they are flattened into `prompt`. Keeping them as a
   nested object is what forces a deep JSON and corrupts the call.
