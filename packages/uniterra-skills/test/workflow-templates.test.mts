@@ -130,10 +130,11 @@ test("every workflow template script parses under dsh's wrapper and instructs th
     const relative = path.relative(root, file);
     const fences = jsFences(content);
 
-    // Invariant 3: the required `meta` tool parameter is instructed.
+    // Invariant 3: the required `meta` tool parameter is instructed (either the
+    // backtick form `meta: { name, description }` or the JSON-object form `"meta":`).
     assert.match(
       content,
-      /`meta:/,
+      /`meta:`|"meta":/,
       `${relative}: must instruct the required \`meta\` tool parameter (name + description)`,
     );
 
